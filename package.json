@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "nodemon --exec ts-node --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "node ./node_modules/typescript/bin/tsc",
     "start": "node dist/index.js",
     "migrate": "node dist/db/migrate.js"
   },
