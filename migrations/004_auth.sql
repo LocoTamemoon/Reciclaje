@@ -1,0 +1,7 @@
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password_hash VARCHAR(100);
+CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
+
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS password_hash VARCHAR(100);
+CREATE INDEX IF NOT EXISTS idx_empresas_email ON empresas(email);

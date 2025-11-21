@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vida Verde · Home</title>
+  <style>
+    :root{ --bg:#f6fbf7; --bg2:#eef7f2; --panel:#ffffff; --panel2:#f8fbf8; --muted:#7b978b; --primary:#3ac27f; --accent:#38c1b3; --text:#0f172a; --border:#d9e7de; --shadow:rgba(15,60,30,0.08); }
+    body{ margin:0; font-family:system-ui, Segoe UI, Arial; background:linear-gradient(120deg, var(--bg), var(--bg2)); color:var(--text); }
+    .container{ max-width:1080px; margin:0 auto; padding:0 20px; }
+    .nav{ position:sticky; top:0; z-index:10; background:var(--panel); border-bottom:1px solid var(--border); box-shadow:0 6px 16px var(--shadow); }
+    .nav-inner{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; }
+    .brand{ display:flex; align-items:center; gap:8px; }
+    .brand-mark{ width:26px; height:26px; border-radius:999px; background:linear-gradient(180deg, #eafbf3, #d6f5e6); border:1px solid var(--border); box-shadow:0 4px 10px var(--shadow); animation:brandIn .6s ease-out; }
+    .brand-name{ font-weight:700; animation:fadeIn .6s ease-out; }
+    .menu{ display:flex; gap:14px; align-items:center; justify-content:center; }
+    .menu a{ color:#475569; text-decoration:none; font-weight:600; padding:6px 8px; border-radius:8px; transition:background-color .25s ease, color .25s ease, transform .25s ease; }
+    .menu a:hover{ background:#edf7f2; }
+    .nav-actions{ display:flex; gap:8px; align-items:center; }
+    .btn{ background:linear-gradient(180deg, #33cf79, var(--primary)); color:#083e2a; border:none; border-radius:10px; padding:8px 12px; cursor:pointer; box-shadow:0 6px 14px var(--shadow); font-weight:600; transition:transform .25s ease, filter .25s ease, box-shadow .25s ease; }
+    .btn.secondary{ background:linear-gradient(180deg, #3ed1c3, var(--accent)); color:#083333; }
+    .hero{ padding:48px 0; }
+    .hero-inner{ display:grid; grid-template-columns: 1.1fr 0.9fr; gap:20px; align-items:center; }
+    .hero h1{ margin:0 0 10px; font-size:30px; font-weight:800; }
+    .hero p{ margin:0 0 14px; color:#576a62; }
+    .illustration{ background:linear-gradient(180deg, #ffffff, #fbfdfc); border:1px solid var(--border); border-radius:16px; height:220px; box-shadow:0 10px 24px var(--shadow); }
+    .section{ padding:36px 0; }
+    .section h2{ margin:0 0 16px; font-size:22px; font-weight:700; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
+    .card{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:0 6px 14px var(--shadow); transition:transform .25s ease, box-shadow .25s ease; }
+    .muted{ color:var(--muted); font-size:14px; }
+    .steps{ display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; }
+    .step{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 6px 14px var(--shadow); transition:transform .25s ease, box-shadow .25s ease; }
+    .benefits{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+    .benefit{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 6px 14px var(--shadow); transition:transform .25s ease, box-shadow .25s ease; }
+    .commit{ background:linear-gradient(180deg, #ffffff, #fbfdfc); border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:0 10px 24px var(--shadow); }
+    .footer{ margin-top:40px; background:#ffffff; border-top:1px solid var(--border); }
+    .footer-inner{ display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; padding:16px 0; }
+    .footer a{ color:#475569; text-decoration:none; }
+    .card:hover, .step:hover, .benefit:hover{ transform:translateY(-3px); box-shadow:0 10px 22px var(--shadow); }
+    .btn:hover{ transform:translateY(-1px); filter:brightness(1.06); }
+    .reveal{ opacity:0; transform:translateY(12px); transition:opacity .4s ease, transform .4s ease; }
+    .reveal.visible{ opacity:1; transform:translateY(0); }
+    @keyframes brandIn{ from{ transform:scale(.92); opacity:0; } to{ transform:scale(1); opacity:1; } }
+    @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+    .sponsors{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
+    .sponsor-card{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:0 6px 14px var(--shadow); display:flex; align-items:center; gap:10px; transition:transform .25s ease, box-shadow .25s ease; }
+    .sponsor-logo{ width:34px; height:34px; border-radius:999px; background:linear-gradient(180deg, #eafbf3, #d6f5e6); border:1px solid var(--border); box-shadow:0 4px 10px var(--shadow); flex-shrink:0; }
+    .sponsor-name{ font-weight:600; color:#0f172a; }
+    .sponsor-card:hover{ transform:translateY(-3px); box-shadow:0 10px 22px var(--shadow); }
+    @media (max-width: 860px){ .hero-inner{ grid-template-columns: 1fr; } }
+  </style>
+  <script>
+    function goLogin(){ window.location.href='/login.html'; }
+    document.addEventListener('DOMContentLoaded', function(){
+      var els = document.querySelectorAll('.reveal');
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          if(entry.isIntersecting){
+            entry.target.classList.add('visible');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+      els.forEach(function(el){ io.observe(el); });
+    });
+  </script>
+  </head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <div class="brand"><div class="brand-mark"></div><div class="brand-name">Vida Verde</div></div>
+      <nav class="menu">
+        <a href="#inicio">Inicio</a>
+        <a href="#que-es">¿Qué es?</a>
+        <a href="#empresas">Empresas recicladoras</a>
+        <a href="#beneficios">Beneficios</a>
+        <a href="#puntos">Puntos</a>
+        <a href="#contacto">Contacto</a>
+      </nav>
+      <div class="nav-actions"><button class="btn" onclick="goLogin()">Iniciar sesión</button></div>
+    </div>
+  </header>
+  <main>
+    <section id="inicio" class="hero reveal">
+      <div class="container hero-inner">
+        <div>
+          <h1>Reciclar nunca fue tan fácil. Cuida el planeta y gana recompensas.</h1>
+          <p>Registra solicitudes, vende materiales, gana puntos y recibe pagos justos con empresas verificadas. Transparencia total en precios, historial y reputación.</p>
+          <div class="row" style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" onclick="goLogin()">Comenzar ahora</button>
+            <button class="btn secondary" onclick="goLogin()">Ver empresas</button>
+          </div>
+        </div>
+        <div class="illustration"></div>
+      </div>
+    </section>
+    <section id="que-es" class="section reveal">
+      <div class="container">
+        <h2>¿Qué es Vida Verde?</h2>
+        <div class="grid">
+          <div class="card">
+            <div class="muted">Plataforma digital que conecta usuarios con empresas recicladoras.</div>
+          </div>
+          <div class="card">
+            <div class="muted">Vende materiales, solicita recojo, consulta precios y recibe pagos al instante.</div>
+          </div>
+          <div class="card">
+            <div class="muted">Acumula puntos por cada kilo reciclado y canjéalos por beneficios.</div>
+          </div>
+          <div class="card">
+            <div class="muted">Transparencia en historial, reseñas, reputación y pesaje final de la empresa.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="como-funciona" class="section reveal">
+      <div class="container">
+        <h2>¿Cómo funciona?</h2>
+        <div class="steps">
+          <div class="step"><div class="muted">Crea tu solicitud</div></div>
+          <div class="step"><div class="muted">Elige una empresa recicladora</div></div>
+          <div class="step"><div class="muted">Entrega o solicita recojo</div></div>
+          <div class="step"><div class="muted">Recibe tu pago y gana puntos</div></div>
+        </div>
+      </div>
+    </section>
+    <section id="beneficios" class="section reveal">
+      <div class="container">
+        <h2>Beneficios principales</h2>
+        <div class="benefits">
+          <div class="benefit"><div class="muted">Precios actualizados por empresa</div></div>
+          <div class="benefit"><div class="muted">Sistema de puntos por reciclaje</div></div>
+          <div class="benefit"><div class="muted">Entrega a domicilio opcional</div></div>
+          <div class="benefit"><div class="muted">Historial transparente</div></div>
+          <div class="benefit"><div class="muted">Calificaciones y reputación real</div></div>
+          <div class="benefit"><div class="muted">Apoyo a la economía circular</div></div>
+        </div>
+      </div>
+    </section>
+    <section id="compromiso" class="section reveal">
+      <div class="container commit">
+        Vida Verde promueve prácticas sostenibles y conecta a miles de familias con empresas responsables. Cada reciclaje cuenta.
+      </div>
+    </section>
+    <section id="sponsors" class="section reveal">
+      <div class="container">
+        <h2>Nuestros Aliados</h2>
+        <div class="muted">Estas empresas apoyan la misión de promover el reciclaje y la economía circular.</div>
+        <div class="sponsors" style="margin-top:12px;">
+          <div class="sponsor-card"><div class="sponsor-logo"></div><div class="sponsor-name">Bembos</div></div>
+          <div class="sponsor-card"><div class="sponsor-logo"></div><div class="sponsor-name">KFC</div></div>
+          <div class="sponsor-card"><div class="sponsor-logo"></div><div class="sponsor-name">Cinemark</div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>
+        Enlaces rápidos
+        <div class="muted"><a href="#inicio">Inicio</a> · <a href="#como-funciona">Cómo funciona</a> · <a href="#beneficios">Beneficios</a></div>
+      </div>
+      <div>
+        Proyecto
+        <div class="muted">Vida Verde · Plataforma ecológica de reciclaje</div>
+      </div>
+      <div>
+        Redes
+        <div class="muted">Instagram · Facebook · X</div>
+      </div>
+      <div>
+        <div class="muted">© Vida Verde. Todos los derechos reservados.</div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

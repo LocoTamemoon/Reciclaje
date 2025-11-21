@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <style>
+    :root{ --bg:#f6fbf7; --bg2:#eef7f2; --panel:#ffffff; --panel2:#f8fbf8; --muted:#7b978b; --primary:#3ac27f; --accent:#38c1b3; --text:#0f172a; --border:#d9e7de; --shadow:rgba(15,60,30,0.08); }
+    body{ margin:0; font-family:system-ui, Segoe UI, Arial; background:linear-gradient(120deg, var(--bg), var(--bg2)); color:var(--text); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+    h2{ margin:0; font-weight:700; letter-spacing:0.2px; }
+    h3{ margin:0; font-weight:600; }
+    .layout{ display:grid; grid-template-columns: 280px 1fr; min-height:100vh; }
+    .sidebar{ background:linear-gradient(180deg, #f0f7f2 0%, #eaf6f0 100%); padding:18px; border-right:1px solid var(--border); box-shadow:0 6px 20px var(--shadow); }
+    .brand{ font-weight:700; font-size:18px; margin-bottom:14px; }
+    .menu button{ width:100%; text-align:left; background:transparent; border:none; color:#475569; padding:10px 12px; border-radius:10px; cursor:pointer; transition:all .18s ease; }
+    .menu button.active{ background:#e6f4ec; color:#0f172a; box-shadow:0 4px 12px var(--shadow); }
+    .menu button:hover{ background:#edf7f2; transform:translateY(-1px); }
+    .content{ padding:22px; }
+    .panel{ background:linear-gradient(180deg, var(--panel), var(--panel2)); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow:0 8px 20px var(--shadow); position:relative; overflow:hidden; }
+    .panel::before{ content:""; position:absolute; inset:-18% 52% auto auto; width:200px; height:200px; background:radial-gradient(closest-side, rgba(56,193,179,0.10), transparent); transform:rotate(8deg); pointer-events:none; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+    .card{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 6px 16px var(--shadow); transition:transform .14s ease, box-shadow .14s ease; }
+    .card:hover{ transform:translateY(-2px); box-shadow:0 12px 28px var(--shadow); }
+    .row{ display:flex; gap:10px; align-items:center; }
+    .muted{ color:var(--muted); font-size:12px; }
+    .badge{ display:inline-flex; align-items:center; background:#f2fbf7; border:1px solid var(--border); padding:4px 8px; border-radius:999px; font-size:12px; }
+    .btn{ background:linear-gradient(180deg, #33cf79, var(--primary)); color:#083e2a; border:none; border-radius:10px; padding:8px 12px; cursor:pointer; box-shadow:0 6px 14px var(--shadow); transition:all .14s ease; font-weight:600; }
+    .btn:hover{ filter:brightness(1.06); transform:translateY(-1px); }
+    .btn:active{ transform:translateY(0); }
+    .btn[disabled]{ opacity:.5; cursor:not-allowed; filter:none; box-shadow:none; }
+    .btn.secondary{ background:linear-gradient(180deg, #3ed1c3, var(--accent)); color:#083333; }
+    .right{ text-align:right; }
+    .list{ list-style:none; padding:0; margin:0; }
+    .list li{ padding:10px 12px; background:#ffffff; border:1px solid var(--border); border-radius:12px; margin:8px 0; box-shadow:0 6px 14px var(--shadow); }
+    .cards-row{ align-items:flex-start; gap:12px; }
+    .stats-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px; }
+    .stat-card{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 6px 14px var(--shadow); }
+    .stat-title{ color:var(--muted); font-size:12px; }
+    .stat-value{ font-weight:700; }
+    .mono{ font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+    input, select{ background:#ffffff; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px 10px; outline:none; transition:border-color .14s ease, box-shadow .14s ease; }
+    input:focus, select:focus, textarea:focus{ border-color:#3ac27f; box-shadow:0 0 0 3px rgba(58,194,127,0.25); }
+    table{ width:100%; border-collapse:separate; border-spacing:0; }
+    th, td{ padding:10px; border-bottom:1px solid var(--border); }
+    th{ text-align:left; color:#cbd5e1; font-weight:600; }
+    .modal{ position:fixed; inset:0; background:rgba(0,0,0,0.12); display:flex; align-items:center; justify-content:center; backdrop-filter:saturate(160%) blur(4px); }
+    .modal[hidden]{ display:none !important; }
+    .modal-card{ background:linear-gradient(180deg, #ffffff, #fbfdfc); border:1px solid var(--border); border-radius:16px; width:440px; max-width:92vw; padding:16px; box-shadow:0 10px 24px var(--shadow); }
+    .modal-card h3{ margin:0 0 12px; font-weight:700; }
+    .modal-card textarea{ width:100%; min-height:92px; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text); padding:10px; }
+    .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
+    @media (max-width: 880px){ .layout{ grid-template-columns: 1fr; } .sidebar{ position:sticky; top:0; z-index:10; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">Reciclaje App</div>
+      <div class="mono" id="user-info"></div>
+      <div class="menu">
+        <button id="m-empresas" onclick="setView('empresas')">Empresas</button>
+        <button id="m-solicitudes" onclick="setView('solicitudes')">Mis Solicitudes</button>
+        <button id="m-historial" onclick="setView('historial')">Historial</button>
+        <button id="m-perfil" onclick="setView('perfil')">Perfil</button>
+        <button id="m-resenas" onclick="setView('resenas')">Reseñas</button>
+        <button id="m-rewards" onclick="setView('rewards')">Usa Puntos</button>
+        <button id="m-mapa" onclick="setView('mapa')">Mapa</button>
+        <button onclick="logout()" style="margin-top:12px;">Salir</button>
+      </div>
+    </aside>
+    <main class="content">
+      <section id="view-empresas" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2>Empresas disponibles</h2>
+          <button class="btn secondary" onclick="loadEmpresas()">Actualizar</button>
+        </div>
+        <div id="empresas" class="grid"></div>
+      </section>
+      <section id="view-empresa" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2 id="empresa-titulo">Empresa</h2>
+          <div class="row">
+            <button class="btn secondary" onclick="setView('empresas')">Volver</button>
+            <button class="btn" onclick="confirmarSolicitud()">Crear solicitud</button>
+          </div>
+        </div>
+        <div class="row" style="justify-content:space-between; align-items:flex-end;">
+          <div>
+            <div id="empresa-meta" class="muted"></div>
+          </div>
+          <div class="right">
+            <div>Estimado total: <strong id="estimado-total">S/ 0.00</strong></div>
+          </div>
+        </div>
+        <div style="margin-top:12px; overflow:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:1px solid #1f2937;">
+                <th style="text-align:left; padding:8px;">Material</th>
+                <th style="text-align:right; padding:8px;">Precio/kg (S/)</th>
+                <th style="text-align:right; padding:8px;">Kg a entregar</th>
+                <th style="text-align:right; padding:8px;">Subtotal (S/)</th>
+              </tr>
+            </thead>
+            <tbody id="materiales-body"></tbody>
+          </table>
+        </div>
+        <div class="muted" style="margin-top:10px;" id="empresa-cond"></div>
+        <div style="margin-top:16px;">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <h3>Reseñas</h3>
+            <button class="btn secondary" onclick="empresaResenasRefresh()">Actualizar</button>
+          </div>
+          <ul id="empresa-resenas-list" class="list"></ul>
+        </div>
+      </section>
+      <section id="view-solicitudes" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2>Mis Solicitudes</h2>
+          <button class="btn secondary" onclick="loadSolicitudes()">Actualizar</button>
+        </div>
+        <div class="row cards-row">
+          <div style="flex:1" class="card">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+              <h3>Pendientes</h3>
+              <button class="btn secondary" onclick="loadSolicitudes()">Refrescar</button>
+            </div>
+            <ul id="sol-pend" class="list"></ul>
+          </div>
+          <div style="flex:1" class="card">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+              <h3>Anteriores</h3>
+              <button class="btn secondary" onclick="loadSolicitudes()">Refrescar</button>
+            </div>
+            <ul id="sol-ant" class="list"></ul>
+          </div>
+        </div>
+      </section>
+      <section id="view-historial" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2>Historial de Transacciones</h2>
+          <button class="btn secondary" onclick="loadHistorial()">Actualizar</button>
+        </div>
+        <ul id="hist-list" class="list"></ul>
+        <div id="hist-detalle" class="panel" style="margin-top:12px; display:none;"></div>
+      </section>
+      <section id="view-empresa-solicitudes" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2>Solicitudes Entrantes</h2>
+          <button class="btn secondary" onclick="loadSolicitudesEmpresa()">Actualizar</button>
+        </div>
+        <ul id="emp-sol-list" class="list"></ul>
+      </section>
+      <section id="view-rewards" class="panel" hidden>
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <h2>Usa tus puntos</h2>
+          <div class="badge" id="rewards-puntos">Puntos: 0</div>
+        </div>
+        <ul id="rewards-list" class="list"></ul>
+      </section>
+      <section id="view-resenas" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2>Reseñas de la empresa</h2>
+          <button class="btn secondary" onclick="loadResenasEmpresa()">Actualizar</button>
+        </div>
+        <ul id="resenas-list" class="list"></ul>
+      </section>
+      <section id="view-mapa" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2>Mapa</h2>
+        </div>
+        <div class="card" style="margin-top:12px; text-align:center;">
+          <div class="muted" style="font-size:16px;">Próximamente</div>
+        </div>
+      </section>
+      <section id="view-pesaje" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2 id="pesaje-titulo">Pesaje</h2>
+          <div class="row">
+            <button class="btn secondary" onclick="cancelarPesaje()">Cancelar</button>
+            <button class="btn" onclick="confirmarPesaje()">Registrar pesaje y pago</button>
+          </div>
+        </div>
+        <div class="row" style="justify-content:space-between; align-items:flex-end;">
+          <div>
+            <div id="pesaje-meta" class="muted"></div>
+          </div>
+          <div class="right">
+            <div>Método de pago
+              <select id="metodo-pago">
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px; overflow:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:1px solid #1f2937;">
+                <th style="text-align:left; padding:8px;">Material</th>
+                <th style="text-align:right; padding:8px;">Precio/kg (S/)</th>
+                <th style="text-align:right; padding:8px;">Kg finales</th>
+                <th style="text-align:right; padding:8px;">Subtotal (S/)</th>
+              </tr>
+            </thead>
+            <tbody id="pesaje-body"></tbody>
+          </table>
+        </div>
+        <div class="right" style="margin-top:10px;">
+          <div>Total a pagar: <strong id="pesaje-total">S/ 0.00</strong></div>
+        </div>
+      </section>
+      <section id="view-perfil" class="panel" hidden>
+        <h2>Perfil</h2>
+        <div id="perfil" class="mono"></div>
+        <div id="perfil-materiales" style="margin-top:12px;" hidden>
+          <div class="row" style="justify-content:space-between;">
+            <h3>Materiales y precios</h3>
+            <button class="btn" onclick="perfilSaveMaterials()">Guardar cambios</button>
+          </div>
+          <div class="row" style="gap:12px; margin:8px 0;">
+            <select id="perfil-add-select" style="flex:1"></select>
+            <input id="perfil-add-precio" type="number" step="0.01" placeholder="Precio base" style="width:140px" />
+            <button class="btn secondary" onclick="perfilAddMaterial()">Agregar material</button>
+          </div>
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:1px solid #1f2937;">
+                <th style="text-align:left; padding:8px;">Material</th>
+                <th style="text-align:right; padding:8px;">Precio/kg (S/)</th>
+                <th style="text-align:right; padding:8px;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="perfil-materiales-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="rating-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 id="rating-title">Calificar</h3>
+      <label>Puntaje (1-5)</label>
+      <select id="rating-score">
+        <option value="5">5</option>
+        <option value="4">4</option>
+        <option value="3">3</option>
+        <option value="2">2</option>
+        <option value="1">1</option>
+      </select>
+      <label class="mt">Mensaje (opcional)</label>
+      <textarea id="rating-msg" placeholder="Escribe un comentario..."></textarea>
+      <div class="modal-actions">
+        <button class="btn" onclick="submitRating()">Enviar</button>
+        <button class="btn secondary" onclick="closeRating()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    const user = JSON.parse(localStorage.getItem('user')||'null');
+    if (!token || !user) { window.location.href = '/login.html'; }
+
+    document.getElementById('user-info').textContent = `${role || 'usuario'} #${user.id}`;
+
+    function setView(v){
+      for (const id of ['empresas','solicitudes','historial','perfil','resenas','rewards','mapa']){
+        document.getElementById('view-'+id).hidden = (id!==v);
+        document.getElementById('m-'+id).classList.toggle('active', id===v);
+      }
+      document.getElementById('view-empresa').hidden = (v!=='empresa');
+      document.getElementById('view-empresa-solicitudes').hidden = (v!=='empresa_solicitudes');
+      document.getElementById('view-pesaje').hidden = (v!=='pesaje');
+      if (v==='empresas') loadEmpresas();
+      if (v==='solicitudes') loadSolicitudes();
+      if (v==='historial') { if (role==='empresa') loadHistorialEmpresa(); else loadHistorial(); }
+      if (v==='perfil') loadPerfil();
+      if (v==='empresa_solicitudes') loadSolicitudesEmpresa();
+      if (v==='resenas' && role==='empresa') loadResenasEmpresa();
+      if (v==='rewards' && role==='usuario') loadRewards();
+      if (v==='mapa'){}
+    }
+    function logout(){ localStorage.clear(); window.location.href='/login.html'; }
+    function authHeaders(){ return { 'Content-Type':'application/json', 'Authorization': 'Bearer '+token }; }
+    function displayEstadoSolicitud(estado){ return estado === 'aceptada' ? 'completada' : estado; }
+
+    let empresaSeleccionada = null;
+    let materialesSeleccionados = [];
+    let solicitudSeleccionada = null;
+    let perfilMateriales = [];
+    let perfilCatalogo = [];
+    let histDetalleId = null;
+
+    async function loadEmpresas(){
+      const r = await fetch('/api/empresas', { headers: authHeaders() });
+      const list = await r.json();
+      const container = document.getElementById('empresas');
+      container.innerHTML = '';
+      list.forEach(e=>{
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>${e.nombre}</strong> <span class="badge">RUC ${e.ruc}</span></div>
+            <div class="muted">Reputación: ${Number(e.reputacion_promedio).toFixed(2)} (${e.resenas_recibidas_count} reseñas)</div>
+          </div>
+          <div class="right">
+            <button class="btn secondary" onclick="verEmpresa(${e.id}, '${e.nombre}', '${e.ruc}', ${Number(e.reputacion_promedio)})">Ver materiales</button>
+          </div>
+        </div>
+        <div class="muted">Materiales: ${(e.materiales||[]).map(m=>`#${m.material_id} S/${m.precio_por_kg}`).join(', ') || '—'}</div>`;
+        container.appendChild(div);
+      });
+    }
+    async function verEmpresa(id, nombre, ruc, reputacion){
+      empresaSeleccionada = { id, nombre, ruc, reputacion };
+      document.getElementById('empresa-titulo').textContent = nombre;
+      document.getElementById('empresa-meta').textContent = `RUC ${ruc} · Reputación ${reputacion.toFixed ? reputacion.toFixed(2) : reputacion}`;
+      const r = await fetch(`/api/empresas/${id}/materiales`, { headers: authHeaders() });
+      const mats = await r.json();
+      materialesSeleccionados = mats.map(m=>({ material_id: m.material_id, nombre: m.nombre, precio: Number(m.precio_por_kg), kg: 0, condiciones: m.condiciones || '' }));
+      renderMateriales();
+      setView('empresa');
+      await loadEmpresaResenas(id);
+    }
+    function renderMateriales(){
+      const tbody = document.getElementById('materiales-body');
+      tbody.innerHTML = '';
+      materialesSeleccionados.forEach((m, idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:8px;">${m.nombre}</td>
+          <td style="padding:8px; text-align:right;">${m.precio.toFixed(2)}</td>
+          <td style="padding:8px; text-align:right;"><input type="number" min="0" step="0.1" value="${m.kg}" style="width:120px;" data-idx="${idx}" /></td>
+          <td style="padding:8px; text-align:right;" id="sub-${idx}">0.00</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('input[type="number"]').forEach(inp=>{
+        inp.addEventListener('input', (ev)=>{
+          const i = Number(ev.target.getAttribute('data-idx'));
+          const val = Number(ev.target.value);
+          materialesSeleccionados[i].kg = isNaN(val) ? 0 : val;
+          actualizarEstimado();
+        });
+      });
+      actualizarEstimado();
+      const condText = materialesSeleccionados.map(m=> m.condiciones ? `${m.nombre}: ${m.condiciones}` : '').filter(Boolean).join(' · ');
+      document.getElementById('empresa-cond').textContent = condText ? `Condiciones: ${condText}` : '';
+    }
+    function actualizarEstimado(){
+      let total = 0;
+      materialesSeleccionados.forEach((m, idx)=>{
+        const sub = m.kg * m.precio;
+        total += sub;
+        const el = document.getElementById('sub-'+idx);
+        if (el) el.textContent = sub.toFixed(2);
+      });
+      document.getElementById('estimado-total').textContent = 'S/ ' + total.toFixed(2);
+    }
+    async function loadEmpresaResenas(empresaId){
+      const ul = document.getElementById('empresa-resenas-list');
+      if (ul) ul.innerHTML = '';
+      const r = await fetch(`/api/resenas/empresa/${empresaId}`, { headers: authHeaders() });
+      const list = await r.json();
+      const target = document.getElementById('empresa-resenas-list');
+      if (!target) return;
+      list.forEach(re=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Puntaje ${Number(re.puntaje)}</strong> · Tx #${re.transaccion_id}</div>
+            <div class="muted">${re.mensaje || '—'}</div>
+          </div>
+          <div class="right"><span class="badge">${new Date(re.creado_en).toLocaleString()}</span></div>
+        </div>`;
+        target.appendChild(li);
+      });
+    }
+    function empresaResenasRefresh(){ if (empresaSeleccionada) loadEmpresaResenas(empresaSeleccionada.id); }
+    async function confirmarSolicitud(){
+      if (!empresaSeleccionada) return;
+      const totalKg = materialesSeleccionados.reduce((a,m)=>a+(m.kg||0),0);
+      if (totalKg <= 0) { alert('Indica los kg a entregar para al menos un material.'); return; }
+      if (!confirm('Crear solicitud con empresa '+empresaSeleccionada.nombre+' y estimado '+document.getElementById('estimado-total').textContent+'?')) return;
+      const items = materialesSeleccionados.filter(m=>Number(m.kg)>0).map(m=>({ material_id: Number(m.material_id), kg: Number(m.kg) }));
+      const r = await fetch('/api/solicitudes', { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id, empresa_id: empresaSeleccionada.id, items }) });
+      const j = await r.json();
+      alert('Solicitud creada: #'+j.id);
+      setView('solicitudes');
+    }
+    async function loadSolicitudes(){
+      const r = await fetch(`/api/usuarios/${user.id}/dashboard`, { headers: authHeaders() });
+      const j = await r.json();
+      const pend = document.getElementById('sol-pend');
+      const ant = document.getElementById('sol-ant');
+      pend.innerHTML = '';
+      ant.innerHTML = '';
+      (j.solicitudes_pendientes||[]).forEach(s=>{
+        const li = document.createElement('li');
+        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`;
+        pend.appendChild(li);
+      });
+      (j.solicitudes_anteriores||[]).forEach(s=>{
+        const li = document.createElement('li');
+        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span>`;
+        ant.appendChild(li);
+      });
+    }
+    async function usuarioCancelarSolicitud(sid){
+      const r = await fetch(`/api/solicitudes/${sid}/cancelar`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id }) });
+      const j = await r.json();
+      alert('Solicitud cancelada: #'+j.id);
+      loadSolicitudes();
+    }
+    async function loadHistorial(){
+      const r = await fetch(`/api/usuarios/${user.id}/historial`, { headers: authHeaders() });
+      const list = await r.json();
+      const ul = document.getElementById('hist-list');
+      ul.innerHTML = '';
+      list.forEach(t=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Transacción #${t.id}</strong> con ${t.empresa_nombre||t.empresa_id}</div>
+            <div class="muted">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div>
+          </div>
+          <div class="right"><span class="badge">${new Date(t.fecha).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${t.id})">Ver detalle</button> ${role==='usuario' ? `<button class=\"btn secondary\" id=\"rate-emp-${t.id}\" onclick=\"openRating('empresa', ${t.id}, ${t.empresa_id}, null)\">Calificar empresa</button>` : ''}</div>
+        </div>`;
+        ul.appendChild(li);
+        setTimeout(()=>updateRatingButtonsForTx(t.id),0);
+      });
+    }
+    async function loadHistorialEmpresa(){
+      const r = await fetch(`/api/empresas/${user.id}/historial`, { headers: authHeaders() });
+      const list = await r.json();
+      const ul = document.getElementById('hist-list');
+      ul.innerHTML = '';
+      list.forEach(t=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Transacción #${t.id}</strong></div>
+            <div class="muted">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div>
+          </div>
+          <div class="right"><span class="badge">${new Date(t.fecha).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${t.id})">Ver detalle</button> <button class="btn secondary" id="rate-usr-${t.id}" onclick="openRating('usuario', ${t.id}, null, ${t.usuario_id})">Calificar usuario</button></div>
+        </div>`;
+        ul.appendChild(li);
+        setTimeout(()=>updateRatingButtonsForTx(t.id),0);
+      });
+    }
+    async function verDetalleTx(id){
+      if (document.getElementById('view-historial').hidden) setView('historial');
+      const panel = document.getElementById('hist-detalle');
+      if (panel && panel.style.display !== 'none' && histDetalleId === id){
+        panel.style.display = 'none';
+        histDetalleId = null;
+        return;
+      }
+      const r = await fetch(`/api/transacciones/${id}`, { headers: authHeaders() });
+      const j = await r.json();
+      const filas = j.detalle.map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.precio_por_kg).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.subtotal).toFixed(2)}</td></tr>`).join('');
+      panel.innerHTML = `
+        <h3>Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}</h3>
+        <table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Precio/kg</th><th style=\"text-align:right\">Kg</th><th style=\"text-align:right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>
+        <div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong> · Comisión 10%: <strong>S/ ${Number(j.comision_10).toFixed(2)}</strong> · Total con comisión: <strong>S/ ${Number(j.total_con_comision).toFixed(2)}</strong></div>
+        <div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>
+      `;
+      panel.style.display = 'block';
+      histDetalleId = id;
+    }
+    let ratingCtx = { tipo:null, txId:null, empresaId:null, usuarioId:null };
+    function openRating(tipo, txId, empresaId, usuarioId){
+      ratingCtx = { tipo, txId, empresaId, usuarioId };
+      document.getElementById('rating-title').textContent = tipo==='empresa' ? 'Calificar empresa' : 'Calificar usuario';
+      document.getElementById('rating-score').value = '5';
+      document.getElementById('rating-msg').value = '';
+      document.getElementById('rating-modal').hidden = false;
+    }
+    function closeRating(){ document.getElementById('rating-modal').hidden = true; }
+    async function updateRatingButtonsForTx(txId){
+      const det = await (await fetch(`/api/transacciones/${txId}`, { headers: authHeaders() })).json();
+      const yaEmp = det?.ya_resena_empresa;
+      const yaUsr = det?.ya_resena_usuario;
+      const b1 = document.getElementById('rate-emp-'+txId);
+      const b2 = document.getElementById('rate-usr-'+txId);
+      if (b1 && yaEmp) b1.style.display = 'none';
+      if (b2 && yaUsr) b2.style.display = 'none';
+    }
+    async function submitRating(){
+      const puntaje = Number(document.getElementById('rating-score').value);
+      const mensaje = document.getElementById('rating-msg').value;
+      if (!puntaje || puntaje < 1 || puntaje > 5) { alert('Puntaje inválido'); return; }
+      if (ratingCtx.tipo === 'empresa'){
+        const r = await fetch('/api/resenas/empresa', { method:'POST', headers: authHeaders(), body: JSON.stringify({ empresa_id: ratingCtx.empresaId, usuario_id: user.id, transaccion_id: ratingCtx.txId, puntaje, mensaje }) });
+        await r.json();
+        alert('Reseña enviada');
+        const btn = document.getElementById('rate-emp-'+ratingCtx.txId);
+        if (btn) btn.style.display = 'none';
+      } else {
+        let usuarioId = ratingCtx.usuarioId;
+        if (!usuarioId){
+          const det = await (await fetch(`/api/transacciones/${ratingCtx.txId}`, { headers: authHeaders() })).json();
+          usuarioId = det?.transaccion?.usuario_id;
+        }
+        if (!usuarioId) { alert('No se pudo identificar al usuario'); return; }
+        const r = await fetch('/api/resenas/usuario', { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: usuarioId, empresa_id: user.id, transaccion_id: ratingCtx.txId, puntaje, mensaje }) });
+        await r.json();
+        alert('Reseña enviada');
+        const btn = document.getElementById('rate-usr-'+ratingCtx.txId);
+        if (btn) btn.style.display = 'none';
+      }
+      closeRating();
+    }
+    async function loadHistorialEmpresa(){
+      const r = await fetch(`/api/empresas/${user.id}/historial`, { headers: authHeaders() });
+      const list = await r.json();
+      const ul = document.getElementById('hist-list');
+      ul.innerHTML = '';
+      list.forEach(t=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Transacción #${t.id}</strong></div>
+            <div class="muted">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div>
+          </div>
+          <div class="right"><span class="badge">${new Date(t.fecha).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${t.id})">Ver detalle</button> <button class="btn secondary" id="rate-usr-${t.id}" onclick="openRating('usuario', ${t.id}, null, ${t.usuario_id})">Calificar usuario</button></div>
+        </div>`;
+        ul.appendChild(li);
+        setTimeout(()=>updateRatingButtonsForTx(t.id),0);
+      });
+    }
+    async function loadSolicitudesEmpresa(){
+      const r = await fetch(`/api/empresas/${user.id}/solicitudes`, { headers: authHeaders() });
+      const list = await r.json();
+      const ul = document.getElementById('emp-sol-list');
+      ul.innerHTML = '';
+      list.forEach(s=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Solicitud #${s.id}</strong> del usuario ${s.usuario_id}</div>
+            <div class="muted">Estado: ${displayEstadoSolicitud(s.estado)} · ${new Date(s.creado_en).toLocaleString()}</div>
+          </div>
+          <div class="right">
+            <button class="btn secondary" onclick="empresaAceptar(${s.id})">Aceptar</button>
+            <button class="btn" onclick="empresaRechazar(${s.id})">Rechazar</button>
+            <button class="btn" onclick="empresaPesaje(${s.id}, ${s.usuario_id})">Pesaje</button>
+          </div>
+        </div>`;
+        ul.appendChild(li);
+      });
+    }
+    async function loadRewards(){
+      document.getElementById('rewards-puntos').textContent = 'Puntos: ' + Number(user.puntos_acumulados||0);
+      const ul = document.getElementById('rewards-list');
+      ul.innerHTML = '';
+      const r = await fetch('/api/usuarios/recompensas', { headers: authHeaders() });
+      const list = await r.json();
+      list.forEach(it=>{
+        const li = document.createElement('li');
+        const puede = Number(user.puntos_acumulados||0) >= Number(it.costo);
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>${it.nombre}</strong></div>
+            <div class="muted">Costo: ${it.costo} puntos</div>
+          </div>
+          <div class="right"><button class="btn" ${puede? '' : 'disabled'} onclick="redeemReward('${it.key}', ${it.costo})">Canjear</button></div>
+        </div>`;
+        ul.appendChild(li);
+      });
+    }
+    async function redeemReward(key, costo){
+      const r = await fetch(`/api/usuarios/${user.id}/recompensas/redimir`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ reward_key: key }) });
+      const j = await r.json();
+      if (j?.error==='insufficient_points') { alert('No tienes puntos suficientes'); return; }
+      alert('Canje realizado');
+      user.puntos_acumulados = Number(j.nuevo_puntos||user.puntos_acumulados);
+      loadRewards();
+      if (document.getElementById('view-perfil') && document.getElementById('view-perfil').hidden===false) loadPerfil();
+    }
+    async function loadResenasEmpresa(){
+      const ul = document.getElementById('resenas-list');
+      ul.innerHTML = '';
+      const r = await fetch(`/api/resenas/empresa/${user.id}`, { headers: authHeaders() });
+      const list = await r.json();
+      list.forEach(re=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Puntaje ${Number(re.puntaje)}</strong> · Tx #${re.transaccion_id} · ${re.usuario_email||('Usuario '+re.usuario_id)}</div>
+            <div class="muted">${re.mensaje || '—'}</div>
+          </div>
+          <div class="right"><span class="badge">${new Date(re.creado_en).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${re.transaccion_id})">Ver transacción</button></div>
+        </div>`;
+        ul.appendChild(li);
+      });
+    }
+    async function empresaAceptar(sid){
+      await fetch(`/api/empresas/${user.id}/solicitudes/${sid}/aceptar`, { method:'POST', headers: authHeaders() });
+      loadSolicitudesEmpresa();
+    }
+    async function empresaRechazar(sid){
+      await fetch(`/api/empresas/${user.id}/solicitudes/${sid}/rechazar`, { method:'POST', headers: authHeaders() });
+      loadSolicitudesEmpresa();
+    }
+    async function empresaPesaje(sid, usuarioId){
+      solicitudSeleccionada = { id: sid, usuario_id: usuarioId };
+      const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
+      materialesSeleccionados = mats.map(m=>({ material_id: m.material_id, nombre: m.nombre, precio: Number(m.precio_por_kg), kg: 0 }));
+      renderPesaje();
+      setView('pesaje');
+    }
+    function renderPesaje(){
+      document.getElementById('pesaje-titulo').textContent = 'Pesaje solicitud #' + (solicitudSeleccionada?.id || '');
+      document.getElementById('pesaje-meta').textContent = 'Usuario ' + (solicitudSeleccionada?.usuario_id || '');
+      const tbody = document.getElementById('pesaje-body');
+      tbody.innerHTML = '';
+      materialesSeleccionados.forEach((m, idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style=\"padding:8px;\">${m.nombre}</td>
+          <td style=\"padding:8px; text-align:right;\">${m.precio.toFixed(2)}</td>
+          <td style=\"padding:8px; text-align:right;\"><input type=\"number\" min=\"0\" step=\"0.1\" value=\"${m.kg}\" style=\"width:120px;\" data-idx=\"${idx}\" /></td>
+          <td style=\"padding:8px; text-align:right;\" id=\"p-sub-${idx}\">0.00</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('input[type=\"number\"]').forEach(inp=>{
+        inp.addEventListener('input', (ev)=>{
+          const i = Number(ev.target.getAttribute('data-idx'));
+          const val = Number(ev.target.value);
+          materialesSeleccionados[i].kg = isNaN(val) ? 0 : val;
+          actualizarPesajeTotal();
+        });
+      });
+      actualizarPesajeTotal();
+    }
+    function actualizarPesajeTotal(){
+      let total = 0;
+      materialesSeleccionados.forEach((m, idx)=>{
+        const sub = m.kg * m.precio;
+        total += sub;
+        const el = document.getElementById('p-sub-'+idx);
+        if (el) el.textContent = sub.toFixed(2);
+      });
+      document.getElementById('pesaje-total').textContent = 'S/ ' + total.toFixed(2);
+    }
+    function cancelarPesaje(){ setView('empresa_solicitudes'); }
+    async function confirmarPesaje(){
+      const metodo = document.getElementById('metodo-pago').value;
+      const payload = {
+        usuario_id: solicitudSeleccionada.usuario_id,
+        metodo_pago: metodo,
+        lat: null,
+        lon: null,
+        pesajes: materialesSeleccionados.filter(m=> (m.kg||0) > 0).map(m=> ({ material_id: m.material_id, kg_finales: m.kg }))
+      };
+      const r = await fetch(`/api/empresas/${user.id}/solicitudes/${solicitudSeleccionada.id}/pesaje_pago`, { method:'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+      const j = await r.json();
+      alert('Transacción registrada: #'+j.id+' · Monto S/ '+Number(j.monto_pagado).toFixed(2));
+      setView('empresa_solicitudes');
+      loadSolicitudesEmpresa();
+    }
+    async function loadPerfil(){
+      if (role === 'empresa'){
+        const p = {
+          id: user.id,
+          ruc: user.ruc,
+          nombre: user.nombre,
+          reputacion: user.reputacion_promedio,
+          reseñas: user.resenas_recibidas_count
+        };
+        document.getElementById('perfil').textContent = JSON.stringify(p,null,2);
+        document.getElementById('perfil-materiales').hidden = false;
+        const cat = await (await fetch('/api/materiales', { headers: authHeaders() })).json();
+        perfilCatalogo = cat.map((m)=>({ id: Number(m.id||m.material_id||m.id_material||m), nombre: m.nombre||String(m.nombre||m), precio_base_por_kg: Number(m.precio_base_por_kg||0) }));
+        const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
+        perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg) }));
+        renderPerfilMateriales();
+      } else {
+        const st = await (await fetch(`/api/usuarios/${user.id}/stats`, { headers: authHeaders() })).json();
+        const puntos = Number(user.puntos_acumulados||0);
+        const kg = Number(user.kg_totales||0);
+        const rep = Number(user.reputacion_promedio||0);
+        const resenas = Number(user.resenas_recibidas_count||0);
+        const monto = Number(st?.monto_total||0);
+        document.getElementById('perfil').innerHTML = `
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-title">Puntos</div><div class="stat-value">${puntos}</div></div>
+            <div class="stat-card"><div class="stat-title">Kg totales</div><div class="stat-value">${kg.toFixed(2)}</div></div>
+            <div class="stat-card"><div class="stat-title">Monto ganado (S/)</div><div class="stat-value">${monto.toFixed(2)}</div></div>
+            <div class="stat-card"><div class="stat-title">Reputación</div><div class="stat-value">${rep.toFixed(2)}</div></div>
+            <div class="stat-card"><div class="stat-title">Reseñas</div><div class="stat-value">${resenas}</div></div>
+          </div>
+        `;
+        document.getElementById('perfil-materiales').hidden = true;
+      }
+    }
+
+    function renderPerfilMateriales(){
+      const tbody = document.getElementById('perfil-materiales-body');
+      tbody.innerHTML = '';
+      perfilMateriales.forEach(m=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:8px;">${m.nombre}</td>
+          <td style="padding:8px; text-align:right;"><input type="number" step="0.01" value="${m.precio_por_kg.toFixed(2)}" style="width:120px;" data-mid="${m.material_id}" /></td>
+          <td style="padding:8px; text-align:right;"><button class="btn" onclick="perfilRemoveMaterial(${m.material_id})">Quitar</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('input[data-mid]').forEach(inp=>{
+        inp.addEventListener('input', (ev)=>{
+          const mid = Number(ev.target.getAttribute('data-mid'));
+          const val = Number(ev.target.value);
+          const idx = perfilMateriales.findIndex(x=>x.material_id===mid);
+          if (idx>=0) perfilMateriales[idx].precio_por_kg = isNaN(val) ? 0 : val;
+        });
+      });
+      const sel = document.getElementById('perfil-add-select');
+      sel.innerHTML = '';
+      const ya = new Set(perfilMateriales.map(m=>m.material_id));
+      perfilCatalogo.filter(c=>!ya.has(c.id)).forEach(c=>{
+        const opt = document.createElement('option');
+        opt.value = String(c.id);
+        opt.textContent = c.nombre;
+        sel.appendChild(opt);
+      });
+      const precioInp = document.getElementById('perfil-add-precio');
+      sel.onchange = (ev)=>{
+        const mid = Number(sel.value);
+        const c = perfilCatalogo.find(x=>x.id===mid);
+        if (c && precioInp) precioInp.value = (Number(c.precio_base_por_kg)||0).toFixed(2);
+      };
+      if (sel.options.length>0){
+        const firstId = Number(sel.options[0].value);
+        const c0 = perfilCatalogo.find(x=>x.id===firstId);
+        if (c0 && precioInp) precioInp.value = (Number(c0.precio_base_por_kg)||0).toFixed(2);
+      }
+    }
+
+    async function perfilAddMaterial(){
+      const sel = document.getElementById('perfil-add-select');
+      const mid = Number(sel.value);
+      let precio = Number(document.getElementById('perfil-add-precio').value);
+      if (!mid) return;
+      const c = perfilCatalogo.find(x=>x.id===mid);
+      if (!c) return;
+      if (perfilMateriales.some(x=>x.material_id===mid)) return;
+      if (!precio || precio<=0 || isNaN(precio)) precio = Number(c.precio_base_por_kg)||0;
+      perfilMateriales.push({ material_id: mid, nombre: c.nombre, precio_por_kg: precio });
+      document.getElementById('perfil-add-precio').value = '';
+      renderPerfilMateriales();
+    }
+
+    async function perfilRemoveMaterial(mid){
+      await fetch(`/api/empresas/${user.id}/materiales/${mid}`, { method:'DELETE', headers: authHeaders() });
+      perfilMateriales = perfilMateriales.filter(m=>m.material_id!==Number(mid));
+      renderPerfilMateriales();
+    }
+
+    async function perfilSaveMaterials(){
+      const items = perfilMateriales.map(m=>({ material_id: m.material_id, precio_por_kg: m.precio_por_kg }));
+      const r = await fetch(`/api/empresas/${user.id}/materiales/upsert`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ items }) });
+      await r.json();
+      alert('Cambios guardados');
+      const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
+      perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg) }));
+      renderPerfilMateriales();
+    }
+
+    if (role === 'empresa') {
+      document.getElementById('m-empresas').style.display = 'none';
+      document.getElementById('m-solicitudes').textContent = 'Solicitudes Entrantes';
+      document.getElementById('m-solicitudes').setAttribute('onclick', "setView('empresa_solicitudes')");
+      document.getElementById('m-resenas').style.display = '';
+      document.getElementById('m-rewards').style.display = 'none';
+      setView('empresa_solicitudes');
+    } else {
+      document.getElementById('m-resenas').style.display = 'none';
+      document.getElementById('m-rewards').style.display = '';
+      setView('empresas');
+    }
+  </script>
+</body>
+</html>
