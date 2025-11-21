@@ -6,6 +6,7 @@ const empresasRepo_1 = require("../repositories/empresasRepo");
 const materialesRepo_1 = require("../repositories/materialesRepo");
 const solicitudesRepo_1 = require("../repositories/solicitudesRepo");
 const solicitudesService_1 = require("../services/solicitudesService");
+const solicitudesRepo_2 = require("../repositories/solicitudesRepo");
 const pagosService_1 = require("../services/pagosService");
 const asyncHandler_1 = require("../middleware/asyncHandler");
 exports.empresasRouter = (0, express_1.Router)();
@@ -48,7 +49,11 @@ exports.empresasRouter.post("/:id/solicitudes/:sid/aceptar", (0, asyncHandler_1.
     const empresaId = Number(req.params.id);
     const solicitudId = Number(req.params.sid);
     const s = await (0, solicitudesService_1.aceptarSolicitud)(empresaId, solicitudId);
-    res.json(s);
+    const sol = await (0, solicitudesRepo_2.obtenerSolicitud)(solicitudId);
+    const items = Array.isArray(sol?.items_json) ? sol.items_json : [];
+    const pesajes = items.map((it) => ({ material_id: Number(it.material_id), kg_finales: Number(it.kg) }));
+    const t = await (0, pagosService_1.registrarPesajeYPago)(empresaId, solicitudId, Number(s.usuario_id), "efectivo", null, null, pesajes);
+    res.json({ solicitud: s, transaccion: t });
 }));
 exports.empresasRouter.post("/:id/solicitudes/:sid/rechazar", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const empresaId = Number(req.params.id);
