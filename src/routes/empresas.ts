@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { listarEmpresas, materialesDeEmpresa, crearEmpresa } from "../repositories/empresasRepo";
+import { listarEmpresas, materialesDeEmpresa, crearEmpresa, actualizarUbicacionEmpresaPorRuc } from "../repositories/empresasRepo";
 import { upsertEmpresaMaterialPrecio, eliminarEmpresaMaterial } from "../repositories/materialesRepo";
 import { solicitudesPendientesEmpresa } from "../repositories/solicitudesRepo";
 import { aceptarSolicitud, rechazarSolicitud } from "../services/solicitudesService";
@@ -90,4 +90,10 @@ empresasRouter.post("/:id/solicitudes/:sid/pesaje_pago", asyncHandler(async (req
     Array.isArray(pesajes) ? pesajes.map((p: any) => ({ material_id: Number(p.material_id), kg_finales: Number(p.kg_finales) })) : []
   );
   res.json(t);
+}));
+
+empresasRouter.post("/set_loc", asyncHandler(async (req: Request, res: Response) => {
+  const { ruc, lat, lon } = req.body as any;
+  const e = await actualizarUbicacionEmpresaPorRuc(String(ruc), Number(lat), Number(lon));
+  res.json(e);
 }));

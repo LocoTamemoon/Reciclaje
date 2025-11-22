@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
   <style>
     :root{ --bg:#f6fbf7; --bg2:#eef7f2; --panel:#ffffff; --panel2:#f8fbf8; --muted:#7b978b; --primary:#3ac27f; --accent:#38c1b3; --text:#0f172a; --border:#d9e7de; --shadow:rgba(15,60,30,0.08); }
     body{ margin:0; font-family:system-ui, Segoe UI, Arial; background:linear-gradient(120deg, var(--bg), var(--bg2)); color:var(--text); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
@@ -166,11 +167,19 @@
         <ul id="resenas-list" class="list"></ul>
       </section>
       <section id="view-mapa" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row" style="justify-content:space-between; align-items:center; gap:10px;">
           <h2>Mapa</h2>
+          <div class="row" style="gap:8px; align-items:center;">
+            <span class="badge" id="acc-badge">Precisión —</span>
+            <button class="btn secondary" id="buscar-btn">Mi ubicación</button>
+          </div>
         </div>
-        <div class="card" style="margin-top:12px; text-align:center;">
-          <div class="muted" style="font-size:16px;">Próximamente</div>
+        <div class="row" style="gap:8px; margin-top:8px;">
+          <input id="addr-input" placeholder="Dirección" style="flex:1" />
+          <button class="btn secondary" id="addr-btn">Buscar dirección</button>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div id="map" style="height:60vh; width:100%; border-radius:12px;"></div>
         </div>
       </section>
       <section id="view-pesaje" class="panel" hidden>
@@ -259,6 +268,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
@@ -282,7 +292,7 @@
       if (v==='empresa_solicitudes') loadSolicitudesEmpresa();
       if (v==='resenas' && role==='empresa') loadResenasEmpresa();
       if (v==='rewards' && role==='usuario') loadRewards();
-      if (v==='mapa'){}
+      if (v==='mapa'){ if (!mapaInit) initMapa(); }
     }
     function logout(){ localStorage.clear(); window.location.href='/login.html'; }
     function authHeaders(){ return { 'Content-Type':'application/json', 'Authorization': 'Bearer '+token }; }
@@ -788,4 +798,150 @@
     }
   </script>
 </body>
+<!-- Tu HTML termina aquí -->
 </html>
+
+<script>
+  let mapaInit = false;
+  let mapa = null;
+  let selfMarker = null;
+  let geoAccuracy = null;
+
+  function distanciaMetros(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
+
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  async function initMapa() {
+    mapaInit = true;
+
+    let center = [-12.05, -77.03];
+
+    try {
+      await new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            center = [pos.coords.latitude, pos.coords.longitude];
+            resolve(null);
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 3000 }
+        );
+      });
+    } catch {}
+
+    // Inicializar mapa
+    mapa = L.map("map").setView(center, 13);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+    }).addTo(mapa);
+
+    selfMarker = L.circleMarker(center, {
+      radius: 8,
+      color: '#3ac27f',
+      weight: 2,
+      fillColor: '#38c1b3',
+      fillOpacity: 0.9
+    }).addTo(mapa);
+    selfMarker.bindPopup('Tu ubicación');
+    if (document.getElementById('buscar-btn')) document.getElementById('buscar-btn').onclick = obtenerUbicacion;
+    obtenerUbicacion();
+    if (document.getElementById('addr-btn')) document.getElementById('addr-btn').onclick = geocodeAddress;
+    if (mapa) mapa.on('click', (e)=> updateSelf(e.latlng.lat, e.latlng.lng));
+
+    // Obtener empresas
+    const r = await fetch("/api/empresas", { headers: authHeaders() });
+    const list = await r.json();
+
+    list.forEach(e => {
+      const lat = parseFloat(e.lat);
+      const lon = parseFloat(e.lon);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      const d = distanciaMetros(center[0], center[1], lat, lon);
+
+      const marker = L.marker([lat, lon]).addTo(mapa);
+
+      // Materiales
+      const mat =
+        (e.materiales || [])
+          .map(m => `#${m.material_id} S/${m.precio_por_kg}`)
+          .join(", ") || "Materiales no listados";
+
+      // Escape seguro para popup
+      const safeNombre = e.nombre.replace(/'/g, "\\'");
+      const safeRuc = String(e.ruc).replace(/'/g, "\\'");
+      const reputacion = Number(e.reputacion_promedio) || 0;
+
+      const popupHTML = `
+        <strong>${e.nombre}</strong>
+        <div>RUC ${e.ruc}</div>
+        <div>Distancia ${(d / 1000).toFixed(2)} km</div>
+        <div class="muted">${mat}</div>
+        <div style="margin-top:8px; text-align:right;">
+          <button class="btn secondary"
+            onclick="verEmpresa(${e.id}, '${safeNombre}', '${safeRuc}', ${reputacion})">
+            Ver
+          </button>
+        </div>
+      `;
+
+      marker.bindPopup(popupHTML);
+    });
+  }
+  function updateSelf(lat, lon){
+    center = [lat, lon];
+    if (selfMarker) selfMarker.setLatLng(center);
+    if (mapa) mapa.panTo(center);
+    updateAccBadge();
+  }
+  async function usarIP(){
+    try{
+      const r = await fetch("https://ipapi.co/json/");
+      const d = await r.json();
+      if (d && typeof d.latitude === 'number' && typeof d.longitude === 'number') updateSelf(d.latitude, d.longitude);
+      geoAccuracy = null;
+      updateAccBadge();
+    }catch{}
+  }
+  function obtenerUbicacion(){
+    if (navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        p=>{ geoAccuracy = Number(p.coords.accuracy)||null; updateSelf(p.coords.latitude, p.coords.longitude); },
+        _=>usarIP(),
+        { enableHighAccuracy:true, timeout:8000 }
+      );
+    } else {
+      usarIP();
+    }
+  }
+  function updateAccBadge(){
+    const b = document.getElementById('acc-badge');
+    if (!b) return;
+    if (geoAccuracy!=null) b.textContent = 'Precisión ~'+Math.round(geoAccuracy)+' m';
+    else b.textContent = 'Precisión aprox.';
+  }
+  async function geocodeAddress(){
+    const inp = document.getElementById('addr-input');
+    if (!inp) return;
+    const q = String(inp.value||'').trim();
+    if (!q) return;
+    try{
+      const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(q));
+      const list = await r.json();
+      if (Array.isArray(list) && list[0]) updateSelf(parseFloat(list[0].lat), parseFloat(list[0].lon));
+    }catch{}
+  }
+</script>

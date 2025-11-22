@@ -41,3 +41,11 @@ export async function crearEmpresa(
   );
   return res.rows[0];
 }
+
+export async function actualizarUbicacionEmpresaPorRuc(ruc: string, lat: number, lon: number) {
+  const res = await pool.query(
+    "UPDATE empresas SET lat=$2, lon=$3 WHERE ruc=$1 RETURNING *",
+    [ruc, lat, lon]
+  );
+  return res.rows[0] || null;
+}
