@@ -187,7 +187,7 @@
           <h2 id="pesaje-titulo">Pesaje</h2>
           <div class="row">
             <button class="btn secondary" onclick="cancelarPesaje()">Cancelar</button>
-            <button class="btn" onclick="confirmarPesaje()">Registrar pesaje y pago</button>
+            <button class="btn" id="btn-pesaje-confirm" onclick="confirmarPesaje()" disabled>Registrar pesaje y pago</button>
           </div>
         </div>
         <div class="row" style="justify-content:space-between; align-items:flex-end;">
@@ -216,8 +216,14 @@
             <tbody id="pesaje-body"></tbody>
           </table>
         </div>
-        <div class="right" style="margin-top:10px;">
-          <div>Total a pagar: <strong id="pesaje-total">S/ 0.00</strong></div>
+        <div class="right" style="margin-top:10px; display:flex; gap:12px; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
+          <div>Total estimado: <strong id="pesaje-total">S/ 0.00</strong></div>
+          <div>Comisión (10%): <strong id="pesaje-fee">S/ 0.00</strong></div>
+          <div>Total a pagar: <strong id="pesaje-net">S/ 0.00</strong></div>
+          <div class="row" style="gap:8px; align-items:center;">
+            <input type="checkbox" id="pesaje-agree" />
+            <label for="pesaje-agree" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
+          </div>
         </div>
       </section>
       <section id="view-perfil" class="panel" hidden>
@@ -264,6 +270,36 @@
       <div class="modal-actions">
         <button class="btn" onclick="submitRating()">Enviar</button>
         <button class="btn secondary" onclick="closeRating()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="aceptar-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h3>Confirmar aceptación</h3>
+      <div id="aceptar-detalle" class="mono"></div>
+      <div class="row" style="align-items:center; gap:8px; margin-top:10px;">
+        <input type="checkbox" id="aceptar-agree" />
+        <label for="aceptar-agree" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
+      </div>
+      <div id="aceptar-fee-box" class="right" style="margin-top:8px;" hidden>
+        <div>Comisión (10%): <strong id="aceptar-fee">S/ 0.00</strong></div>
+        <div>Total a pagar: <strong id="aceptar-net">S/ 0.00</strong></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="btn-aceptar-go">Aceptar</button>
+        <button class="btn secondary" id="btn-aceptar-pesaje">Pesaje</button>
+        <button class="btn secondary" onclick="closeAceptar()">Volver</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="solicitud-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h3>Detalle de solicitud</h3>
+      <div id="solicitud-detalle" class="mono"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeSolicitudDetalle()">Cerrar</button>
       </div>
     </div>
   </div>
@@ -412,7 +448,7 @@
       ant.innerHTML = '';
       (j.solicitudes_pendientes||[]).forEach(s=>{
         const li = document.createElement('li');
-        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`;
+        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> <button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`;
         pend.appendChild(li);
       });
       (j.solicitudes_anteriores||[]).forEach(s=>{
@@ -426,6 +462,26 @@
       const j = await r.json();
       alert('Solicitud cancelada: #'+j.id);
       loadSolicitudes();
+    }
+
+    let solicitudDetalleCtx = { sid: null, empresa_id: null };
+    function closeSolicitudDetalle(){ document.getElementById('solicitud-modal').hidden = true; solicitudDetalleCtx = { sid:null, empresa_id:null }; }
+    async function openSolicitudDetalle(sid, empresaId){
+      solicitudDetalleCtx = { sid, empresa_id: empresaId };
+      const sol = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+      const cat = await (await fetch('/api/materiales', { headers: authHeaders() })).json();
+      const nombres = new Map(cat.map(m=> [Number(m.id), String(m.nombre)]));
+      const items = Array.isArray(sol?.items_json) ? sol.items_json : [];
+      const rows = items.map(it=>({ nombre: nombres.get(Number(it.material_id)) || ('Material '+Number(it.material_id)), kg: Number(it.kg)||0 }));
+      const html = [`<table style=\"width:100%; border-collapse:collapse;\">`,
+        `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Kg solicitados</th></tr></thead>`,
+        `<tbody>`,
+        ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td></tr>`),
+        `</tbody>`,
+        `</table>`
+      ].join('');
+      document.getElementById('solicitud-detalle').innerHTML = html;
+      document.getElementById('solicitud-modal').hidden = false;
     }
     async function loadHistorial(){
       const r = await fetch(`/api/usuarios/${user.id}/historial`, { headers: authHeaders() });
@@ -557,7 +613,7 @@
             <div class="muted">Estado: ${displayEstadoSolicitud(s.estado)} · ${new Date(s.creado_en).toLocaleString()}</div>
           </div>
           <div class="right">
-            <button class="btn secondary" onclick="empresaAceptar(${s.id})">Aceptar</button>
+            <button class="btn secondary" onclick="openAceptar(${s.id}, ${s.usuario_id})">Aceptar</button>
             <button class="btn" onclick="empresaRechazar(${s.id})">Rechazar</button>
             <button class="btn" onclick="empresaPesaje(${s.id}, ${s.usuario_id})">Pesaje</button>
           </div>
@@ -618,10 +674,63 @@
       await fetch(`/api/empresas/${user.id}/solicitudes/${sid}/rechazar`, { method:'POST', headers: authHeaders() });
       loadSolicitudesEmpresa();
     }
+
+    let aceptarCtx = { sid: null, usuario_id: null };
+    function closeAceptar(){ document.getElementById('aceptar-modal').hidden = true; aceptarCtx = { sid:null, usuario_id:null }; }
+  async function openAceptar(sid, usuarioId){
+    aceptarCtx = { sid, usuario_id: usuarioId };
+    const sol = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+    const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
+    const precios = new Map(mats.map(m=> [Number(m.material_id), Number(m.precio_por_kg)]));
+    const nombres = new Map(mats.map(m=> [Number(m.material_id), String(m.nombre)]));
+    const items = Array.isArray(sol?.items_json) ? sol.items_json : [];
+    let total = 0;
+    const rows = items.map(it=>{
+      const precio = precios.get(Number(it.material_id)) || 0;
+      const kg = Number(it.kg)||0;
+      const sub = precio * kg;
+      total += sub;
+      return { material_id: Number(it.material_id), nombre: (nombres.get(Number(it.material_id)) || ('#'+Number(it.material_id))), kg, precio, sub };
+    });
+    const detalle = document.getElementById('aceptar-detalle');
+    const html = [`<table style=\"width:100%; border-collapse:collapse;\">`,
+      `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Precio/kg</th><th style='text-align:right'>Kg</th><th style='text-align:right'>Subtotal</th></tr></thead>`,
+      `<tbody>`,
+      ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.precio.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.sub.toFixed(2)}</td></tr>`),
+      `</tbody>`,
+      `</table>`,
+      `<div class='right' style='margin-top:10px;'>Total estimado: <strong>S/ ${total.toFixed(2)}</strong></div>`
+    ].join('');
+    detalle.innerHTML = html;
+    const btnGo = document.getElementById('btn-aceptar-go');
+    const btnPes = document.getElementById('btn-aceptar-pesaje');
+    const chk = document.getElementById('aceptar-agree');
+    const feeBox = document.getElementById('aceptar-fee-box');
+    const feeEl = document.getElementById('aceptar-fee');
+    const netEl = document.getElementById('aceptar-net');
+    btnGo.disabled = true;
+    btnGo.onclick = async ()=>{ await empresaAceptar(sid); closeAceptar(); };
+    btnPes.onclick = ()=>{ closeAceptar(); empresaPesaje(sid, usuarioId); };
+    chk.onchange = ()=>{
+      const ok = chk.checked;
+      btnGo.disabled = !ok;
+      feeBox.hidden = !ok;
+      if (ok){
+        const fee = total * 0.10;
+        const net = total + fee;
+        if (feeEl) feeEl.textContent = 'S/ ' + fee.toFixed(2);
+        if (netEl) netEl.textContent = 'S/ ' + net.toFixed(2);
+      }
+    };
+    document.getElementById('aceptar-modal').hidden = false;
+  }
     async function empresaPesaje(sid, usuarioId){
       solicitudSeleccionada = { id: sid, usuario_id: usuarioId };
       const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
-      materialesSeleccionados = mats.map(m=>({ material_id: m.material_id, nombre: m.nombre, precio: Number(m.precio_por_kg), kg: 0 }));
+      const sol = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+      const items = Array.isArray(sol?.items_json) ? sol.items_json : [];
+      const kgByMat = new Map(items.map((it)=> [Number(it.material_id), Number(it.kg)]));
+      materialesSeleccionados = mats.map(m=>({ material_id: m.material_id, nombre: m.nombre, precio: Number(m.precio_por_kg), kg: kgByMat.get(Number(m.material_id)) || 0 }));
       renderPesaje();
       setView('pesaje');
     }
@@ -649,6 +758,10 @@
         });
       });
       actualizarPesajeTotal();
+      const chk = document.getElementById('pesaje-agree');
+      const btn = document.getElementById('btn-pesaje-confirm');
+      if (btn) btn.disabled = true;
+      if (chk) chk.onchange = ()=>{ if (btn) btn.disabled = !chk.checked; };
     }
     function actualizarPesajeTotal(){
       let total = 0;
@@ -658,7 +771,14 @@
         const el = document.getElementById('p-sub-'+idx);
         if (el) el.textContent = sub.toFixed(2);
       });
-      document.getElementById('pesaje-total').textContent = 'S/ ' + total.toFixed(2);
+      const totalEl = document.getElementById('pesaje-total');
+      const feeEl = document.getElementById('pesaje-fee');
+      const netEl = document.getElementById('pesaje-net');
+      const fee = total * 0.10;
+      const net = total + fee;
+      if (totalEl) totalEl.textContent = 'S/ ' + total.toFixed(2);
+      if (feeEl) feeEl.textContent = 'S/ ' + fee.toFixed(2);
+      if (netEl) netEl.textContent = 'S/ ' + net.toFixed(2);
     }
     function cancelarPesaje(){ setView('empresa_solicitudes'); }
     async function confirmarPesaje(){
@@ -945,3 +1065,7 @@
     }catch{}
   }
 </script>
+        <div class="row" style="gap:8px; align-items:center; margin-top:10px;">
+          <input type="checkbox" id="pesaje-agree" />
+          <label for="pesaje-agree" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
+        </div>
