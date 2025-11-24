@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { listarEmpresas, materialesDeEmpresa, crearEmpresa, actualizarUbicacionEmpresaPorRuc } from "../repositories/empresasRepo";
+import { listarEmpresas, materialesDeEmpresa, crearEmpresa, actualizarUbicacionEmpresaPorRuc, statsEmpresasTransacciones, statsDistritosTransacciones } from "../repositories/empresasRepo";
 import { upsertEmpresaMaterialPrecio, eliminarEmpresaMaterial } from "../repositories/materialesRepo";
 import { solicitudesPendientesEmpresa } from "../repositories/solicitudesRepo";
 import { aceptarSolicitud, rechazarSolicitud } from "../services/solicitudesService";
@@ -96,4 +96,14 @@ empresasRouter.post("/set_loc", asyncHandler(async (req: Request, res: Response)
   const { ruc, lat, lon } = req.body as any;
   const e = await actualizarUbicacionEmpresaPorRuc(String(ruc), Number(lat), Number(lon));
   res.json(e);
+}));
+
+empresasRouter.get("/stats", asyncHandler(async (_req: Request, res: Response) => {
+  const stats = await statsEmpresasTransacciones();
+  res.json(stats);
+}));
+
+empresasRouter.get("/stats_distritos", asyncHandler(async (_req: Request, res: Response) => {
+  const stats = await statsDistritosTransacciones();
+  res.json(stats);
 }));

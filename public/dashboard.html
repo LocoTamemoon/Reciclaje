@@ -174,6 +174,7 @@
           <h2>Mapa</h2>
           <div class="row" style="gap:8px; align-items:center;">
             <span class="badge" id="acc-badge">Precisión —</span>
+            <span class="badge" id="dist-badge">Distrito —</span>
             <button class="btn secondary" id="buscar-btn">Mi ubicación</button>
           </div>
         </div>
@@ -181,6 +182,26 @@
           <input id="addr-input" placeholder="Dirección" style="flex:1" />
           <button class="btn secondary" id="addr-btn">Buscar dirección</button>
           <button class="btn" id="distrito-btn">Ver distrito</button>
+        </div>
+        <div class="card" style="margin-top:8px; padding:8px;">
+          <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
+            <select id="map-filtro" style="min-width:240px;">
+              <option value="none">---SELECCIONE---</option>
+              <option value="mejor_material">Mejores pagos por material</option>
+              <option value="empresas_count">Empresas registradas en distrito</option>
+              <option value="mas_tx">Distrito con más transacciones</option>
+              <option value="mejor_distrito">Distrito con mejores calificaciones</option>
+            </select>
+            <select id="map-material" style="min-width:240px; display:none;"></select>
+            <label style="display:none; align-items:center; gap:6px;" id="limit-dist-wrap">
+              <input type="checkbox" id="map-limit-distrito" /> Limitar por distrito
+            </label>
+            <select id="map-limit-distrito-sel" style="min-width:240px; display:none;"></select>
+            <select id="map-filtro-distrito" style="min-width:240px; display:none;"></select>
+            <button class="btn" id="aplicar-filtro">Aplicar filtro</button>
+            <button class="btn secondary" id="quitar-filtro">Quitar filtro</button>
+            <span id="filtro-res" class="muted"></span>
+          </div>
         </div>
         <div class="card" style="margin-top:12px;">
           <div id="map" style="height:60vh; width:100%; border-radius:12px;"></div>
@@ -989,6 +1010,10 @@
   let geoAccuracy = null;
   let distritosData = null;
   let distritoLayer = null;
+  let distritoActual = null;
+  let empresasList = [];
+  let highlightLayer = null;
+  let materialCatalog = [];
 
   function distanciaMetros(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -1050,8 +1075,9 @@
     // Obtener empresas
     const r = await fetch("/api/empresas", { headers: authHeaders() });
     const list = await r.json();
+    empresasList = list.map((e)=>({ ...e }));
 
-    list.forEach(e => {
+    empresasList.forEach(e => {
       const lat = parseFloat(e.lat);
       const lon = parseFloat(e.lon);
       if (isNaN(lat) || isNaN(lon)) return;
@@ -1086,12 +1112,35 @@
 
       marker.bindPopup(popupHTML);
     });
+
+    const aplicarBtn = document.getElementById('aplicar-filtro');
+    if (aplicarBtn) aplicarBtn.onclick = aplicarFiltroMapa;
+    const quitarBtn = document.getElementById('quitar-filtro');
+    if (quitarBtn) quitarBtn.onclick = quitarFiltroMapa;
+    const filtroSel = document.getElementById('map-filtro');
+    if (filtroSel) filtroSel.onchange = onFiltroChange;
+
+    try{
+      const mr = await fetch('/api/materiales', { headers: authHeaders() });
+      materialCatalog = await mr.json();
+      const msel = document.getElementById('map-material');
+      if (msel){
+        msel.innerHTML='';
+        materialCatalog.forEach((m)=>{
+          const opt = document.createElement('option');
+          opt.value = String(m.id);
+          opt.textContent = m.nombre;
+          msel.appendChild(opt);
+        });
+      }
+    }catch{}
   }
   function updateSelf(lat, lon){
     center = [lat, lon];
     if (selfMarker) selfMarker.setLatLng(center);
     if (mapa) mapa.panTo(center);
     updateAccBadge();
+    updateDistritoBadge();
   }
   async function usarIP(){
     try{
@@ -1118,6 +1167,246 @@
     if (!b) return;
     if (geoAccuracy!=null) b.textContent = 'Precisión ~'+Math.round(geoAccuracy)+' m';
     else b.textContent = 'Precisión aprox.';
+  }
+  async function updateDistritoBadge(){
+    const bd = document.getElementById('dist-badge');
+    if (!bd || !selfMarker) return;
+    const ll = selfMarker.getLatLng();
+    if (!distritosData){
+      try{
+        const r = await fetch('/data/lima_callao_distritos.geojson');
+        distritosData = await r.json();
+      }catch{
+        bd.textContent = 'Distrito —';
+        return;
+      }
+    }
+    let nombre = null;
+    const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+    for (const f of feats){
+      if (contieneFeature(f, ll.lat, ll.lng)){
+        const p = f.properties||{};
+        nombre = p.nombre||p.name||p.NOMBREDIST||p.distrito||null;
+        break;
+      }
+    }
+    if (nombre){
+      const t = String(nombre).trim();
+      const display = /^lurigancho$/i.test(t) ? 'LURIGANCHO-CHOSICA' : t;
+      bd.textContent = 'Distrito: '+display;
+    } else {
+      bd.textContent = 'Distrito —';
+    }
+  }
+
+  async function populateDistritosSelect(){
+    if (!distritosData){ try{ const r = await fetch('/data/lima_callao_distritos.geojson'); distritosData = await r.json(); }catch{ return; } }
+    const sel = document.getElementById('map-filtro-distrito');
+    if (!sel) return;
+    sel.innerHTML = '';
+    const names = [];
+    const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+    feats.forEach(f=>{ const p = f.properties||{}; const n = p.nombre||p.name||p.NOMBREDIST||p.distrito||null; if (n) names.push(String(n)); });
+    names.sort((a,b)=> a.localeCompare(b, 'es-PE'));
+    names.forEach(n=>{ const opt = document.createElement('option'); opt.value = n; opt.textContent = n; sel.appendChild(opt); });
+  }
+
+  async function populateDistritosSelectTo(sel){
+    if (!distritosData){ try{ const r = await fetch('/data/lima_callao_distritos.geojson'); distritosData = await r.json(); }catch{ return; } }
+    if (!sel) return;
+    sel.innerHTML = '';
+    const names = [];
+    const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+    feats.forEach(f=>{ const p = f.properties||{}; const n = p.nombre||p.name||p.NOMBREDIST||p.distrito||null; if (n) names.push(String(n)); });
+    names.sort((a,b)=> a.localeCompare(b, 'es-PE'));
+    names.forEach(n=>{ const opt = document.createElement('option'); opt.value = n; opt.textContent = n; sel.appendChild(opt); });
+  }
+
+  async function onFiltroChange(){
+    const sel = document.getElementById('map-filtro');
+    const distSel = document.getElementById('map-filtro-distrito');
+    const out = document.getElementById('filtro-res');
+    const msel = document.getElementById('map-material');
+    const limitWrap = document.getElementById('limit-dist-wrap');
+    const limitChk = document.getElementById('map-limit-distrito');
+    const limitSel = document.getElementById('map-limit-distrito-sel');
+    if (!sel || !distSel || !out) return;
+    out.textContent = '';
+    const v = String(sel.value);
+    if (v==='empresas_count'){
+      await populateDistritosSelect();
+      distSel.style.display = '';
+    } else {
+      distSel.style.display = 'none';
+      distSel.innerHTML = '';
+    }
+    if (v==='mejor_material'){
+      if (msel) msel.style.display='';
+      if (limitWrap) limitWrap.style.display='';
+      if (limitChk && limitSel){
+        limitChk.onchange = async ()=>{
+          if (limitChk.checked){ await populateDistritosSelectTo(limitSel); limitSel.style.display=''; }
+          else { limitSel.style.display='none'; limitSel.innerHTML=''; }
+        };
+      }
+    } else {
+      if (msel) msel.style.display='none';
+      if (limitWrap) limitWrap.style.display='none';
+      if (limitSel){ limitSel.style.display='none'; limitSel.innerHTML=''; }
+      if (limitChk) limitChk.checked = false;
+    }
+  }
+
+  function empresaDistrito(e){
+    const lat = parseFloat(e.lat), lon = parseFloat(e.lon);
+    if (isNaN(lat) || isNaN(lon)) return null;
+    if (!distritosData) return null;
+    const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+    for (const f of feats){ if (contieneFeature(f, lat, lon)) { const p = f.properties||{}; return (p.nombre||p.name||p.NOMBREDIST||p.distrito||null); } }
+    return null;
+  }
+
+  function avgPrecioEmpresa(e){
+    const arr = Array.isArray(e.materiales) ? e.materiales : [];
+    if (arr.length===0) return 0;
+    let s=0; for (const m of arr) s += Number(m.precio_por_kg)||0;
+    return s/arr.length;
+  }
+
+  function clearHighlight(){ if (highlightLayer){ try{ mapa.removeLayer(highlightLayer); }catch{} highlightLayer=null; } }
+  function highlightEmpresas(list){
+    clearHighlight();
+    highlightLayer = L.layerGroup();
+    list.forEach(e=>{
+      const lat = parseFloat(e.lat), lon = parseFloat(e.lon);
+      if (isNaN(lat)||isNaN(lon)) return;
+      const c = L.circleMarker([lat,lon], { radius:10, color:'#f59e0b', weight:3, fillColor:'#fde68a', fillOpacity:0.5 });
+      c.addTo(highlightLayer);
+    });
+    highlightLayer.addTo(mapa);
+  }
+
+  async function aplicarFiltroMapa(){
+    const sel = document.getElementById('map-filtro');
+    const out = document.getElementById('filtro-res');
+    const distSel = document.getElementById('map-filtro-distrito');
+    const msel = document.getElementById('map-material');
+    const limitChk = document.getElementById('map-limit-distrito');
+    const limitSel = document.getElementById('map-limit-distrito-sel');
+    if (!sel || !out) return;
+    const v = String(sel.value);
+    if (v==='none'){ out.textContent = 'Seleccione un filtro'; return; }
+    if (!distritosData){ try{ const r = await fetch('/data/lima_callao_distritos.geojson'); distritosData = await r.json(); }catch{ out.textContent='No se pudo cargar distritos'; return; } }
+    const current = distritoActual;
+    let empresasDistrito = empresasList.filter(e=> empresaDistrito(e) === current);
+    if (v==='mejor_material'){
+      if (!msel || !msel.value){ out.textContent='Seleccione un material'; return; }
+      const materialId = Number(msel.value);
+      let pool = empresasList.slice();
+      if (limitChk && limitSel && limitChk.checked && limitSel.value){
+        const target = String(limitSel.value);
+        pool = pool.filter(e=> empresaDistrito(e) === target);
+      }
+      let best = null; let bestPrecio = -1;
+      for (const e of pool){
+        const arr = Array.isArray(e.materiales) ? e.materiales : [];
+        const item = arr.find((m)=> Number(m.material_id)===materialId);
+        const precio = item ? Number(item.precio_por_kg) : -1;
+        if (precio>bestPrecio){ bestPrecio=precio; best=e; }
+      }
+      clearHighlight();
+      if (!best || bestPrecio<0){ out.textContent='Sin datos de precios para el material seleccionado'; return; }
+      const lat = parseFloat(best.lat), lon = parseFloat(best.lon);
+      if (!isNaN(lat)&&!isNaN(lon)){
+        highlightLayer = L.layerGroup();
+        const c = L.circleMarker([lat,lon], { radius:12, color:'#ef4444', weight:3, fillColor:'#fecaca', fillOpacity:0.6 });
+        c.addTo(highlightLayer);
+        highlightLayer.addTo(mapa);
+        try{ mapa.panTo([lat,lon]); }catch{}
+      }
+      const matName = (materialCatalog.find((m)=> Number(m.id)===materialId)?.nombre) || ('#'+String(materialId));
+      out.textContent = 'Mejor pago por '+matName+': '+best.nombre+' — S/ '+bestPrecio.toFixed(2);
+      return;
+    }
+    if (v==='top_pagan'){
+      const sorted = empresasDistrito.slice().sort((a,b)=> avgPrecioEmpresa(b)-avgPrecioEmpresa(a));
+      const top = sorted.slice(0, Math.min(5, sorted.length));
+      highlightEmpresas(top);
+      out.textContent = top.length ? ('Top pagadores ('+top.length+') en '+(current||'—')) : 'Sin empresas en distrito';
+      return;
+    }
+    if (v==='empresas_count'){
+      if (!distSel || !distSel.value){ out.textContent = 'Seleccione un distrito'; return; }
+      const target = String(distSel.value);
+      empresasDistrito = empresasList.filter(e=> empresaDistrito(e) === target);
+      clearHighlight();
+      const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+      let found = null;
+      for (const f of feats){ const p = f.properties||{}; const name = p.nombre||p.name||p.NOMBREDIST||p.distrito||null; if (name===target){ found=f; break; } }
+      if (found){
+        if (distritoLayer){ try{ mapa.removeLayer(distritoLayer); }catch{} distritoLayer=null; }
+        distritoLayer = L.geoJSON(found, { style: { color:'#22c55e', weight:3, fillColor:'#86efac', fillOpacity:0.2 } });
+        distritoLayer.addTo(mapa);
+        try{ mapa.fitBounds(distritoLayer.getBounds(), { padding:[20,20] }); }catch{}
+      }
+      out.textContent = 'Empresas registradas en '+target+': '+String(empresasDistrito.length);
+      return;
+    }
+    if (v==='mas_tx'){
+      try{
+        const r = await fetch('/api/empresas/stats_distritos', { headers: authHeaders() });
+        const stats = await r.json();
+        const best = stats && stats[0] ? String(stats[0].distrito) : null;
+        const bestCount = stats && stats[0] ? Number(stats[0].transacciones_count) : 0;
+        if (!best){ out.textContent='Sin datos de transacciones'; clearHighlight(); return; }
+        if (!distritosData){ const rr = await fetch('/data/lima_callao_distritos.geojson'); distritosData = await rr.json(); }
+        const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+        let found = null;
+        for (const f of feats){ const p = f.properties||{}; const name = p.nombre||p.name||p.NOMBREDIST||p.distrito||null; if (name===best){ found=f; break; } }
+        clearHighlight();
+        if (found){
+          if (distritoLayer){ try{ mapa.removeLayer(distritoLayer); }catch{} distritoLayer=null; }
+          distritoLayer = L.geoJSON(found, { style: { color:'#22c55e', weight:3, fillColor:'#86efac', fillOpacity:0.2 } });
+          distritoLayer.addTo(mapa);
+          try{ mapa.fitBounds(distritoLayer.getBounds(), { padding:[20,20] }); }catch{}
+        }
+        out.textContent = 'Distrito con más transacciones: '+best+' ('+String(bestCount)+')';
+      }catch{ out.textContent='No se pudo cargar estadísticas'; }
+      return;
+    }
+    if (v==='mejor_distrito'){
+      const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+      const byDist = new Map();
+      empresasList.forEach(e=>{
+        const d = empresaDistrito(e);
+        if (!d) return;
+        const arr = byDist.get(d)||[];
+        arr.push(Number(e.reputacion_promedio)||0);
+        byDist.set(d, arr);
+      });
+      let best = null; let bestAvg = -1;
+      for (const [d, arr] of byDist.entries()){
+        const avg = arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+        if (avg>bestAvg){ bestAvg=avg; best=d; }
+      }
+      if (!best){ out.textContent='Sin datos de reputación'; clearHighlight(); return; }
+      let found = null;
+      for (const f of feats){ const p = f.properties||{}; const name = p.nombre||p.name||p.NOMBREDIST||p.distrito||null; if (name===best){ found=f; break; } }
+      if (!found){ out.textContent='Distrito no encontrado'; clearHighlight(); return; }
+      if (distritoLayer){ try{ mapa.removeLayer(distritoLayer); }catch{} distritoLayer=null; }
+      distritoLayer = L.geoJSON(found, { style: { color:'#22c55e', weight:3, fillColor:'#86efac', fillOpacity:0.2 } });
+      distritoLayer.addTo(mapa);
+      try{ mapa.fitBounds(distritoLayer.getBounds(), { padding:[20,20] }); }catch{}
+      out.textContent = 'Mejor distrito por reputación: '+best+' (avg '+bestAvg.toFixed(2)+')';
+      return;
+    }
+  }
+
+  function quitarFiltroMapa(){
+    const out = document.getElementById('filtro-res');
+    if (out) out.textContent = '';
+    clearHighlight();
+    if (distritoLayer){ try{ mapa.removeLayer(distritoLayer); }catch{} distritoLayer=null; }
   }
   async function geocodeAddress(){
     const inp = document.getElementById('addr-input');
@@ -1172,5 +1461,6 @@
     distritoLayer = L.geoJSON(found, { style: { color:'#0ea5e9', weight:3, fillColor:'#60a5fa', fillOpacity:0.15 } });
     distritoLayer.addTo(mapa);
     try{ mapa.fitBounds(distritoLayer.getBounds(), { padding:[20,20] }); }catch{}
+    updateDistritoBadge();
   }
 </script>
