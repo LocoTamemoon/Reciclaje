@@ -188,6 +188,7 @@
             <select id="map-filtro" style="min-width:240px;">
               <option value="none">---SELECCIONE---</option>
               <option value="mejor_material">Mejores pagos por material</option>
+              <option value="mas_cercana">Empresa recicladora más cercana</option>
               <option value="empresas_count">Empresas registradas en distrito</option>
               <option value="mas_tx">Distrito con más transacciones</option>
               <option value="mejor_distrito">Distrito con mejores calificaciones</option>
@@ -1326,6 +1327,29 @@
       }
       const matName = (materialCatalog.find((m)=> Number(m.id)===materialId)?.nombre) || ('#'+String(materialId));
       out.textContent = 'Mejor pago por '+matName+': '+best.nombre+' — S/ '+bestPrecio.toFixed(2);
+      return;
+    }
+    if (v==='mas_cercana'){
+      if (!selfMarker){ out.textContent='Ubicación no disponible'; return; }
+      const ll = selfMarker.getLatLng();
+      let best = null; let bestDist = Infinity;
+      for (const e of empresasList){
+        const lat = parseFloat(e.lat), lon = parseFloat(e.lon);
+        if (isNaN(lat)||isNaN(lon)) continue;
+        const d = distanciaMetros(ll.lat, ll.lng, lat, lon);
+        if (d < bestDist){ bestDist = d; best = e; }
+      }
+      clearHighlight();
+      if (!best || !isFinite(bestDist)){ out.textContent='No se encontró empresa cercana'; return; }
+      const lat = parseFloat(best.lat), lon = parseFloat(best.lon);
+      if (!isNaN(lat)&&!isNaN(lon)){
+        highlightLayer = L.layerGroup();
+        const c = L.circleMarker([lat,lon], { radius:12, color:'#0ea5e9', weight:3, fillColor:'#bae6fd', fillOpacity:0.6 });
+        c.addTo(highlightLayer);
+        highlightLayer.addTo(mapa);
+        try{ mapa.panTo([lat,lon]); }catch{}
+      }
+      out.textContent = 'Empresa más cercana: '+best.nombre+' — '+(bestDist/1000).toFixed(2)+' km';
       return;
     }
     if (v==='top_pagan'){
