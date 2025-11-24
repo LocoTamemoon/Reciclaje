@@ -453,7 +453,7 @@
       });
       (j.solicitudes_anteriores||[]).forEach(s=>{
         const li = document.createElement('li');
-        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span>`;
+        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button>`;
         ant.appendChild(li);
       });
     }
@@ -470,13 +470,32 @@
       solicitudDetalleCtx = { sid, empresa_id: empresaId };
       const sol = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
       const cat = await (await fetch('/api/materiales', { headers: authHeaders() })).json();
-      const nombres = new Map(cat.map(m=> [Number(m.id), String(m.nombre)]));
+      const nombresCat = new Map(cat.map(m=> [Number(m.id), String(m.nombre)]));
+      const empresas = await (await fetch('/api/empresas', { headers: authHeaders() })).json();
+      const emp = Array.isArray(empresas) ? empresas.find((e)=> Number(e.id) === Number(empresaId)) : null;
+      const matsEmp = await (await fetch(`/api/empresas/${empresaId}/materiales`, { headers: authHeaders() })).json();
+      const precios = new Map(matsEmp.map(m=> [Number(m.material_id), Number(m.precio_por_kg)]));
+      const nombresEmp = new Map(matsEmp.map(m=> [Number(m.material_id), String(m.nombre)]));
       const items = Array.isArray(sol?.items_json) ? sol.items_json : [];
-      const rows = items.map(it=>({ nombre: nombres.get(Number(it.material_id)) || ('Material '+Number(it.material_id)), kg: Number(it.kg)||0 }));
-      const html = [`<table style=\"width:100%; border-collapse:collapse;\">`,
-        `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Kg solicitados</th></tr></thead>`,
+      let total = 0;
+      const rows = items.map(it=>{
+        const mid = Number(it.material_id);
+        const nombre = nombresEmp.get(mid) || nombresCat.get(mid) || ('Material '+mid);
+        const kg = Number(it.kg)||0;
+        const precio = precios.get(mid) || 0;
+        const sub = precio * kg;
+        total += sub;
+        return { nombre, precio, kg, sub };
+      });
+      const html = [
+        `<div class='row' style='justify-content:space-between; margin-bottom:8px;'>`,
+          `<div><span class='muted'>Empresa</span> <strong>${emp?.nombre || ('Empresa '+empresaId)}</strong></div>`,
+          `<div class='right'><span class='muted'>Total estimado a ganar</span> <strong>S/ ${total.toFixed(2)}</strong></div>`,
+        `</div>`,
+        `<table style=\"width:100%; border-collapse:collapse;\">`,
+        `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Precio/kg (S/)</th><th style='text-align:right'>Kg</th><th style='text-align:right'>Subtotal (S/)</th></tr></thead>`,
         `<tbody>`,
-        ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td></tr>`),
+        ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.precio.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.sub.toFixed(2)}</td></tr>`),
         `</tbody>`,
         `</table>`
       ].join('');
@@ -530,10 +549,13 @@
       const r = await fetch(`/api/transacciones/${id}`, { headers: authHeaders() });
       const j = await r.json();
       const filas = j.detalle.map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.precio_por_kg).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.subtotal).toFixed(2)}</td></tr>`).join('');
+      const footer = role === 'usuario'
+        ? `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong></div>`
+        : `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong> · Comisión 10%: <strong>S/ ${Number(j.comision_10).toFixed(2)}</strong> · Total con comisión: <strong>S/ ${Number(j.total_con_comision).toFixed(2)}</strong></div>`;
       panel.innerHTML = `
         <h3>Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}</h3>
         <table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Precio/kg</th><th style=\"text-align:right\">Kg</th><th style=\"text-align:right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>
-        <div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong> · Comisión 10%: <strong>S/ ${Number(j.comision_10).toFixed(2)}</strong> · Total con comisión: <strong>S/ ${Number(j.total_con_comision).toFixed(2)}</strong></div>
+        ${footer}
         <div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>
       `;
       panel.style.display = 'block';
@@ -709,6 +731,10 @@
     const feeEl = document.getElementById('aceptar-fee');
     const netEl = document.getElementById('aceptar-net');
     btnGo.disabled = true;
+    if (chk) chk.checked = false;
+    if (feeBox) feeBox.hidden = true;
+    if (feeEl) feeEl.textContent = 'S/ 0.00';
+    if (netEl) netEl.textContent = 'S/ 0.00';
     btnGo.onclick = async ()=>{ await empresaAceptar(sid); closeAceptar(); };
     btnPes.onclick = ()=>{ closeAceptar(); empresaPesaje(sid, usuarioId); };
     chk.onchange = ()=>{
@@ -760,6 +786,7 @@
       actualizarPesajeTotal();
       const chk = document.getElementById('pesaje-agree');
       const btn = document.getElementById('btn-pesaje-confirm');
+      if (chk) chk.checked = false;
       if (btn) btn.disabled = true;
       if (chk) chk.onchange = ()=>{ if (btn) btn.disabled = !chk.checked; };
     }
@@ -1065,7 +1092,3 @@
     }catch{}
   }
 </script>
-        <div class="row" style="gap:8px; align-items:center; margin-top:10px;">
-          <input type="checkbox" id="pesaje-agree" />
-          <label for="pesaje-agree" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
-        </div>
