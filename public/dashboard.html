@@ -442,18 +442,22 @@
     async function loadSolicitudes(){
       const r = await fetch(`/api/usuarios/${user.id}/dashboard`, { headers: authHeaders() });
       const j = await r.json();
+      const empList = await (await fetch('/api/empresas', { headers: authHeaders() })).json();
+      const empNames = new Map(empList.map((e)=> [Number(e.id), String(e.nombre||('Empresa '+e.id))]));
       const pend = document.getElementById('sol-pend');
       const ant = document.getElementById('sol-ant');
       pend.innerHTML = '';
       ant.innerHTML = '';
       (j.solicitudes_pendientes||[]).forEach(s=>{
         const li = document.createElement('li');
-        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> <button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`;
+        const en = empNames.get(Number(s.empresa_id)) || String(s.empresa_id);
+        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> <button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`;
         pend.appendChild(li);
       });
       (j.solicitudes_anteriores||[]).forEach(s=>{
         const li = document.createElement('li');
-        li.innerHTML = `Solicitud #${s.id} → Empresa ${s.empresa_id} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button>`;
+        const en = empNames.get(Number(s.empresa_id)) || String(s.empresa_id);
+        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button>`;
         ant.appendChild(li);
       });
     }
