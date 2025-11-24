@@ -180,6 +180,7 @@
         <div class="row" style="gap:8px; margin-top:8px;">
           <input id="addr-input" placeholder="Dirección" style="flex:1" />
           <button class="btn secondary" id="addr-btn">Buscar dirección</button>
+          <button class="btn" id="distrito-btn">Ver distrito</button>
         </div>
         <div class="card" style="margin-top:12px;">
           <div id="map" style="height:60vh; width:100%; border-radius:12px;"></div>
@@ -986,6 +987,8 @@
   let mapa = null;
   let selfMarker = null;
   let geoAccuracy = null;
+  let distritosData = null;
+  let distritoLayer = null;
 
   function distanciaMetros(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -1036,6 +1039,9 @@
       fillOpacity: 0.9
     }).addTo(mapa);
     selfMarker.bindPopup('Tu ubicación');
+
+    const dbtn = document.getElementById('distrito-btn');
+    if (dbtn) dbtn.onclick = verDistrito;
     if (document.getElementById('buscar-btn')) document.getElementById('buscar-btn').onclick = obtenerUbicacion;
     obtenerUbicacion();
     if (document.getElementById('addr-btn')) document.getElementById('addr-btn').onclick = geocodeAddress;
@@ -1123,5 +1129,48 @@
       const list = await r.json();
       if (Array.isArray(list) && list[0]) updateSelf(parseFloat(list[0].lat), parseFloat(list[0].lon));
     }catch{}
+  }
+
+  function puntoEnAnillo(lat, lon, ring){
+    let inside = false;
+    for (let i=0,j=ring.length-1;i<ring.length;j=i++){
+      const xi = ring[i][1], yi = ring[i][0];
+      const xj = ring[j][1], yj = ring[j][0];
+      const intersect = ((yi>lon)!=(yj>lon)) && (lat < (xj - xi) * (lon - yi) / (yj - yi + 0.0000001) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function contieneFeature(feature, lat, lon){
+    const g = feature && feature.geometry;
+    if (!g) return false;
+    if (g.type === 'Polygon'){
+      const rings = g.coordinates || [];
+      return puntoEnAnillo(lat, lon, rings[0]||[]);
+    }
+    if (g.type === 'MultiPolygon'){
+      const polys = g.coordinates || [];
+      for (const p of polys){ if (puntoEnAnillo(lat, lon, (p[0]||[]))) return true; }
+      return false;
+    }
+    return false;
+  }
+  async function verDistrito(){
+    if (!selfMarker) return;
+    const ll = selfMarker.getLatLng();
+    if (!distritosData){
+      try{
+        const r = await fetch('/data/lima_callao_distritos.geojson');
+        distritosData = await r.json();
+      }catch{ alert('No se pudo cargar distritos'); return; }
+    }
+    let found = null;
+    const feats = Array.isArray(distritosData?.features) ? distritosData.features : [];
+    for (const f of feats){ if (contieneFeature(f, ll.lat, ll.lng)) { found = f; break; } }
+    if (!found){ alert('Ubicación fuera de distritos de Lima/Callao'); return; }
+    if (distritoLayer){ try{ mapa.removeLayer(distritoLayer); }catch{} distritoLayer = null; }
+    distritoLayer = L.geoJSON(found, { style: { color:'#0ea5e9', weight:3, fillColor:'#60a5fa', fillOpacity:0.15 } });
+    distritoLayer.addTo(mapa);
+    try{ mapa.fitBounds(distritoLayer.getBounds(), { padding:[20,20] }); }catch{}
   }
 </script>
