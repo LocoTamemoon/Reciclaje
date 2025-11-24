@@ -138,9 +138,12 @@
         </div>
       </section>
       <section id="view-historial" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
-          <h2>Historial de Transacciones</h2>
-          <button class="btn secondary" onclick="loadHistorial()">Actualizar</button>
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <h2 id="hist-title">Historial de Transacciones</h2>
+          <div class="row">
+            <button class="btn secondary" id="hist-refresh">Actualizar</button>
+            <button class="btn" id="hist-toggle">Gasto de Puntos</button>
+          </div>
         </div>
         <ul id="hist-list" class="list"></ul>
         <div id="hist-detalle" class="panel" style="margin-top:12px; display:none;"></div>
@@ -323,7 +326,7 @@
       document.getElementById('view-pesaje').hidden = (v!=='pesaje');
       if (v==='empresas') loadEmpresas();
       if (v==='solicitudes') loadSolicitudes();
-      if (v==='historial') { if (role==='empresa') loadHistorialEmpresa(); else loadHistorial(); }
+      if (v==='historial') { if (role==='empresa') loadHistorialEmpresa(); else { initHistorialUI(); if (histGastosMode) loadHistorialGastos(); else loadHistorial(); } }
       if (v==='perfil') loadPerfil();
       if (v==='empresa_solicitudes') loadSolicitudesEmpresa();
       if (v==='resenas' && role==='empresa') loadResenasEmpresa();
@@ -506,6 +509,7 @@
       document.getElementById('solicitud-detalle').innerHTML = html;
       document.getElementById('solicitud-modal').hidden = false;
     }
+    let histGastosMode = false;
     async function loadHistorial(){
       const r = await fetch(`/api/usuarios/${user.id}/historial`, { headers: authHeaders() });
       const list = await r.json();
@@ -523,6 +527,31 @@
         ul.appendChild(li);
         setTimeout(()=>updateRatingButtonsForTx(t.id),0);
       });
+    }
+    async function loadHistorialGastos(){
+      const ul = document.getElementById('hist-list');
+      ul.innerHTML = '';
+      const gastos = await (await fetch(`/api/usuarios/${user.id}/puntos/gastos`, { headers: authHeaders() })).json();
+      const rewards = await (await fetch('/api/usuarios/recompensas', { headers: authHeaders() })).json();
+      const names = new Map(rewards.map((r)=> [String(r.key), String(r.nombre)]));
+      gastos.forEach(g=>{
+        const li = document.createElement('li');
+        const nombre = names.get(String(g.reward_key)) || String(g.reward_key);
+        li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\">\n          <div>\n            <div><strong>${nombre}</strong></div>\n            <div class=\"muted\">Gasto de puntos: ${Number(g.puntos)} · ${new Date(g.creado_en).toLocaleString()}</div>\n          </div>\n        </div>`;
+        ul.appendChild(li);
+      });
+      document.getElementById('hist-detalle').style.display = 'none';
+    }
+    function initHistorialUI(){
+      const refresh = document.getElementById('hist-refresh');
+      const toggle = document.getElementById('hist-toggle');
+      if (refresh) refresh.onclick = ()=>{ if (histGastosMode) loadHistorialGastos(); else loadHistorial(); };
+      if (toggle) toggle.onclick = ()=>{
+        histGastosMode = !histGastosMode;
+        document.getElementById('hist-title').textContent = histGastosMode ? 'Gasto de Puntos' : 'Historial de Transacciones';
+        toggle.textContent = histGastosMode ? 'Transacciones de Empresas' : 'Gasto de Puntos';
+        if (histGastosMode) loadHistorialGastos(); else loadHistorial();
+      };
     }
     async function loadHistorialEmpresa(){
       const r = await fetch(`/api/empresas/${user.id}/historial`, { headers: authHeaders() });

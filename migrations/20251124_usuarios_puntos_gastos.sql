@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS usuario_puntos_gastos (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  reward_key VARCHAR(128) NOT NULL,
+  puntos INTEGER NOT NULL,
+  creado_en TIMESTAMP DEFAULT NOW()
+);

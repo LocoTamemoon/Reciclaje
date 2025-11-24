@@ -53,10 +53,19 @@ usuariosRouter.post("/:id/recompensas/redimir", asyncHandler(async (req: Request
   const r = RECOMPENSAS.find(x=>x.key===String(reward_key));
   if (!r) { res.status(400).json({ error: 'reward_not_found' }); return; }
   try {
-    const out = await redimirPuntosUsuario(id, Number(r.costo));
+    const out = await redimirPuntosUsuario(id, Number(r.costo), String(r.key));
     res.json({ ok: true, nuevo_puntos: out.nuevo_puntos });
   } catch (e: any) {
     if (String(e.message)==='insufficient_points') { res.status(400).json({ error: 'insufficient_points' }); return; }
     res.status(400).json({ error: 'redeem_failed' });
   }
+}));
+
+usuariosRouter.get("/:id/puntos/gastos", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const rows = await pool.query(
+    "SELECT reward_key, puntos, creado_en FROM usuario_puntos_gastos WHERE usuario_id=$1 ORDER BY creado_en DESC",
+    [id]
+  );
+  res.json(rows.rows);
 }));
