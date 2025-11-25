@@ -8,6 +8,8 @@ exports.registerEmpresa = registerEmpresa;
 exports.loginUsuario = loginUsuario;
 exports.loginEmpresa = loginEmpresa;
 exports.setEmpresaCredentialsByRuc = setEmpresaCredentialsByRuc;
+exports.registerRecolector = registerRecolector;
+exports.loginRecolector = loginRecolector;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const pool_1 = require("../db/pool");
@@ -55,4 +57,22 @@ async function setEmpresaCredentialsByRuc(ruc, email, password) {
     const hash = await bcryptjs_1.default.hash(password, 10);
     const res = await pool_1.pool.query("UPDATE empresas SET email=$2, password_hash=$3 WHERE ruc=$1 RETURNING *", [ruc, email, hash]);
     return res.rows[0];
+}
+async function registerRecolector(email, password, lat, lon) {
+    const hash = await bcryptjs_1.default.hash(password, 10);
+    const res = await pool_1.pool.query("INSERT INTO recolectores(email, password_hash, lat, lon) VALUES($1,$2,$3,$4) RETURNING *", [email, hash, lat, lon]);
+    const r = res.rows[0];
+    const token = signToken({ tipo: "recolector", id: r.id });
+    return { token, recolector: r };
+}
+async function loginRecolector(email, password) {
+    const res = await pool_1.pool.query("SELECT * FROM recolectores WHERE email=$1", [email]);
+    const r = res.rows[0];
+    if (!r)
+        throw new Error("credenciales_invalidas");
+    const ok = await bcryptjs_1.default.compare(password, r.password_hash || "");
+    if (!ok)
+        throw new Error("credenciales_invalidas");
+    const token = signToken({ tipo: "recolector", id: r.id });
+    return { token, recolector: r };
 }

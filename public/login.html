@@ -40,6 +40,7 @@
         <select id="role">
           <option value="usuario">Usuario</option>
           <option value="empresa">Empresa</option>
+          <option value="recolector">Recolector</option>
         </select>
         <label class="mt">Email</label>
         <input id="email" type="email" placeholder="correo@ejemplo.com" />
@@ -61,10 +62,10 @@
       const role = document.getElementById('role').value;
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
-      const url = role === 'empresa' ? '/api/auth/login/empresa' : '/api/auth/login/usuario';
+      const url = role === 'empresa' ? '/api/auth/login/empresa' : (role === 'recolector' ? '/api/auth/login/recolector' : '/api/auth/login/usuario');
       const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email, password }) });
       const j = await r.json();
-      if (j.token) { setToken(j.token); setRole(role); setUser(j.usuario || j.empresa); window.location.href = '/dashboard.html'; return; }
+      if (j.token) { setToken(j.token); setRole(role); setUser(j.usuario || j.empresa || j.recolector); window.location.href = '/dashboard.html'; return; }
       show(document.getElementById('out'), j);
     }
   </script>

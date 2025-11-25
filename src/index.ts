@@ -8,6 +8,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { authRouter } from "./routes/auth";
 import { transaccionesRouter } from "./routes/transacciones";
 import { materialesRouter } from "./routes/materiales";
+import { recolectorRouter } from "./routes/recolector";
 
 const app = express();
 app.use(express.json());
@@ -24,6 +25,7 @@ app.use("/api/usuarios", usuariosRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/transacciones", transaccionesRouter);
 app.use("/api/materiales", materialesRouter);
+app.use("/api/recolector", recolectorRouter);
 
 app.use(errorHandler);
 

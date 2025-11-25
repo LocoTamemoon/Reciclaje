@@ -52,7 +52,7 @@ async function obtenerUsuarioPorId(id) {
     const res = await pool_1.pool.query("SELECT * FROM usuarios WHERE id=$1", [id]);
     return res.rows[0] || null;
 }
-async function redimirPuntosUsuario(usuarioId, puntos) {
+async function redimirPuntosUsuario(usuarioId, puntos, rewardKey) {
     const client = await pool_1.pool.connect();
     try {
         await client.query("BEGIN");
@@ -63,6 +63,7 @@ async function redimirPuntosUsuario(usuarioId, puntos) {
         if (actual < puntos)
             throw new Error("insufficient_points");
         await client.query("UPDATE usuarios SET puntos_acumulados = puntos_acumulados - $2 WHERE id=$1", [usuarioId, puntos]);
+        await client.query("INSERT INTO usuario_puntos_gastos(usuario_id, reward_key, puntos) VALUES($1,$2,$3)", [usuarioId, rewardKey, puntos]);
         await client.query("COMMIT");
         return { nuevo_puntos: actual - puntos };
     }

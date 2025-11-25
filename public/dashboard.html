@@ -77,6 +77,13 @@
         </div>
         <div id="empresas" class="grid"></div>
       </section>
+      <section id="view-recolector" class="panel" hidden>
+        <div class="row" style="justify-content:space-between;">
+          <h2>Solicitudes Disponibles</h2>
+          <button class="btn secondary" onclick="loadRecolectorFeed()">Actualizar</button>
+        </div>
+        <ul id="reco-feed" class="list"></ul>
+      </section>
       <section id="view-empresa" class="panel" hidden>
         <div class="row" style="justify-content:space-between;">
           <h2 id="empresa-titulo">Empresa</h2>
@@ -107,6 +114,13 @@
           </table>
         </div>
         <div class="muted" style="margin-top:10px;" id="empresa-cond"></div>
+        <div style="margin-top:10px;">
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="delivery-check" />
+            <span>Solicito el delivery sabiendo las condiciones del Acuerdo de Usuario a VidaVerde</span>
+          </label>
+          <div class="muted" id="delivery-hint" style="margin-top:6px;">Delivery disponible desde S/ 35</div>
+        </div>
         <div style="margin-top:16px;">
           <div class="row" style="justify-content:space-between; align-items:center;">
             <h3>Reseñas</h3>
@@ -140,6 +154,7 @@
       <section id="view-historial" class="panel" hidden>
         <div class="row" style="justify-content:space-between; align-items:center;">
           <h2 id="hist-title">Historial de Transacciones</h2>
+          <div class="badge" id="hist-earnings" style="margin-left:8px;">Ganancia total: S/ 0.00</div>
           <div class="row">
             <button class="btn secondary" id="hist-refresh">Actualizar</button>
             <button class="btn" id="hist-toggle">Gasto de Puntos</button>
@@ -339,6 +354,12 @@
 
     document.getElementById('user-info').textContent = `${role || 'usuario'} #${user.id}`;
 
+    // Ajuste de texto del menú para recolector
+    if (role === 'recolector') {
+      const btnSol = document.getElementById('m-solicitudes');
+      if (btnSol) btnSol.textContent = 'Solicitudes Disponibles';
+    }
+
     function setView(v){
       for (const id of ['empresas','solicitudes','historial','perfil','resenas','rewards','mapa']){
         document.getElementById('view-'+id).hidden = (id!==v);
@@ -347,9 +368,40 @@
       document.getElementById('view-empresa').hidden = (v!=='empresa');
       document.getElementById('view-empresa-solicitudes').hidden = (v!=='empresa_solicitudes');
       document.getElementById('view-pesaje').hidden = (v!=='pesaje');
+      if (role === 'recolector' && v === 'solicitudes') {
+        document.getElementById('view-solicitudes').hidden = true;
+        const rview = document.getElementById('view-recolector');
+        if (rview) rview.hidden = false;
+        loadRecolectorFeed();
+        return;
+      } else {
+        const rview = document.getElementById('view-recolector');
+        if (rview) rview.hidden = true;
+      }
       if (v==='empresas') loadEmpresas();
       if (v==='solicitudes') loadSolicitudes();
-      if (v==='historial') { if (role==='empresa') loadHistorialEmpresa(); else { initHistorialUI(); if (histGastosMode) loadHistorialGastos(); else loadHistorial(); } }
+      if (v==='historial') {
+        if (role==='empresa') {
+          loadHistorialEmpresa();
+          const he = document.getElementById('hist-earnings');
+          if (he) he.style.display = 'none';
+        } else if (role==='recolector') {
+          const title = document.getElementById('hist-title');
+          if (title) title.textContent = 'Historial de trabajos';
+          const toggle = document.getElementById('hist-toggle');
+          if (toggle) toggle.style.display = 'none';
+          const refresh = document.getElementById('hist-refresh');
+          if (refresh) refresh.onclick = ()=> loadHistorialRecolector();
+          const he = document.getElementById('hist-earnings');
+          if (he) he.style.display = 'inline-block';
+          loadHistorialRecolector();
+        } else {
+          initHistorialUI();
+          if (histGastosMode) loadHistorialGastos(); else loadHistorial();
+          const he = document.getElementById('hist-earnings');
+          if (he) he.style.display = 'none';
+        }
+      }
       if (v==='perfil') loadPerfil();
       if (v==='empresa_solicitudes') loadSolicitudesEmpresa();
       if (v==='resenas' && role==='empresa') loadResenasEmpresa();
@@ -433,6 +485,10 @@
         if (el) el.textContent = sub.toFixed(2);
       });
       document.getElementById('estimado-total').textContent = 'S/ ' + total.toFixed(2);
+      const dchk = document.getElementById('delivery-check');
+      const dhint = document.getElementById('delivery-hint');
+      if (dchk) dchk.disabled = total < 35;
+      if (dhint) dhint.textContent = total < 35 ? 'Delivery disponible desde S/ 35' : 'Delivery habilitado';
     }
     async function loadEmpresaResenas(empresaId){
       const ul = document.getElementById('empresa-resenas-list');
@@ -460,10 +516,47 @@
       if (totalKg <= 0) { alert('Indica los kg a entregar para al menos un material.'); return; }
       if (!confirm('Crear solicitud con empresa '+empresaSeleccionada.nombre+' y estimado '+document.getElementById('estimado-total').textContent+'?')) return;
       const items = materialesSeleccionados.filter(m=>Number(m.kg)>0).map(m=>({ material_id: Number(m.material_id), kg: Number(m.kg) }));
-      const r = await fetch('/api/solicitudes', { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id, empresa_id: empresaSeleccionada.id, items }) });
-      const j = await r.json();
+      const delivery = Boolean(document.getElementById('delivery-check')?.checked);
+      const delivery_consent = delivery ? true : false;
+      const totalText = document.getElementById('estimado-total').textContent||'S/ 0';
+      const totalNum = Number(totalText.replace('S/','').trim());
+      if (delivery && totalNum < 35) { alert('Para solicitar delivery el total mínimo es S/ 35'); return; }
+      const r = await fetch('/api/solicitudes', { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id, empresa_id: empresaSeleccionada.id, items, delivery, delivery_consent, delivery_terms_version: 'v1' }) });
+      let j;
+      try { j = await r.json(); } catch { j = {}; }
+      if (j?.error === 'delivery_min_total') { alert('Para solicitar delivery el total mínimo es S/ 35'); return; }
       alert('Solicitud creada: #'+j.id);
       setView('solicitudes');
+    }
+
+    async function loadRecolectorFeed(){
+      const r = await fetch('/api/recolector/feed', { headers: authHeaders() });
+      const list = await r.json();
+      const ul = document.getElementById('reco-feed');
+      if (!ul) return;
+      ul.innerHTML = '';
+      list.forEach(s=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Solicitud #${s.id}</strong> → Empresa ${s.empresa_id}</div>
+            <div class="muted">Clasificación: ${s.clasificacion_distancia||'—'} · Fee: S/ ${Number(s.delivery_fee||0).toFixed(2)}</div>
+          </div>
+          <div class="right">
+            <button class="btn" onclick="recolectorAceptar(${s.id})">Aceptar</button>
+          </div>
+        </div>`;
+        ul.appendChild(li);
+      });
+    }
+
+    async function recolectorAceptar(sid){
+      const body = { recolector_id: user.id };
+      const r = await fetch(`/api/recolector/${sid}/aceptar`, { method:'POST', headers: authHeaders(), body: JSON.stringify(body) });
+      const j = await r.json();
+      if (j?.error === 'no_disponible') { alert('Ya no está disponible'); return; }
+      alert('Solicitud aceptada: #'+j.id);
+      loadRecolectorFeed();
     }
     async function loadSolicitudes(){
       const r = await fetch(`/api/usuarios/${user.id}/dashboard`, { headers: authHeaders() });
@@ -517,17 +610,22 @@
         total += sub;
         return { nombre, precio, kg, sub };
       });
+      const fee = (String(sol?.tipo_entrega||'')==='delivery') ? Number(sol?.delivery_fee||0) : 0;
+      const banda = String(sol?.clasificacion_distancia||'');
+      const usuarioNeto = (fee>0) ? (total - fee) : total;
       const html = [
         `<div class='row' style='justify-content:space-between; margin-bottom:8px;'>`,
-          `<div><span class='muted'>Empresa</span> <strong>${emp?.nombre || ('Empresa '+empresaId)}</strong></div>`,
-          `<div class='right'><span class='muted'>Total estimado a ganar</span> <strong>S/ ${total.toFixed(2)}</strong></div>`,
+          `<div><span class='muted'>Empresa</span> <strong>${emp?.nombre || ('Empresa '+empresaId)}</strong>${banda? ` · <span class='badge'>${banda}</span>`:''}</div>`,
+          `<div class='right'><span class='muted'>Total estimado</span> <strong>S/ ${total.toFixed(2)}</strong></div>`,
         `</div>`,
         `<table style=\"width:100%; border-collapse:collapse;\">`,
         `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Precio/kg (S/)</th><th style='text-align:right'>Kg</th><th style='text-align:right'>Subtotal (S/)</th></tr></thead>`,
         `<tbody>`,
         ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.precio.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.sub.toFixed(2)}</td></tr>`),
         `</tbody>`,
-        `</table>`
+        `</table>`,
+        (fee>0 ? `<div class='right' style='margin-top:8px;'>Delivery: <strong>S/ ${fee.toFixed(2)}</strong></div>` : ``),
+        (fee>0 ? `<div class='right' style='margin-top:6px;'>Neto para ti: <strong>S/ ${usuarioNeto.toFixed(2)}</strong></div>` : ``)
       ].join('');
       document.getElementById('solicitud-detalle').innerHTML = html;
       document.getElementById('solicitud-modal').hidden = false;
@@ -606,7 +704,7 @@
       const j = await r.json();
       const filas = j.detalle.map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.precio_por_kg).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.subtotal).toFixed(2)}</td></tr>`).join('');
       const footer = role === 'usuario'
-        ? `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong></div>`
+        ? `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong>${Number(j.delivery_fee||0)>0 ? ` · Delivery: <strong>S/ ${Number(j.delivery_fee||0).toFixed(2)}</strong> · Neto: <strong>S/ ${Number(j.usuario_neto||j.total).toFixed(2)}</strong>` : ''}</div>`
         : `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong> · Comisión 10%: <strong>S/ ${Number(j.comision_10).toFixed(2)}</strong> · Total con comisión: <strong>S/ ${Number(j.total_con_comision).toFixed(2)}</strong></div>`;
       panel.innerHTML = `
         <h3>Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}</h3>
@@ -616,6 +714,51 @@
       `;
       panel.style.display = 'block';
       histDetalleId = id;
+    }
+    async function loadHistorialRecolector(){
+      const r = await fetch(`/api/recolector/${user.id}/historial`, { headers: authHeaders() });
+      const list = await r.json();
+      const ul = document.getElementById('hist-list');
+      ul.innerHTML = '';
+      const total = list.reduce((a, s)=> a + Number(s.delivery_fee||0), 0);
+      const he = document.getElementById('hist-earnings');
+      if (he) he.textContent = 'Ganancia total: S/ ' + total.toFixed(2);
+      list.forEach(s=>{
+        const li = document.createElement('li');
+        const banda = String(s.clasificacion_distancia||'').toLowerCase();
+        li.innerHTML = `<div class="row" style="justify-content:space-between;">
+          <div>
+            <div><strong>Trabajo #${s.id}</strong> · Gana: <strong>S/ ${Number(s.delivery_fee||0).toFixed(2)}</strong></div>
+            <div class="muted">Usuario #${s.usuario_id} · Empresa ${s.empresa_nombre||s.empresa_id} · Viaje: ${banda||'—'}</div>
+          </div>
+          <div class="right"><span class="badge">${new Date(s.creado_en).toLocaleString()}</span> <button class="btn" onclick="verDetalleTrabajo(${s.id})">Detalles</button></div>
+        </div>`;
+        ul.appendChild(li);
+      });
+      const panel = document.getElementById('hist-detalle');
+      if (panel) panel.style.display = 'none';
+    }
+    async function verDetalleTrabajo(sid){
+      if (document.getElementById('view-historial').hidden) setView('historial');
+      const panel = document.getElementById('hist-detalle');
+      if (panel && panel.style.display !== 'none' && histDetalleId === sid){
+        panel.style.display = 'none';
+        histDetalleId = null;
+        return;
+      }
+      const r = await fetch(`/api/recolector/trabajos/${sid}/detalle`, { headers: authHeaders() });
+      const j = await r.json();
+      const filas = (j.materiales||[]).map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td></tr>`).join('');
+      const distRU = (j.dist_recolector_usuario_km!=null) ? `${Number(j.dist_recolector_usuario_km).toFixed(2)} km` : '—';
+      const distUE = (j.dist_usuario_empresa_km!=null) ? `${Number(j.dist_usuario_empresa_km).toFixed(2)} km` : '—';
+      panel.innerHTML = `
+        <h3>Detalle Trabajo #${sid}</h3>
+        <table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table>
+        <div class=\"right\" style=\"margin-top:10px\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div>
+        <div class=\"right\" style=\"margin-top:6px\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>
+      `;
+      panel.style.display = 'block';
+      histDetalleId = sid;
     }
     let ratingCtx = { tipo:null, txId:null, empresaId:null, usuarioId:null };
     function openRating(tipo, txId, empresaId, usuarioId){
@@ -994,6 +1137,12 @@
       document.getElementById('m-resenas').style.display = '';
       document.getElementById('m-rewards').style.display = 'none';
       setView('empresa_solicitudes');
+    } else if (role === 'recolector') {
+      document.getElementById('m-empresas').style.display = 'none';
+      document.getElementById('m-resenas').style.display = 'none';
+      document.getElementById('m-rewards').style.display = 'none';
+      document.getElementById('m-solicitudes').textContent = 'Solicitudes Disponibles';
+      setView('solicitudes');
     } else {
       document.getElementById('m-resenas').style.display = 'none';
       document.getElementById('m-rewards').style.display = '';

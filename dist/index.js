@@ -13,6 +13,7 @@ const errorHandler_1 = require("./middleware/errorHandler");
 const auth_1 = require("./routes/auth");
 const transacciones_1 = require("./routes/transacciones");
 const materiales_1 = require("./routes/materiales");
+const recolector_1 = require("./routes/recolector");
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 app.use(express_1.default.static("public"));
@@ -26,6 +27,7 @@ app.use("/api/usuarios", usuarios_1.usuariosRouter);
 app.use("/api/auth", auth_1.authRouter);
 app.use("/api/transacciones", transacciones_1.transaccionesRouter);
 app.use("/api/materiales", materiales_1.materialesRouter);
+app.use("/api/recolector", recolector_1.recolectorRouter);
 app.use(errorHandler_1.errorHandler);
 app.listen(env_1.env.port, () => {
     console.log(`Servidor en puerto ${env_1.env.port}`);

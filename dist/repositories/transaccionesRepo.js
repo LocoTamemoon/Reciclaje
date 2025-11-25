@@ -5,6 +5,7 @@ exports.historialUsuario = historialUsuario;
 exports.historialEmpresa = historialEmpresa;
 exports.obtenerTransaccion = obtenerTransaccion;
 exports.obtenerPesajesTransaccion = obtenerPesajesTransaccion;
+exports.obtenerTransaccionPorSolicitud = obtenerTransaccionPorSolicitud;
 const pool_1 = require("../db/pool");
 async function crearTransaccionConPesaje(solicitudId, usuarioId, empresaId, metodoPago, lat, lon, pesajes, precios, puntosPor10kg) {
     const client = await pool_1.pool.connect();
@@ -49,4 +50,8 @@ async function obtenerTransaccion(id) {
 async function obtenerPesajesTransaccion(transaccionId) {
     const res = await pool_1.pool.query("SELECT p.material_id, m.nombre, p.kg_finales FROM pesajes p JOIN materiales m ON m.id=p.material_id WHERE p.transaccion_id=$1 ORDER BY m.nombre", [transaccionId]);
     return res.rows;
+}
+async function obtenerTransaccionPorSolicitud(solicitudId) {
+    const res = await pool_1.pool.query("SELECT t.*, e.nombre AS empresa_nombre FROM transacciones t JOIN empresas e ON e.id=t.empresa_id WHERE t.solicitud_id=$1 ORDER BY t.fecha DESC LIMIT 1", [solicitudId]);
+    return res.rows[0] || null;
 }

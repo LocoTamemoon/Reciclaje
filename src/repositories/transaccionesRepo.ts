@@ -76,3 +76,11 @@ export async function obtenerPesajesTransaccion(transaccionId: number) {
   );
   return res.rows;
 }
+
+export async function obtenerTransaccionPorSolicitud(solicitudId: number) {
+  const res = await pool.query(
+    "SELECT t.*, e.nombre AS empresa_nombre FROM transacciones t JOIN empresas e ON e.id=t.empresa_id WHERE t.solicitud_id=$1 ORDER BY t.fecha DESC LIMIT 1",
+    [solicitudId]
+  );
+  return res.rows[0] || null;
+}

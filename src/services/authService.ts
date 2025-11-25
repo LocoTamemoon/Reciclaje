@@ -58,3 +58,24 @@ export async function setEmpresaCredentialsByRuc(ruc: string, email: string, pas
   );
   return res.rows[0];
 }
+
+export async function registerRecolector(email: string, password: string, lat: number | null, lon: number | null) {
+  const hash = await bcrypt.hash(password, 10);
+  const res = await pool.query(
+    "INSERT INTO recolectores(email, password_hash, lat, lon) VALUES($1,$2,$3,$4) RETURNING *",
+    [email, hash, lat, lon]
+  );
+  const r = res.rows[0];
+  const token = signToken({ tipo: "recolector", id: r.id });
+  return { token, recolector: r };
+}
+
+export async function loginRecolector(email: string, password: string) {
+  const res = await pool.query("SELECT * FROM recolectores WHERE email=$1", [email]);
+  const r = res.rows[0];
+  if (!r) throw new Error("credenciales_invalidas");
+  const ok = await bcrypt.compare(password, r.password_hash || "");
+  if (!ok) throw new Error("credenciales_invalidas");
+  const token = signToken({ tipo: "recolector", id: r.id });
+  return { token, recolector: r };
+}

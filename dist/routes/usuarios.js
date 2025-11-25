@@ -43,7 +43,7 @@ exports.usuariosRouter.post("/:id/recompensas/redimir", (0, asyncHandler_1.async
         return;
     }
     try {
-        const out = await (0, usuariosRepo_1.redimirPuntosUsuario)(id, Number(r.costo));
+        const out = await (0, usuariosRepo_1.redimirPuntosUsuario)(id, Number(r.costo), String(r.key));
         res.json({ ok: true, nuevo_puntos: out.nuevo_puntos });
     }
     catch (e) {
@@ -53,4 +53,9 @@ exports.usuariosRouter.post("/:id/recompensas/redimir", (0, asyncHandler_1.async
         }
         res.status(400).json({ error: 'redeem_failed' });
     }
+}));
+exports.usuariosRouter.get("/:id/puntos/gastos", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const rows = await pool_1.pool.query("SELECT reward_key, puntos, creado_en FROM usuario_puntos_gastos WHERE usuario_id=$1 ORDER BY creado_en DESC", [id]);
+    res.json(rows.rows);
 }));

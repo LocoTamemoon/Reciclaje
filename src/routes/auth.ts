@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { registerUsuario, registerEmpresa, loginUsuario, loginEmpresa, setEmpresaCredentialsByRuc } from "../services/authService";
+import { registerUsuario, registerEmpresa, loginUsuario, loginEmpresa, setEmpresaCredentialsByRuc, registerRecolector, loginRecolector } from "../services/authService";
 
 export const authRouter = Router();
 
@@ -31,5 +31,17 @@ authRouter.post("/set/empresa", asyncHandler(async (req: Request, res: Response)
 authRouter.post("/login/empresa", asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const r = await loginEmpresa(String(email), String(password));
+  res.json(r);
+}));
+
+authRouter.post("/register/recolector", asyncHandler(async (req: Request, res: Response) => {
+  const { email, password, lat, lon } = req.body;
+  const r = await registerRecolector(String(email), String(password), lat !== undefined ? Number(lat) : null, lon !== undefined ? Number(lon) : null);
+  res.status(201).json(r);
+}));
+
+authRouter.post("/login/recolector", asyncHandler(async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  const r = await loginRecolector(String(email), String(password));
   res.json(r);
 }));

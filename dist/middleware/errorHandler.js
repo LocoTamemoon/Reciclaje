@@ -7,5 +7,9 @@ function errorHandler(err, req, res, next) {
         res.status(503).json({ error: "database_unavailable", message: "Base de datos no disponible" });
         return;
     }
+    if (String(err?.message) === "delivery_min_total") {
+        res.status(400).json({ error: "delivery_min_total" });
+        return;
+    }
     res.status(500).json({ error: "internal_error", message: err?.message || "Error" });
 }

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { obtenerTransaccion, obtenerPesajesTransaccion } from "../repositories/transaccionesRepo";
+import { obtenerSolicitud } from "../repositories/solicitudesRepo";
 import { existeResenaEmpresa, existeResenaUsuario } from "../repositories/resenasRepo";
 import { materialesDeEmpresa } from "../repositories/empresasRepo";
 
@@ -22,7 +23,11 @@ transaccionesRouter.get("/:id", asyncHandler(async (req: Request, res: Response)
   const total = detalle.reduce((a: number, d: any) => a + d.subtotal, 0);
   const comision_10 = total * 0.10;
   const total_con_comision = total + comision_10;
+  const solicitud = await obtenerSolicitud(Number(tx.solicitud_id));
+  const esDelivery = String((solicitud as any)?.tipo_entrega||'') === 'delivery';
+  const delivery_fee = esDelivery ? Number((solicitud as any)?.delivery_fee||0) : 0;
+  const usuario_neto = total - delivery_fee;
   const ya_resena_usuario = await existeResenaUsuario(Number(tx.usuario_id), Number(tx.empresa_id), id);
   const ya_resena_empresa = await existeResenaEmpresa(Number(tx.empresa_id), Number(tx.usuario_id), id);
-  res.json({ transaccion: tx, detalle, total, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa });
+  res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa });
 }));

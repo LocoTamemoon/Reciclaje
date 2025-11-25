@@ -68,3 +68,16 @@ exports.empresasRouter.post("/:id/solicitudes/:sid/pesaje_pago", (0, asyncHandle
     const t = await (0, pagosService_1.registrarPesajeYPago)(empresaId, solicitudId, Number(usuario_id), String(metodo_pago), lat !== undefined ? Number(lat) : null, lon !== undefined ? Number(lon) : null, Array.isArray(pesajes) ? pesajes.map((p) => ({ material_id: Number(p.material_id), kg_finales: Number(p.kg_finales) })) : []);
     res.json(t);
 }));
+exports.empresasRouter.post("/set_loc", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const { ruc, lat, lon } = req.body;
+    const e = await (0, empresasRepo_1.actualizarUbicacionEmpresaPorRuc)(String(ruc), Number(lat), Number(lon));
+    res.json(e);
+}));
+exports.empresasRouter.get("/stats", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    const stats = await (0, empresasRepo_1.statsEmpresasTransacciones)();
+    res.json(stats);
+}));
+exports.empresasRouter.get("/stats_distritos", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    const stats = await (0, empresasRepo_1.statsDistritosTransacciones)();
+    res.json(stats);
+}));

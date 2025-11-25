@@ -30,3 +30,13 @@ exports.authRouter.post("/login/empresa", (0, asyncHandler_1.asyncHandler)(async
     const r = await (0, authService_1.loginEmpresa)(String(email), String(password));
     res.json(r);
 }));
+exports.authRouter.post("/register/recolector", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const { email, password, lat, lon } = req.body;
+    const r = await (0, authService_1.registerRecolector)(String(email), String(password), lat !== undefined ? Number(lat) : null, lon !== undefined ? Number(lon) : null);
+    res.status(201).json(r);
+}));
+exports.authRouter.post("/login/recolector", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const { email, password } = req.body;
+    const r = await (0, authService_1.loginRecolector)(String(email), String(password));
+    res.json(r);
+}));
