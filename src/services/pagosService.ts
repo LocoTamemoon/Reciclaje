@@ -1,7 +1,8 @@
 import { crearTransaccionConPesaje } from "../repositories/transaccionesRepo";
 import { materialesDeEmpresa } from "../repositories/empresasRepo";
-import { actualizarEstadoSolicitud } from "../repositories/solicitudesRepo";
+import { actualizarEstadoSolicitud, obtenerSolicitud } from "../repositories/solicitudesRepo";
 import { acumularKgYPuntos, upsertUsuarioMaterialTotal } from "../repositories/usuariosRepo";
+import { pool } from "../db/pool";
 
 export async function registrarPesajeYPago(
   empresaId: number,
@@ -28,6 +29,10 @@ export async function registrarPesajeYPago(
     puntosPor10kg
   );
   await actualizarEstadoSolicitud(solicitudId, "completada");
+  const sol = await obtenerSolicitud(solicitudId);
+  if (sol && String(sol.tipo_entrega) === "delivery" && Number(sol.recolector_id || 0) > 0) {
+    await pool.query("UPDATE recolectores SET trabajos_completados = trabajos_completados + 1 WHERE id=$1", [Number(sol.recolector_id)]);
+  }
   await acumularKgYPuntos(usuarioId, totalKg, puntos);
   for (const p of pesajes) {
     await upsertUsuarioMaterialTotal(usuarioId, p.material_id, p.kg_finales);

@@ -24,7 +24,7 @@ async function obtenerSolicitud(id) {
     return res.rows[0] || null;
 }
 async function solicitudesPendientesEmpresa(empresaId) {
-    const res = await pool_1.pool.query("SELECT * FROM solicitudes WHERE empresa_id=$1 AND estado='pendiente_empresa' AND NOT (tipo_entrega='delivery' AND (estado_publicacion IS NULL OR estado_publicacion <> 'aceptada_recolector')) ORDER BY creado_en DESC", [empresaId]);
+    const res = await pool_1.pool.query("SELECT * FROM solicitudes WHERE empresa_id=$1 AND estado='pendiente_empresa' AND (COALESCE(tipo_entrega,'') <> 'delivery' OR estado_publicacion='aceptada_recolector') ORDER BY creado_en DESC", [empresaId]);
     return res.rows;
 }
 async function actualizarEstadoSolicitud(id, estado) {

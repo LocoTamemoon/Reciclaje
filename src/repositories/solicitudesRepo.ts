@@ -30,7 +30,7 @@ export async function obtenerSolicitud(id: number) {
 
 export async function solicitudesPendientesEmpresa(empresaId: number) {
   const res = await pool.query(
-    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND estado='pendiente_empresa' AND NOT (tipo_entrega='delivery' AND (estado_publicacion IS NULL OR estado_publicacion <> 'aceptada_recolector')) ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND estado='pendiente_empresa' AND (COALESCE(tipo_entrega,'') <> 'delivery' OR estado_publicacion='aceptada_recolector') ORDER BY creado_en DESC",
     [empresaId]
   );
   return res.rows;

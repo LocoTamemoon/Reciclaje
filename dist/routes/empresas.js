@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.empresasRouter = void 0;
 const express_1 = require("express");
 const empresasRepo_1 = require("../repositories/empresasRepo");
+const transaccionesRepo_1 = require("../repositories/transaccionesRepo");
 const materialesRepo_1 = require("../repositories/materialesRepo");
 const solicitudesRepo_1 = require("../repositories/solicitudesRepo");
 const solicitudesService_1 = require("../services/solicitudesService");
@@ -72,6 +73,11 @@ exports.empresasRouter.post("/set_loc", (0, asyncHandler_1.asyncHandler)(async (
     const { ruc, lat, lon } = req.body;
     const e = await (0, empresasRepo_1.actualizarUbicacionEmpresaPorRuc)(String(ruc), Number(lat), Number(lon));
     res.json(e);
+}));
+exports.empresasRouter.get("/:id/historial", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const list = await (0, transaccionesRepo_1.historialEmpresa)(id);
+    res.json(list);
 }));
 exports.empresasRouter.get("/stats", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
     const stats = await (0, empresasRepo_1.statsEmpresasTransacciones)();

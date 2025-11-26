@@ -84,3 +84,15 @@ exports.recolectorRouter.get("/trabajos/:sid/detalle", (0, asyncHandler_1.asyncH
         dist_usuario_empresa_km: distUE
     });
 }));
+exports.recolectorRouter.post("/stats/recompute_all", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    const idsRes = await pool_1.pool.query("SELECT id FROM recolectores");
+    const updated = [];
+    for (const r of idsRes.rows) {
+        const id = Number(r.id);
+        const cRes = await pool_1.pool.query("SELECT COUNT(*)::int AS c FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado='completada'", [id]);
+        const c = Number((cRes.rows[0] || {}).c || 0);
+        await pool_1.pool.query("UPDATE recolectores SET trabajos_completados=$2 WHERE id=$1", [id, c]);
+        updated.push({ id, trabajos_completados: c });
+    }
+    res.json({ updated });
+}));
