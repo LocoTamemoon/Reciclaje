@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import { env } from "./config/env";
 import { empresasRouter } from "./routes/empresas";
 import { solicitudesRouter } from "./routes/solicitudes";
@@ -26,6 +27,10 @@ app.use("/api/auth", authRouter);
 app.use("/api/transacciones", transaccionesRouter);
 app.use("/api/materiales", materialesRouter);
 app.use("/api/recolector", recolectorRouter);
+
+app.use((req, res) => {
+  res.status(404).sendFile(path.resolve("public", "404.html"));
+});
 
 app.use(errorHandler);
 

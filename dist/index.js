@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const path_1 = __importDefault(require("path"));
 const env_1 = require("./config/env");
 const empresas_1 = require("./routes/empresas");
 const solicitudes_1 = require("./routes/solicitudes");
@@ -28,6 +29,9 @@ app.use("/api/auth", auth_1.authRouter);
 app.use("/api/transacciones", transacciones_1.transaccionesRouter);
 app.use("/api/materiales", materiales_1.materialesRouter);
 app.use("/api/recolector", recolector_1.recolectorRouter);
+app.use((req, res) => {
+    res.status(404).sendFile(path_1.default.resolve("public", "404.html"));
+});
 app.use(errorHandler_1.errorHandler);
 app.listen(env_1.env.port, () => {
     console.log(`Servidor en puerto ${env_1.env.port}`);
