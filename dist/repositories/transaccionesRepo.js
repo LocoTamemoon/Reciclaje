@@ -7,10 +7,11 @@ exports.obtenerTransaccion = obtenerTransaccion;
 exports.obtenerPesajesTransaccion = obtenerPesajesTransaccion;
 exports.obtenerTransaccionPorSolicitud = obtenerTransaccionPorSolicitud;
 const pool_1 = require("../db/pool");
-async function crearTransaccionConPesaje(solicitudId, usuarioId, empresaId, metodoPago, lat, lon, pesajes, precios, puntosPor10kg) {
+async function crearTransaccionConPesaje(solicitudId, usuarioId, empresaId, metodoPago, modoEntrega, lat, lon, pesajes, precios, puntosPor10kg) {
     const client = await pool_1.pool.connect();
     try {
         await client.query("BEGIN");
+        await client.query("ALTER TABLE transacciones ADD COLUMN IF NOT EXISTS modo_entrega text");
         let totalKg = 0;
         let monto = 0;
         for (const p of pesajes) {
@@ -19,7 +20,7 @@ async function crearTransaccionConPesaje(solicitudId, usuarioId, empresaId, meto
             monto += p.kg_finales * precio;
         }
         const puntos = Math.floor(totalKg / 10) * puntosPor10kg;
-        const tx = await client.query("INSERT INTO transacciones(solicitud_id, usuario_id, empresa_id, monto_pagado, metodo_pago, lat, lon, puntos_obtenidos) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *", [solicitudId, usuarioId, empresaId, monto, metodoPago, lat, lon, puntos]);
+        const tx = await client.query("INSERT INTO transacciones(solicitud_id, usuario_id, empresa_id, monto_pagado, metodo_pago, modo_entrega, lat, lon, puntos_obtenidos) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *", [solicitudId, usuarioId, empresaId, monto, metodoPago, modoEntrega, lat, lon, puntos]);
         const transaccion = tx.rows[0];
         for (const p of pesajes) {
             await client.query("INSERT INTO pesajes(transaccion_id, material_id, kg_finales) VALUES($1,$2,$3)", [transaccion.id, p.material_id, p.kg_finales]);

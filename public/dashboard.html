@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css">
   <style>
     :root{ --bg:#f6fbf7; --bg2:#eef7f2; --panel:#ffffff; --panel2:#f8fbf8; --muted:#7b978b; --primary:#3ac27f; --accent:#38c1b3; --text:#0f172a; --border:#d9e7de; --shadow:rgba(15,60,30,0.08); }
     body{ margin:0; font-family:system-ui, Segoe UI, Arial; background:linear-gradient(120deg, var(--bg), var(--bg2)); color:var(--text); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
@@ -83,6 +84,10 @@
           <button class="btn secondary" onclick="loadRecolectorFeed()">Actualizar</button>
         </div>
         <ul id="reco-feed" class="list"></ul>
+        <div id="reco-preview" class="panel" style="margin-top:12px; display:none;">
+          <div id="reco-map" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
+          <div id="reco-route-meta" class="muted" style="margin-top:8px;"></div>
+        </div>
       </section>
       <section id="view-empresa" class="panel" hidden>
         <div class="row" style="justify-content:space-between;">
@@ -346,6 +351,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
   <script>
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
@@ -416,8 +422,12 @@
     let materialesSeleccionados = [];
     let solicitudSeleccionada = null;
     let perfilMateriales = [];
-    let perfilCatalogo = [];
-    let histDetalleId = null;
+  let perfilCatalogo = [];
+  let histDetalleId = null;
+  let recoPrevMap = null;
+  let recoPrevLayer = null;
+  let recoPrevRouteCtrl = null;
+  let recoPrevSid = null;
 
     async function loadEmpresas(){
       const r = await fetch('/api/empresas', { headers: authHeaders() });
@@ -544,10 +554,85 @@
           </div>
           <div class="right">
             <button class="btn" onclick="recolectorAceptar(${s.id})">Aceptar</button>
+            <button class="btn secondary" onclick="verPrevisualizacion(${s.id})">Previsualización</button>
           </div>
         </div>`;
         ul.appendChild(li);
       });
+    }
+
+    function clearRecoPreview(){
+      const panel = document.getElementById('reco-preview');
+      const meta = document.getElementById('reco-route-meta');
+      if (panel) panel.style.display = 'none';
+      if (meta) meta.textContent = '';
+      if (recoPrevLayer && recoPrevMap) { recoPrevLayer.remove(); recoPrevLayer = null; }
+      if (recoPrevRouteCtrl) { recoPrevRouteCtrl.remove(); recoPrevRouteCtrl = null; }
+      recoPrevSid = null;
+    }
+    async function verPrevisualizacion(sid){
+      const panel = document.getElementById('reco-preview');
+      if (panel && panel.style.display !== 'none' && recoPrevSid === sid) { clearRecoPreview(); return; }
+      panel.style.display = 'block';
+      const r = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+      const j = await r.json();
+      let rLat = null, rLon = null;
+      try {
+        await new Promise((resolve)=>{
+          if (!navigator.geolocation) return resolve(null);
+          navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:3000 });
+        });
+      } catch {}
+      if (rLat==null || rLon==null){ rLat = j?.recolector?.lat ?? null; rLon = j?.recolector?.lon ?? null; }
+      const uLat = j?.usuario?.lat ?? null;
+      const uLon = j?.usuario?.lon ?? null;
+      const eLat = j?.empresa?.lat ?? null;
+      const eLon = j?.empresa?.lon ?? null;
+      const ru = j?.dist_recolector_usuario_km!=null ? `${Number(j.dist_recolector_usuario_km).toFixed(2)} km` : '—';
+      const ue = j?.dist_usuario_empresa_km!=null ? `${Number(j.dist_usuario_empresa_km).toFixed(2)} km` : '—';
+      const meta = document.getElementById('reco-route-meta');
+      meta.innerHTML = `Recolector → Usuario: <strong>${ru}</strong> · Usuario → Empresa: <strong>${ue}</strong>`;
+      const mapDiv = document.getElementById('reco-map');
+      if (!recoPrevMap){ recoPrevMap = L.map(mapDiv).setView([uLat||-12.05, uLon||-77.03], 13); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(recoPrevMap); }
+      const toFit = [];
+      if (rLat!=null && rLon!=null) toFit.push([rLat, rLon]);
+      if (uLat!=null && uLon!=null) toFit.push([uLat, uLon]);
+      if (eLat!=null && eLon!=null) toFit.push([eLat, eLon]);
+      if (toFit.length>0) recoPrevMap.fitBounds(toFit);
+      if (recoPrevLayer) { recoPrevLayer.remove(); recoPrevLayer=null; }
+      const mkIcon = (t,b)=> L.divIcon({ className: 'marker-div', html: `<div style="background:${b};color:#081012;border-radius:999px;padding:4px 8px;border:1px solid #0b1c14;box-shadow:0 3px 10px rgba(0,0,0,.25);font-weight:700;font-size:12px;">${t}</div>`, iconSize: [1,1], iconAnchor: [14,28], popupAnchor: [0,-28] });
+      const recoIcon = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+      const hogarIcon = L.icon({ iconUrl: '/img/hogar.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+      const empresaIcon = L.icon({ iconUrl: '/img/empresa.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+      const layers = [];
+      if (rLat!=null && rLon!=null) layers.push(L.marker([rLat, rLon], { icon: recoIcon }).bindPopup(`Tú: ${user?.nombre||('Recolector #'+user?.id)}`));
+      if (uLat!=null && uLon!=null) layers.push(L.marker([uLat, uLon], { icon: hogarIcon }).bindPopup(`Usuario: ${j?.usuario_nombre||('Usuario')}`));
+      if (eLat!=null && eLon!=null) layers.push(L.marker([eLat, eLon], { icon: empresaIcon }).bindPopup(`Empresa: ${j?.empresa_nombre||('Empresa')}`));
+      recoPrevLayer = L.layerGroup(layers).addTo(recoPrevMap);
+      if (recoPrevRouteCtrl) { recoPrevRouteCtrl.remove(); recoPrevRouteCtrl = null; }
+      if (rLat!=null && rLon!=null && uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
+        recoPrevRouteCtrl = L.Routing.control({
+          language: 'es',
+          waypoints: [ L.latLng(rLat, rLon), L.latLng(uLat, uLon), L.latLng(eLat, eLon) ],
+          router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
+          routeWhileDragging: false,
+          showAlternatives: false,
+          addWaypoints: false,
+          draggableWaypoints: false,
+          createMarker: function() { return null; },
+          fitSelectedRoutes: true,
+          lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
+        }).addTo(recoPrevMap);
+        recoPrevRouteCtrl.on('routesfound', (e)=>{
+          const sum = e?.routes?.[0]?.summary;
+          if (sum) {
+            const km = (sum.totalDistance/1000).toFixed(2);
+            const min = Math.round(sum.totalTime/60);
+            meta.innerHTML = `Objetivo: <strong>Usuario</strong> → <strong>Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
+          }
+        });
+      }
+      recoPrevSid = sid;
     }
 
     async function recolectorAceptar(sid){
@@ -570,13 +655,15 @@
       (j.solicitudes_pendientes||[]).forEach(s=>{
         const li = document.createElement('li');
         const en = empNames.get(Number(s.empresa_id)) || String(s.empresa_id);
-        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> <button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`;
+        const isExp = String(s.estado)==='expirada' && String(s.tipo_entrega)==='delivery';
+        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${isExp?`<button class="btn" onclick="usuarioRepublicarSolicitud(${s.id})">Re-publicar</button>`:`<button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`}`;
         pend.appendChild(li);
       });
       (j.solicitudes_anteriores||[]).forEach(s=>{
         const li = document.createElement('li');
         const en = empNames.get(Number(s.empresa_id)) || String(s.empresa_id);
-        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button>`;
+        const isExp = String(s.estado)==='expirada' && String(s.tipo_entrega)==='delivery';
+        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${isExp?`<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>`:''}`;
         ant.appendChild(li);
       });
     }
@@ -584,6 +671,13 @@
       const r = await fetch(`/api/solicitudes/${sid}/cancelar`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id }) });
       const j = await r.json();
       alert('Solicitud cancelada: #'+j.id);
+      loadSolicitudes();
+    }
+    async function usuarioRepublicarSolicitud(sid){
+      const r = await fetch(`/api/solicitudes/${sid}/republish`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id }) });
+      const j = await r.json();
+      if (j?.error) { alert('No se pudo re-publicar'); return; }
+      alert('Solicitud re-publicada: #'+j.id);
       loadSolicitudes();
     }
 
@@ -823,7 +917,8 @@
     }
     async function loadSolicitudesEmpresa(){
       const r = await fetch(`/api/empresas/${user.id}/solicitudes`, { headers: authHeaders() });
-      const list = await r.json();
+      let list = await r.json();
+      if (!Array.isArray(list)) list = [];
       const ul = document.getElementById('emp-sol-list');
       ul.innerHTML = '';
       list.forEach(s=>{

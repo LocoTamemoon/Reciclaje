@@ -4,6 +4,7 @@ exports.crearNuevaSolicitud = crearNuevaSolicitud;
 exports.aceptarSolicitud = aceptarSolicitud;
 exports.rechazarSolicitud = rechazarSolicitud;
 exports.cancelarSolicitudPorUsuario = cancelarSolicitudPorUsuario;
+exports.republicarSolicitudPorUsuario = republicarSolicitudPorUsuario;
 const empresasRepo_1 = require("../repositories/empresasRepo");
 const solicitudesRepo_1 = require("../repositories/solicitudesRepo");
 const usuariosRepo_1 = require("../repositories/usuariosRepo");
@@ -104,5 +105,18 @@ async function cancelarSolicitudPorUsuario(usuarioId, solicitudId) {
         throw new Error("Solicitud no válida");
     if (solicitud.estado !== "pendiente_empresa")
         throw new Error("Solicitud no cancelable");
+    if (String(solicitud.tipo_entrega) === "delivery") {
+        const s = await (0, solicitudesRepo_1.cancelarPublicacionSolicitud)(solicitudId);
+        return s;
+    }
     return await (0, solicitudesRepo_1.actualizarEstadoSolicitud)(solicitudId, "cancelada");
+}
+async function republicarSolicitudPorUsuario(usuarioId, solicitudId) {
+    const solicitud = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
+    if (!solicitud || solicitud.usuario_id !== usuarioId)
+        throw new Error("Solicitud no válida");
+    if (String(solicitud.tipo_entrega) !== "delivery" || String(solicitud.estado) !== "expirada")
+        throw new Error("Solicitud no republicable");
+    const s = await (0, solicitudesRepo_1.republicarSolicitudExpirada)(solicitudId);
+    return s;
 }

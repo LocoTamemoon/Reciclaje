@@ -16,8 +16,9 @@ export async function crearSolicitudDelivery(
   consent: boolean,
   termsVersion: string | null
 ) {
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS publicacion_expira_en timestamp");
   const res = await pool.query(
-    "INSERT INTO solicitudes(usuario_id, empresa_id, estado, tipo_entrega, estado_publicacion, delivery_fee, clasificacion_distancia, delivery_consent, delivery_terms_version) VALUES($1,$2,'pendiente_empresa','delivery','publicada',$3,$4,$5,$6) RETURNING *",
+    "INSERT INTO solicitudes(usuario_id, empresa_id, estado, tipo_entrega, estado_publicacion, delivery_fee, clasificacion_distancia, delivery_consent, delivery_terms_version, publicacion_expira_en) VALUES($1,$2,'pendiente_empresa','delivery','publicada',$3,$4,$5,$6, NOW() + INTERVAL '30 minutes') RETURNING *",
     [usuarioId, empresaId, deliveryFee, clasificacion, consent, termsVersion]
   );
   return res.rows[0];
@@ -29,8 +30,11 @@ export async function obtenerSolicitud(id: number) {
 }
 
 export async function solicitudesPendientesEmpresa(empresaId: number) {
+  await pool.query(
+    "UPDATE solicitudes SET estado='expirada', estado_publicacion='expirada' WHERE tipo_entrega='delivery' AND estado='pendiente_empresa' AND estado_publicacion='publicada' AND publicacion_expira_en IS NOT NULL AND publicacion_expira_en <= NOW()"
+  );
   const res = await pool.query(
-    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND estado='pendiente_empresa' AND (COALESCE(tipo_entrega,'') <> 'delivery' OR estado_publicacion='aceptada_recolector') ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector') ORDER BY creado_en DESC",
     [empresaId]
   );
   return res.rows;
@@ -42,6 +46,14 @@ export async function actualizarEstadoSolicitud(id: number, estado: string) {
     [id, estado]
   );
   return res.rows[0];
+}
+
+export async function cancelarPublicacionSolicitud(id: number) {
+  const res = await pool.query(
+    "UPDATE solicitudes SET estado='cancelada', estado_publicacion='cancelada' WHERE id=$1 RETURNING *",
+    [id]
+  );
+  return res.rows[0] || null;
 }
 
 export async function aceptarPorRecolector(id: number, recolectorId: number) {
@@ -61,10 +73,28 @@ export async function actualizarEstadoOperativo(id: number, estado: string) {
 }
 
 export async function listarSolicitudesPublicadas() {
+  await pool.query(
+    "UPDATE solicitudes SET estado='expirada', estado_publicacion='expirada' WHERE tipo_entrega='delivery' AND estado='pendiente_empresa' AND estado_publicacion='publicada' AND publicacion_expira_en IS NOT NULL AND publicacion_expira_en <= NOW()"
+  );
   const res = await pool.query(
-    "SELECT * FROM solicitudes WHERE tipo_entrega='delivery' AND estado_publicacion='publicada' ORDER BY creado_en DESC"
+    "SELECT * FROM solicitudes WHERE tipo_entrega='delivery' AND estado='pendiente_empresa' AND estado_publicacion='publicada' AND (publicacion_expira_en IS NULL OR publicacion_expira_en > NOW()) ORDER BY creado_en DESC"
   );
   return res.rows;
+}
+
+export async function marcarSolicitudesExpiradas() {
+  const res = await pool.query(
+    "UPDATE solicitudes SET estado='expirada', estado_publicacion='expirada' WHERE tipo_entrega='delivery' AND estado='pendiente_empresa' AND estado_publicacion='publicada' AND publicacion_expira_en IS NOT NULL AND publicacion_expira_en <= NOW() RETURNING *"
+  );
+  return res.rows;
+}
+
+export async function republicarSolicitudExpirada(id: number) {
+  const res = await pool.query(
+    "UPDATE solicitudes SET estado='pendiente_empresa', estado_publicacion='publicada', publicacion_expira_en=NOW() + INTERVAL '30 minutes' WHERE id=$1 AND tipo_entrega='delivery' AND estado='expirada' RETURNING *",
+    [id]
+  );
+  return res.rows[0] || null;
 }
 
 export async function guardarItemsSolicitudJSON(id: number, items: { material_id: number; kg: number }[]) {

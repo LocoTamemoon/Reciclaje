@@ -1,5 +1,5 @@
 import { obtenerEmpresa, materialesDeEmpresa } from "../repositories/empresasRepo";
-import { crearSolicitud, crearSolicitudDelivery, actualizarEstadoSolicitud, obtenerSolicitud, guardarItemsSolicitudJSON } from "../repositories/solicitudesRepo";
+import { crearSolicitud, crearSolicitudDelivery, actualizarEstadoSolicitud, obtenerSolicitud, guardarItemsSolicitudJSON, cancelarPublicacionSolicitud, republicarSolicitudExpirada } from "../repositories/solicitudesRepo";
 import { obtenerUsuario } from "../repositories/usuariosRepo";
 import { incrementarSolicitudesUsuario } from "../repositories/usuariosRepo";
 
@@ -80,5 +80,17 @@ export async function cancelarSolicitudPorUsuario(usuarioId: number, solicitudId
   const solicitud = await obtenerSolicitud(solicitudId);
   if (!solicitud || solicitud.usuario_id !== usuarioId) throw new Error("Solicitud no válida");
   if (solicitud.estado !== "pendiente_empresa") throw new Error("Solicitud no cancelable");
+  if (String(solicitud.tipo_entrega) === "delivery") {
+    const s = await cancelarPublicacionSolicitud(solicitudId);
+    return s;
+  }
   return await actualizarEstadoSolicitud(solicitudId, "cancelada");
+}
+
+export async function republicarSolicitudPorUsuario(usuarioId: number, solicitudId: number) {
+  const solicitud = await obtenerSolicitud(solicitudId);
+  if (!solicitud || solicitud.usuario_id !== usuarioId) throw new Error("Solicitud no válida");
+  if (String(solicitud.tipo_entrega) !== "delivery" || String(solicitud.estado) !== "expirada") throw new Error("Solicitud no republicable");
+  const s = await republicarSolicitudExpirada(solicitudId);
+  return s;
 }

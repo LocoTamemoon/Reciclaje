@@ -13,6 +13,8 @@ export async function registrarPesajeYPago(
   lon: number | null,
   pesajes: { material_id: number; kg_finales: number }[]
 ) {
+  const solPre = await obtenerSolicitud(solicitudId);
+  const modoEntrega = String(solPre?.tipo_entrega) === "delivery" ? "delivery" : "presencial";
   const materiales = await materialesDeEmpresa(empresaId);
   const precios = new Map<number, number>();
   for (const m of materiales) precios.set(m.material_id, Number(m.precio_por_kg));
@@ -22,6 +24,7 @@ export async function registrarPesajeYPago(
     usuarioId,
     empresaId,
     metodoPago,
+    modoEntrega,
     lat,
     lon,
     pesajes,

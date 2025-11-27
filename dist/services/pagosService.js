@@ -7,12 +7,14 @@ const solicitudesRepo_1 = require("../repositories/solicitudesRepo");
 const usuariosRepo_1 = require("../repositories/usuariosRepo");
 const pool_1 = require("../db/pool");
 async function registrarPesajeYPago(empresaId, solicitudId, usuarioId, metodoPago, lat, lon, pesajes) {
+    const solPre = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
+    const modoEntrega = String(solPre?.tipo_entrega) === "delivery" ? "delivery" : "presencial";
     const materiales = await (0, empresasRepo_1.materialesDeEmpresa)(empresaId);
     const precios = new Map();
     for (const m of materiales)
         precios.set(m.material_id, Number(m.precio_por_kg));
     const puntosPor10kg = 40;
-    const { transaccion, totalKg, puntos } = await (0, transaccionesRepo_1.crearTransaccionConPesaje)(solicitudId, usuarioId, empresaId, metodoPago, lat, lon, pesajes, precios, puntosPor10kg);
+    const { transaccion, totalKg, puntos } = await (0, transaccionesRepo_1.crearTransaccionConPesaje)(solicitudId, usuarioId, empresaId, metodoPago, modoEntrega, lat, lon, pesajes, precios, puntosPor10kg);
     await (0, solicitudesRepo_1.actualizarEstadoSolicitud)(solicitudId, "completada");
     const sol = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
     if (sol && String(sol.tipo_entrega) === "delivery" && Number(sol.recolector_id || 0) > 0) {

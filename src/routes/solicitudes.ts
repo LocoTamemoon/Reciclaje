@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { crearNuevaSolicitud, cancelarSolicitudPorUsuario } from "../services/solicitudesService";
+import { crearNuevaSolicitud, cancelarSolicitudPorUsuario, republicarSolicitudPorUsuario } from "../services/solicitudesService";
 import { obtenerSolicitud } from "../repositories/solicitudesRepo";
 import { asyncHandler } from "../middleware/asyncHandler";
 
@@ -16,6 +16,13 @@ solicitudesRouter.post("/:sid/cancelar", asyncHandler(async (req: Request, res: 
   const sid = Number(req.params.sid);
   const { usuario_id } = req.body;
   const s = await cancelarSolicitudPorUsuario(Number(usuario_id), sid);
+  res.json(s);
+}));
+
+solicitudesRouter.post("/:sid/republish", asyncHandler(async (req: Request, res: Response) => {
+  const sid = Number(req.params.sid);
+  const { usuario_id } = req.body;
+  const s = await republicarSolicitudPorUsuario(Number(usuario_id), sid);
   res.json(s);
 }));
 

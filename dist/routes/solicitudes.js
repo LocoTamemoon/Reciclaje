@@ -18,6 +18,12 @@ exports.solicitudesRouter.post("/:sid/cancelar", (0, asyncHandler_1.asyncHandler
     const s = await (0, solicitudesService_1.cancelarSolicitudPorUsuario)(Number(usuario_id), sid);
     res.json(s);
 }));
+exports.solicitudesRouter.post("/:sid/republish", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const sid = Number(req.params.sid);
+    const { usuario_id } = req.body;
+    const s = await (0, solicitudesService_1.republicarSolicitudPorUsuario)(Number(usuario_id), sid);
+    res.json(s);
+}));
 exports.solicitudesRouter.get("/:sid", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const sid = Number(req.params.sid);
     const s = await (0, solicitudesRepo_1.obtenerSolicitud)(sid);

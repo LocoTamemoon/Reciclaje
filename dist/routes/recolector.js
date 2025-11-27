@@ -49,6 +49,36 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
+exports.recolectorRouter.get("/previsualizacion/:sid", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const sid = Number(req.params.sid);
+    const s = await (0, solicitudesRepo_1.obtenerSolicitud)(sid);
+    if (!s) {
+        res.status(404).json({ error: "not_found" });
+        return;
+    }
+    const usuario = await (0, usuariosRepo_1.obtenerUsuario)(Number(s.usuario_id));
+    const empresa = await (0, empresasRepo_1.obtenerEmpresa)(Number(s.empresa_id));
+    const rlatlon = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
+    const recolector = rlatlon.rows[0] || null;
+    const uLat = usuario?.lat !== null && usuario?.lat !== undefined ? Number(usuario.lat) : null;
+    const uLon = usuario?.lon !== null && usuario?.lon !== undefined ? Number(usuario.lon) : null;
+    const eLat = empresa?.lat !== null && empresa?.lat !== undefined ? Number(empresa.lat) : null;
+    const eLon = empresa?.lon !== null && empresa?.lon !== undefined ? Number(empresa.lon) : null;
+    const rLat = recolector?.lat !== null && recolector?.lat !== undefined ? Number(recolector.lat) : null;
+    const rLon = recolector?.lon !== null && recolector?.lon !== undefined ? Number(recolector.lon) : null;
+    const distRU = (rLat != null && rLon != null && uLat != null && uLon != null) ? haversineKm(rLat, rLon, uLat, uLon) : null;
+    const distUE = (uLat != null && uLon != null && eLat != null && eLon != null) ? haversineKm(uLat, uLon, eLat, eLon) : null;
+    res.json({
+        solicitud_id: sid,
+        usuario: { lat: uLat, lon: uLon },
+        empresa: { lat: eLat, lon: eLon },
+        usuario_nombre: usuario?.nombre || usuario?.email || `Usuario #${s.usuario_id}`,
+        empresa_nombre: empresa?.nombre || `Empresa #${s.empresa_id}`,
+        recolector: { lat: rLat, lon: rLon },
+        dist_recolector_usuario_km: distRU,
+        dist_usuario_empresa_km: distUE
+    });
+}));
 exports.recolectorRouter.get("/trabajos/:sid/detalle", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const sid = Number(req.params.sid);
     const s = await (0, solicitudesRepo_1.obtenerSolicitud)(sid);
