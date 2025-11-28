@@ -43,4 +43,3 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--color-p
 /* Links */
 a{color:var(--color-secondary); text-decoration:none}
 a:hover{text-decoration:underline}
-

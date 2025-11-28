@@ -7,4 +7,3 @@ UPDATE usuarios
 SET home_lat = COALESCE(home_lat, lat),
     home_lon = COALESCE(home_lon, lon)
 WHERE home_lat IS NULL OR home_lon IS NULL;
-
