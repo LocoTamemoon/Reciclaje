@@ -8,26 +8,37 @@
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/layout.css">
   <script src="/js/micro.js" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="container" style="min-height:100vh; display:grid; place-items:center;">
-    <div class="panel" style="width:100%; max-width:420px; padding:34px;">
-      <div class="row" style="justify-content:center; gap:13px;">
-        <div style="width:28px; height:28px; border-radius:999px; background:linear-gradient(180deg,#eafbf3,#d6f5e6); border:1px solid var(--color-border); box-shadow:var(--shadow-sm);"></div>
-        <h2 style="margin:0;">VidaVerde</h2>
+<body class="relative min-h-screen bg-gradient-to-br from-emerald-50 via-emerald-100 to-emerald-200">
+  <div class="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(56,193,179,0.12),_transparent_40%)]"></div>
+  <div class="min-h-screen flex items-center justify-center p-6">
+    <div class="panel w-full max-w-xl mx-auto p-10 bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl shadow-2xl">
+      <div class="row justify-center gap-3">
+        <div class="w-7 h-7 rounded-full bg-gradient-to-b from-emerald-50 to-emerald-100 ring-1 ring-emerald-200 shadow"></div>
+        <h2 class="m-0">VidaVerde</h2>
       </div>
-      <div class="muted" style="text-align:center; margin-top:8px;">Conecta, recicla y gana — plataforma ecológica premium</div>
-      <div class="card" style="margin-top:21px;">
+      <div class="muted text-center mt-2">Conecta, recicla y gana — plataforma ecológica premium</div>
+      <div id="alert" class="hidden mt-4" role="alert"></div>
+      <div class="card mt-4 bg-white/50 backdrop-blur-sm ring-1 ring-emerald-100 rounded-xl shadow p-6">
         <h3>Login</h3>
-        <label style="margin-top:13px;">Rol</label>
-        <select id="role"></select>
-        <label style="margin-top:13px;">Email</label>
-        <input id="email" type="email" placeholder="correo@ejemplo.com" />
-        <label style="margin-top:13px;">Password</label>
-        <input id="password" type="password" placeholder="••••" />
-        <button class="btn" style="margin-top:21px; width:100%;" onclick="login()">Ingresar</button>
-        <div class="muted" style="text-align:center; margin-top:13px;">¿Olvidaste tu contraseña? <a href="#">Recuperar</a></div>
-        <div id="out" class="list" style="margin-top:21px; padding:12px;"></div>
+        <div class="mt-6 space-y-4">
+          <div>
+            <label class="block">Rol</label>
+            <select id="role" class="w-full h-11 px-3 rounded-xl border border-emerald-200 bg-white/80 text-[#0f172a] outline-none focus:ring-2 focus:ring-emerald-300"></select>
+          </div>
+          <div>
+            <label class="block">Email</label>
+            <input id="email" type="email" placeholder="correo@ejemplo.com" class="w-full h-11 px-3 rounded-xl border border-emerald-200 bg-white/80 text-[#0f172a] outline-none focus:ring-2 focus:ring-emerald-300" />
+          </div>
+          <div>
+            <label class="block">Password</label>
+            <input id="password" type="password" placeholder="••••" class="w-full h-11 px-3 rounded-xl border border-emerald-200 bg-white/80 text-[#0f172a] outline-none focus:ring-2 focus:ring-emerald-300" />
+          </div>
+        </div>
+        <button class="btn mt-6 w-full" onclick="login()">Ingresar</button>
+        <div class="muted text-center mt-4">¿Olvidaste tu contraseña? <a href="#" class="text-emerald-600">Recuperar</a></div>
+        <div id="out" class="list mt-6 p-4 hidden"></div>
       </div>
     </div>
   </div>
@@ -36,7 +47,16 @@
     function setToken(t) { localStorage.setItem('token', t); }
     function setRole(r) { localStorage.setItem('role', r); }
     function setUser(u) { localStorage.setItem('user', JSON.stringify(u)); }
-    function show(el, obj) { el.textContent = JSON.stringify(obj, null, 2); }
+    function setAlert(text, type){
+      const el = document.getElementById('alert');
+      if (!el) return;
+      const base = type==='error'
+        ? 'flex items-center gap-3 p-3 rounded-xl border border-red-200 bg-red-50/90 text-red-800 shadow'
+        : 'flex items-center gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50/90 text-emerald-800 shadow';
+      el.className = base;
+      el.innerHTML = `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-600 font-bold">×</span><span>${text}</span>`;
+      el.classList.remove('hidden');
+    }
     async function login() {
       const role = document.getElementById('role').value;
       const email = document.getElementById('email').value;
@@ -45,13 +65,16 @@
       const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email, password }) });
       const j = await r.json();
       if (j.token) { setToken(j.token); setRole(role); setUser(j.usuario || j.empresa || j.recolector); window.location.href = '/dashboard.html'; return; }
-      show(document.getElementById('out'), j);
+      const key = String(j?.message||j?.error||'');
+      const msg = (key==='credenciales_invalidas') ? 'Credenciales inválidas. Verifica tu email y contraseña.' : 'Ocurrió un error al iniciar sesión.';
+      setAlert(msg, 'error');
     }
     // Populate roles for consistency
     (function init(){
       const sel = document.getElementById('role');
       if (!sel) return;
       ['usuario','empresa','recolector'].forEach(v=>{ const opt=document.createElement('option'); opt.value=v; opt.textContent=v.charAt(0).toUpperCase()+v.slice(1); sel.appendChild(opt); });
+      ['email','password','role'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.addEventListener('input',()=>{ const a=document.getElementById('alert'); if(a){ a.classList.add('hidden'); a.innerHTML=''; } }); }});
     })();
   </script>
 </body>
