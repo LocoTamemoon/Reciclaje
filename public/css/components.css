@@ -28,6 +28,37 @@
 .menu button{width:100%;text-align:left;background:transparent;border:none;color:#475569;padding:10px 12px;border-radius:10px;cursor:pointer;transition:all .18s ease}
 .menu button.active{background:#e6f4ec;color:#0f172a;box-shadow:var(--shadow-sm)}
 .menu button:hover{background:#edf7f2;transform:translateY(-1px)}
+/* Danger button (Salir) */
+.btn.danger{background:linear-gradient(180deg,#ff6b6b,#ff4a4a);color:#220000}
+.btn.icon{display:inline-flex;align-items:center;gap:8px}
 input[type=checkbox]{width:16px;height:16px;margin:0;vertical-align:middle;accent-color:var(--color-primary)}
 .check-wrap{display:inline-flex;align-items:center;gap:8px}
 .check-wrap>span{margin:0}
+.table{width:100%;border-collapse:collapse}
+.ta-right{text-align:right}
+.ta-left{text-align:left}
+.ml-8{margin-left:8px}
+.mt-4{margin-top:4px}
+.overflow-auto{overflow:auto}
+.flex-1{flex:1}
+.jc-between{justify-content:space-between}
+.jc-end{justify-content:flex-end}
+.ai-center{align-items:center}
+.ai-end{align-items:flex-end}
+.gap-8{gap:8px}
+.gap-10{gap:10px}
+.gap-12{gap:12px}
+.mt-8{margin-top:8px}
+.mt-10{margin-top:10px}
+.mt-12{margin-top:12px}
+.mt-13{margin-top:13px}
+.mt-21{margin-top:21px}
+.my-8{margin-top:8px;margin-bottom:8px}
+.flex-wrap{flex-wrap:wrap}
+.cards-row{align-items:flex-start;gap:12px}
+.map-box{height:60vh;width:100%;border:1px solid var(--color-border);border-radius:12px}
+.min-240{min-width:240px}
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px}
+.pager button{min-width:32px;padding:6px 10px;border:1px solid var(--color-border);border-radius:10px;background:#FFFFFF;color:#0B1220;cursor:pointer;transition:transform .14s ease}
+.pager button.active{background:#e6f4ec;font-weight:600}
+.pager button:hover{transform:translateY(-1px)}

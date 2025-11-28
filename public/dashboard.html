@@ -81,37 +81,46 @@
         <button id="m-resenas" onclick="setView('resenas')">Reseñas</button>
         <button id="m-rewards" onclick="setView('rewards')">Usa Puntos</button>
         <button id="m-mapa" onclick="setView('mapa')">Mapa</button>
-        <button onclick="logout()" style="margin-top:12px;">Salir</button>
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn danger icon" onclick="logout()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 3H6C4.895 3 4 3.895 4 5V19C4 20.105 4.895 21 6 21H10" stroke="#3b0b0b" stroke-width="2" stroke-linecap="round"/>
+            <path d="M17 16L21 12L17 8" stroke="#3b0b0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 12H10" stroke="#3b0b0b" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Salir
+        </button>
       </div>
     </aside>
     <main class="content">
       <section id="view-empresas" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row jc-between">
           <h2>Empresas disponibles</h2>
           <button class="btn secondary" onclick="loadEmpresas()">Actualizar</button>
         </div>
         <div id="empresas" class="grid"></div>
       </section>
       <section id="view-recolector" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row jc-between">
           <h2>Solicitudes Disponibles</h2>
           <button class="btn secondary" onclick="loadRecolectorFeed()">Actualizar</button>
         </div>
         <ul id="reco-feed" class="list"></ul>
-        <div id="reco-preview" class="panel" style="margin-top:12px; display:none;">
-          <div id="reco-map" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
-          <div id="reco-route-meta" class="muted" style="margin-top:8px;"></div>
+        <div id="reco-preview" class="panel mt-12" style="display:none;">
+          <div id="reco-map" class="map-box"></div>
+          <div id="reco-route-meta" class="muted mt-8"></div>
         </div>
       </section>
       <section id="view-empresa" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row jc-between">
           <h2 id="empresa-titulo">Empresa</h2>
           <div class="row">
             <button class="btn secondary" onclick="setView('empresas')">Volver</button>
             <button class="btn" onclick="confirmarSolicitud()">Crear solicitud</button>
           </div>
         </div>
-        <div class="row" style="justify-content:space-between; align-items:flex-end;">
+        <div class="row jc-between ai-end">
           <div>
             <div id="empresa-meta" class="muted"></div>
           </div>
@@ -119,7 +128,7 @@
             <div>Estimado total: <strong id="estimado-total">S/ 0.00</strong></div>
           </div>
         </div>
-        <div style="margin-top:12px; overflow:auto;">
+        <div class="mt-12" style="overflow:auto;">
           <table style="width:100%; border-collapse:collapse;">
             <thead>
               <tr style="border-bottom:1px solid #1f2937;">
@@ -132,21 +141,21 @@
             <tbody id="materiales-body"></tbody>
           </table>
         </div>
-        <div class="muted" style="margin-top:10px;" id="empresa-cond"></div>
-        <div style="margin-top:10px;">
+        <div class="muted mt-10" id="empresa-cond"></div>
+        <div class="mt-10">
           <label class="check-wrap">
             <input type="checkbox" id="delivery-check" />
             <span>Solicito el delivery sabiendo las condiciones del Acuerdo de Usuario a VidaVerde</span>
           </label>
-          <div class="muted" id="delivery-hint" style="margin-top:6px;">Delivery disponible desde S/ 35</div>
-          <label class="check-wrap" style="margin-top:8px;">
+          <div class="muted mt-8" id="delivery-hint">Delivery disponible desde S/ 35</div>
+          <label class="check-wrap mt-8">
             <input type="checkbox" id="delivery-actual-check" />
             <span>Quiero que el recojo sea en mi ubicación actual (por defecto se usa el domicilio previamente registrado)</span>
           </label>
-          <div class="muted" id="delivery-actual-hint" style="margin-top:4px; display:none;">Activa tu geolocalización para usar tu ubicación actual</div>
+          <div class="muted mt-8" id="delivery-actual-hint" style="display:none;">Activa tu geolocalización para usar tu ubicación actual</div>
         </div>
-        <div style="margin-top:16px;">
-          <div class="row" style="justify-content:space-between; align-items:center;">
+        <div class="mt-21">
+          <div class="row jc-between ai-center">
             <h3>Reseñas</h3>
             <button class="btn secondary" onclick="empresaResenasRefresh()">Actualizar</button>
           </div>
@@ -154,19 +163,19 @@
         </div>
       </section>
       <section id="view-solicitudes" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row jc-between">
           <h2>Mis Solicitudes</h2>
           <button class="btn secondary" onclick="loadSolicitudes()">Actualizar</button>
         </div>
         <div class="row cards-row">
           <div id="sol-card-pend" style="flex:1" class="card">
-            <div class="row" style="justify-content:space-between; align-items:center;">
+            <div class="row jc-between ai-center">
               <h3>Pendientes</h3>
             </div>
-            <div class="row" style="margin:8px 0;">
-              <input id="sol-pend-search" type="text" placeholder="Buscar solicitud pendiente..." style="flex:1;" />
+            <div class="row my-8">
+              <input id="sol-pend-search" type="text" placeholder="Buscar solicitud pendiente..." class="flex-1" />
             </div>
-            <div class="row" style="gap:8px; margin:4px 0 8px;">
+            <div class="row gap-8" style="margin:4px 0 8px;">
               <select id="sol-pend-estado">
                 <option value="todos">Todos</option>
                 <option value="pendiente_empresa">pendiente_empresa</option>
@@ -185,13 +194,13 @@
             <ul id="sol-pend" class="list"></ul>
           </div>
           <div id="sol-card-ant" style="flex:1" class="card">
-            <div class="row" style="justify-content:space-between; align-items:center;">
+            <div class="row jc-between ai-center">
               <h3>Anteriores</h3>
             </div>
-            <div class="row" style="margin:8px 0;">
-              <input id="sol-ant-search" type="text" placeholder="Buscar solicitud anterior..." style="flex:1;" />
+            <div class="row my-8">
+              <input id="sol-ant-search" type="text" placeholder="Buscar solicitud anterior..." class="flex-1" />
             </div>
-            <div class="row" style="gap:8px; margin:4px 0 8px;">
+            <div class="row gap-8" style="margin:4px 0 8px;">
               <select id="sol-ant-estado">
                 <option value="todos">Todos</option>
                 <option value="pendiente_empresa">pendiente_empresa</option>
@@ -210,65 +219,65 @@
             <ul id="sol-ant" class="list"></ul>
           </div>
         </div>
-        <div id="usr-preview" class="panel" style="margin-top:12px; display:none;">
-          <div id="usr-map" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
-          <div id="usr-route-meta" class="muted" style="margin-top:8px;"></div>
+        <div id="usr-preview" class="panel mt-12" style="display:none;">
+          <div id="usr-map" class="map-box"></div>
+          <div id="usr-route-meta" class="muted mt-8"></div>
         </div>
       </section>
       <section id="view-historial" class="panel" hidden>
-        <div class="row" style="justify-content:space-between; align-items:center;">
+        <div class="row jc-between ai-center">
           <h2 id="hist-title">Historial de Transacciones</h2>
           <div class="badge" id="hist-earnings" style="margin-left:8px;">Ganancia total: S/ 0.00</div>
           <div class="row">
             <button class="btn secondary" id="hist-refresh">Actualizar</button>
           </div>
         </div>
-        <div class="row" style="margin:8px 0;">
+        <div class="row my-8">
           <input id="hist-search" type="text" placeholder="Buscar transacción..." style="flex:1;" />
         </div>
 
         <ul id="hist-list" class="list"></ul>
-        <div id="hist-detalle" class="panel" style="margin-top:12px; display:none;"></div>
+        <div id="hist-detalle" class="panel mt-12" style="display:none;"></div>
       </section>
       <section id="view-empresa-solicitudes" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row jc-between">
           <h2>Solicitudes Entrantes</h2>
           <button class="btn secondary" onclick="loadSolicitudesEmpresa()">Actualizar</button>
         </div>
         <ul id="emp-sol-list" class="list"></ul>
       </section>
       <section id="view-rewards" class="panel" hidden>
-        <div class="row" style="justify-content:space-between; align-items:center;">
+        <div class="row jc-between ai-center">
           <h2>Usa tus puntos</h2>
           <div class="badge" id="rewards-puntos">Puntos: 0</div>
         </div>
         <ul id="rewards-list" class="list"></ul>
       </section>
       <section id="view-resenas" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row jc-between">
           <h2>Reseñas de la empresa</h2>
           <button class="btn secondary" onclick="loadResenasEmpresa()">Actualizar</button>
         </div>
         <ul id="resenas-list" class="list"></ul>
       </section>
       <section id="view-mapa" class="panel" hidden>
-        <div class="row" style="justify-content:space-between; align-items:center; gap:10px;">
+        <div class="row jc-between ai-center gap-10">
           <h2>Mapa</h2>
-          <div class="row" style="gap:8px; align-items:center;">
+          <div class="row gap-8 ai-center">
             <span class="badge" id="acc-badge">Precisión —</span>
             <span class="badge" id="dist-badge">Distrito —</span>
             <button class="btn secondary" id="buscar-btn">Mi ubicación</button>
           </div>
         </div>
-        <div class="row" style="gap:8px; margin-top:8px;">
+        <div class="row gap-8 mt-8">
           <input id="addr-input" placeholder="Dirección" style="flex:1" />
           <button class="btn secondary" id="addr-btn">Buscar dirección</button>
           <button class="btn" id="distrito-btn">Ver distrito</button>
           <button class="btn secondary" id="casa-btn">Ver ubicación de casa</button>
         </div>
-        <div class="card" style="margin-top:8px; padding:8px;">
-          <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
-            <select id="map-filtro" style="min-width:240px;">
+        <div class="card mt-8" style="padding:8px;">
+          <div class="row gap-8 ai-center flex-wrap">
+            <select id="map-filtro" class="min-240">
               <option value="none">---SELECCIONE---</option>
               <option value="mejor_material">Mejores pagos por material</option>
               <option value="mas_cercana">Empresa recicladora más cercana</option>
@@ -276,30 +285,30 @@
               <option value="mas_tx">Distrito con más transacciones</option>
               <option value="mejor_distrito">Distrito con mejores calificaciones</option>
             </select>
-            <select id="map-material" style="min-width:240px; display:none;"></select>
+            <select id="map-material" class="min-240" style="display:none;"></select>
             <label class="check-wrap" style="display:none;" id="limit-dist-wrap">
               <input type="checkbox" id="map-limit-distrito" /> Limitar por distrito
             </label>
-            <select id="map-limit-distrito-sel" style="min-width:240px; display:none;"></select>
-            <select id="map-filtro-distrito" style="min-width:240px; display:none;"></select>
+            <select id="map-limit-distrito-sel" class="min-240" style="display:none;"></select>
+            <select id="map-filtro-distrito" class="min-240" style="display:none;"></select>
             <button class="btn" id="aplicar-filtro">Aplicar filtro</button>
             <button class="btn secondary" id="quitar-filtro">Quitar filtro</button>
             <span id="filtro-res" class="muted"></span>
           </div>
         </div>
-        <div class="card" style="margin-top:12px;">
-          <div id="map" style="height:60vh; width:100%; border-radius:12px;"></div>
+        <div class="card mt-12">
+          <div id="map" class="map-box"></div>
         </div>
       </section>
       <section id="view-pesaje" class="panel" hidden>
-        <div class="row" style="justify-content:space-between;">
+        <div class="row jc-between">
           <h2 id="pesaje-titulo">Pesaje</h2>
           <div class="row">
             <button class="btn secondary" onclick="cancelarPesaje()">Cancelar</button>
             <button class="btn" id="btn-pesaje-confirm" onclick="confirmarPesaje()" disabled>Registrar pesaje y pago</button>
           </div>
         </div>
-        <div class="row" style="justify-content:space-between; align-items:flex-end;">
+        <div class="row jc-between ai-end">
           <div>
             <div id="pesaje-meta" class="muted"></div>
           </div>
@@ -312,20 +321,20 @@
             </div>
           </div>
         </div>
-        <div style="margin-top:12px; overflow:auto;">
-          <table style="width:100%; border-collapse:collapse;">
+        <div class="mt-12 overflow-auto">
+          <table class="table">
             <thead>
-              <tr style="border-bottom:1px solid #1f2937;">
-                <th style="text-align:left; padding:8px;">Material</th>
-                <th style="text-align:right; padding:8px;">Precio/kg (S/)</th>
-                <th style="text-align:right; padding:8px;">Kg finales</th>
-                <th style="text-align:right; padding:8px;">Subtotal (S/)</th>
+              <tr>
+                <th class="ta-left">Material</th>
+                <th class="ta-right">Precio/kg (S/)</th>
+                <th class="ta-right">Kg finales</th>
+                <th class="ta-right">Subtotal (S/)</th>
               </tr>
             </thead>
             <tbody id="pesaje-body"></tbody>
           </table>
         </div>
-        <div class="right" style="margin-top:10px; display:flex; gap:12px; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
+        <div class="right mt-10" style="display:flex; gap:12px; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
           <div>Total estimado: <strong id="pesaje-total">S/ 0.00</strong></div>
           <div>Comisión (10%): <strong id="pesaje-fee">S/ 0.00</strong></div>
           <div>Total a pagar: <strong id="pesaje-net">S/ 0.00</strong></div>
@@ -339,21 +348,21 @@
         <h2>Perfil</h2>
         <div id="perfil" class="mono"></div>
         <div id="perfil-materiales" style="margin-top:12px;" hidden>
-          <div class="row" style="justify-content:space-between;">
+          <div class="row jc-between">
             <h3>Materiales y precios</h3>
             <button class="btn" onclick="perfilSaveMaterials()">Guardar cambios</button>
           </div>
-          <div class="row" style="gap:12px; margin:8px 0;">
+          <div class="row gap-12 my-8">
             <select id="perfil-add-select" style="flex:1"></select>
             <input id="perfil-add-precio" type="number" step="0.01" placeholder="Precio base" style="width:140px" />
             <button class="btn secondary" onclick="perfilAddMaterial()">Agregar material</button>
           </div>
-          <table style="width:100%; border-collapse:collapse;">
+          <table class="table">
             <thead>
-              <tr style="border-bottom:1px solid #1f2937;">
-                <th style="text-align:left; padding:8px;">Material</th>
-                <th style="text-align:right; padding:8px;">Precio/kg (S/)</th>
-                <th style="text-align:right; padding:8px;">Acciones</th>
+              <tr>
+                <th class="ta-left">Material</th>
+                <th class="ta-right">Precio/kg (S/)</th>
+                <th class="ta-right">Acciones</th>
               </tr>
             </thead>
             <tbody id="perfil-materiales-body"></tbody>
@@ -387,11 +396,11 @@
     <div class="modal-card">
       <h3>Confirmar aceptación</h3>
       <div id="aceptar-detalle" class="mono"></div>
-      <div class="row" style="align-items:center; gap:8px; margin-top:10px;">
+      <div class="row ai-center gap-8 mt-10">
         <input type="checkbox" id="aceptar-agree" />
         <label for="aceptar-agree" class="check-wrap" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
       </div>
-      <div id="aceptar-fee-box" class="right" style="margin-top:8px;" hidden>
+      <div id="aceptar-fee-box" class="right mt-8" hidden>
         <div>Comisión (10%): <strong id="aceptar-fee">S/ 0.00</strong></div>
         <div>Total a pagar: <strong id="aceptar-net">S/ 0.00</strong></div>
       </div>
@@ -415,12 +424,12 @@
 
   <div id="ruta-modal" class="modal" hidden>
     <div class="modal-card">
-      <div class="row" style="justify-content:space-between; align-items:center;">
+      <div class="row jc-between ai-center">
         <h3>Ruta a la empresa</h3>
         <button class="btn secondary" id="usr-instr-toggle">Ocultar indicaciones</button>
       </div>
-      <div id="usr-map-modal" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
-      <div id="usr-route-meta-modal" class="muted" style="margin-top:8px;"></div>
+      <div id="usr-map-modal" class="map-box"></div>
+      <div id="usr-route-meta-modal" class="muted mt-8"></div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="closeRuta()">Cerrar</button>
       </div>
@@ -429,12 +438,12 @@
 
   <div id="viaje-modal" class="modal" hidden>
     <div class="modal-card">
-      <div class="row" style="justify-content:space-between; align-items:center;">
+      <div class="row jc-between ai-center">
         <h3>Ver viaje</h3>
         <button class="btn secondary" id="viaje-instr-toggle">Ocultar indicaciones</button>
       </div>
-      <div id="usr-map-viaje" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
-      <div id="usr-route-meta-viaje" class="muted" style="margin-top:8px;"></div>
+      <div id="usr-map-viaje" class="map-box"></div>
+      <div id="usr-route-meta-viaje" class="muted mt-8"></div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="closeViaje()">Cerrar</button>
       </div>
@@ -518,7 +527,7 @@
         if (rview) rview.hidden = true;
       }
       if (v==='empresas') loadEmpresas();
-      if (v==='solicitudes') loadSolicitudes();
+      if (v==='solicitudes') { solPendVisibleCount = 10; solAntVisibleCount = 10; solPendPage = 1; solAntPage = 1; loadSolicitudes(); }
       if (v==='solicitudes'){
         const sp = document.getElementById('sol-pend-search');
         const sa = document.getElementById('sol-ant-search');
@@ -534,6 +543,7 @@
         if (sat){ sat.value = solAntTipo; sat.onchange = ()=>{ solAntTipo = sat.value; renderSolicitudesAnteriores(); }; }
       }
       if (v==='historial') {
+        histVisibleCount = 10; histPage = 1;
         if (role==='empresa') {
           loadHistorialEmpresa();
           const he = document.getElementById('hist-earnings');
@@ -863,15 +873,36 @@
         const tipoOk = (solPendTipo==='todos') || (solPendTipo==='delivery' ? tipo==='delivery' : tipo!=='delivery');
         return searchOk && estadoOk && tipoOk;
       });
-      list.forEach(s=>{
+      const sorted = list.slice().sort((a,b)=>{
+        const da = new Date(a.creado_en||a.fecha||0).getTime();
+        const db = new Date(b.creado_en||b.fecha||0).getTime();
+        if (db!==da) return db-da;
+        return Number(b.id||0) - Number(a.id||0);
+      });
+      const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+      if (solPendPage < 1) solPendPage = 1; if (solPendPage > totalPages) solPendPage = totalPages;
+      const start = (solPendPage-1) * PAGE_SIZE;
+      const toShow = sorted.slice(start, start + PAGE_SIZE);
+      toShow.forEach(s=>{
         const li = document.createElement('li');
         const en = empNombreById.get(Number(s.empresa_id)) || String(s.empresa_id);
         const isExp = String(s.estado)==='expirada' && String(s.tipo_entrega)==='delivery';
         const isDelivery = String(s.tipo_entrega)==='delivery';
         const canTrack = String(s.tipo_entrega)==='delivery' && s.recolector_id!=null && String(s.estado_publicacion||'')==='aceptada_recolector';
-        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${canTrack?`<button class="btn" onclick="usuarioVerViaje(${s.id})">Ver viaje</button>`:(!isDelivery?`<button class="btn" onclick="usuarioRutaEmpresa(${s.id}, ${s.empresa_id})">Ruta a la empresa</button>`:'')} ${isExp?`<button class="btn" onclick="usuarioRepublicarSolicitud(${s.id})">Re-publicar</button>`:`<button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`}`;
+        const viajeBtn = canTrack ? `<button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button>` : (!isDelivery ? `<button class=\"btn\" onclick=\"usuarioRutaEmpresa(${s.id}, ${s.empresa_id})\">Ruta a la empresa</button>` : '');
+        const finalBtn = isExp ? `<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>` : `<button class=\"btn\" onclick=\"usuarioCancelarSolicitud(${s.id})\">Cancelar</button>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\">${displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${viajeBtn} ${finalBtn}</div></div>`;
         pend.appendChild(li);
       });
+      const totalPages2 = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+      if (sorted.length > PAGE_SIZE){
+        const li = document.createElement('li');
+        const prev = `<button ${solPendPage<=1?'disabled':''} onclick='(function(){ if (solPendPage>1){ solPendPage--; renderSolicitudesPendientes(); } })()'>Anterior</button>`;
+        const next = `<button ${solPendPage>=totalPages2?'disabled':''} onclick='(function(){ if (solPendPage<${totalPages2}){ solPendPage++; renderSolicitudesPendientes(); } })()'>Siguiente</button>`;
+        const pages = Array.from({length: totalPages2}, (_,i)=> i+1).map(i=> `<button class='${i===solPendPage? 'active':''}' onclick='(function(){ solPendPage=${i}; renderSolicitudesPendientes(); })()'>${i}</button>`).join('');
+        li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${solPendPage}/${totalPages2}</span>${pages}${next}</div>`;
+        pend.appendChild(li);
+      }
       if (pend.children.length === 0) {
         const li = document.createElement('li');
         li.className = 'muted';
@@ -894,15 +925,35 @@
         const tipoOk = (solAntTipo==='todos') || (solAntTipo==='delivery' ? tipo==='delivery' : tipo!=='delivery');
         return searchOk && estadoOk && tipoOk;
       });
-      list.forEach(s=>{
+      const sortedAnt = list.slice().sort((a,b)=>{
+        const da = new Date(a.creado_en||a.fecha||0).getTime();
+        const db = new Date(b.creado_en||b.fecha||0).getTime();
+        if (db!==da) return db-da;
+        return Number(b.id||0) - Number(a.id||0);
+      });
+      const totalPagesAnt = Math.max(1, Math.ceil(sortedAnt.length / PAGE_SIZE));
+      if (solAntPage < 1) solAntPage = 1; if (solAntPage > totalPagesAnt) solAntPage = totalPagesAnt;
+      const startAnt = (solAntPage-1) * PAGE_SIZE;
+      const toShowAnt = sortedAnt.slice(startAnt, startAnt + PAGE_SIZE);
+      toShowAnt.forEach(s=>{
         const li = document.createElement('li');
         const en = empNombreById.get(Number(s.empresa_id)) || String(s.empresa_id);
         const isExp = String(s.estado)==='expirada' && String(s.tipo_entrega)==='delivery';
         const isDelivery = String(s.tipo_entrega)==='delivery';
         const canTrack = String(s.tipo_entrega)==='delivery' && s.recolector_id!=null && String(s.estado_publicacion||'')==='aceptada_recolector';
-        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${canTrack?`<button class="btn" onclick="usuarioVerViaje(${s.id})">Ver viaje</button>`:(!isDelivery?`<button class="btn" onclick="usuarioRutaEmpresa(${s.id}, ${s.empresa_id})">Ruta a la empresa</button>`:'')} ${isExp?`<button class="btn" onclick="usuarioRepublicarSolicitud(${s.id})">Re-publicar</button>`:''}`;
+        const viajeBtn = canTrack ? `<button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button>` : (!isDelivery ? `<button class=\"btn\" onclick=\"usuarioRutaEmpresa(${s.id}, ${s.empresa_id})\">Ruta a la empresa</button>` : '');
+        const finalBtn = isExp ? `<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>` : '';
+        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\">${displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${viajeBtn} ${finalBtn}</div></div>`;
         ant.appendChild(li);
       });
+      if (sortedAnt.length > PAGE_SIZE){
+        const li = document.createElement('li');
+        const prev = `<button ${solAntPage<=1?'disabled':''} onclick='(function(){ if (solAntPage>1){ solAntPage--; renderSolicitudesAnteriores(); } })()'>Anterior</button>`;
+        const next = `<button ${solAntPage>=totalPagesAnt?'disabled':''} onclick='(function(){ if (solAntPage<${totalPagesAnt}){ solAntPage++; renderSolicitudesAnteriores(); } })()'>Siguiente</button>`;
+        const pages = Array.from({length: totalPagesAnt}, (_,i)=> i+1).map(i=> `<button class='${i===solAntPage? 'active':''}' onclick='(function(){ solAntPage=${i}; renderSolicitudesAnteriores(); })()'>${i}</button>`).join('');
+        li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${solAntPage}/${totalPagesAnt}</span>${pages}${next}</div>`;
+        ant.appendChild(li);
+      }
       if (ant.children.length === 0) {
         const li = document.createElement('li');
         li.className = 'muted';
@@ -951,18 +1002,18 @@
       const banda = String(sol?.clasificacion_distancia||'');
       const usuarioNeto = (fee>0) ? (total - fee) : total;
       const html = [
-        `<div class='row' style='justify-content:space-between; margin-bottom:8px;'>`,
-          `<div><span class='muted'>Empresa</span> <strong>${emp?.nombre || ('Empresa '+empresaId)}</strong>${banda? ` · <span class='badge'>${banda}</span>`:''}</div>`,
-          `<div class='right'><span class='muted'>Total estimado</span> <strong>S/ ${total.toFixed(2)}</strong></div>`,
+        `<div class=\"row jc-between my-8\">`,
+          `<div><span class=\"muted\">Empresa</span> <strong>${emp?.nombre || ('Empresa '+empresaId)}</strong>${banda? ` · <span class=\"badge\">${banda}</span>`:''}</div>`,
+          `<div class=\"right\"><span class=\"muted\">Total estimado</span> <strong>S/ ${total.toFixed(2)}</strong></div>`,
         `</div>`,
-        `<table style=\"width:100%; border-collapse:collapse;\">`,
-        `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Precio/kg (S/)</th><th style='text-align:right'>Kg</th><th style='text-align:right'>Subtotal (S/)</th></tr></thead>`,
+        `<table class=\"table\">`,
+        `<thead><tr><th class=\"ta-left\">Material</th><th class=\"ta-right\">Precio/kg (S/)</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal (S/)\</th></tr></thead>`,
         `<tbody>`,
-        ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.precio.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.sub.toFixed(2)}</td></tr>`),
+        ...rows.map(r=>`<tr><td>${r.nombre}</td><td class=\"ta-right\">${r.precio.toFixed(2)}</td><td class=\"ta-right\">${r.kg.toFixed(2)}</td><td class=\"ta-right\">${r.sub.toFixed(2)}</td></tr>`),
         `</tbody>`,
         `</table>`,
-        (fee>0 ? `<div class='right' style='margin-top:8px;'>Delivery: <strong>S/ ${fee.toFixed(2)}</strong></div>` : ``),
-        (fee>0 ? `<div class='right' style='margin-top:6px;'>Neto para ti: <strong>S/ ${usuarioNeto.toFixed(2)}</strong></div>` : ``)
+        (fee>0 ? `<div class=\"right mt-8\">Delivery: <strong>S/ ${fee.toFixed(2)}</strong></div>` : ``),
+        (fee>0 ? `<div class=\"right mt-8\">Neto para ti: <strong>S/ ${usuarioNeto.toFixed(2)}</strong></div>` : ``)
       ].join('');
       document.getElementById('solicitud-detalle').innerHTML = html;
       document.getElementById('solicitud-modal').hidden = false;
@@ -983,6 +1034,8 @@
   let histSearch = '';
   let histTransData = [];
   let histGastosData = [];
+  let histEmpresaData = [];
+  let histRecoData = [];
   let solPendSearch = '';
   let solAntSearch = '';
   let solPendData = [];
@@ -992,6 +1045,13 @@
   let solPendTipo = 'todos';
   let solAntEstado = 'todos';
   let solAntTipo = 'todos';
+  let solPendVisibleCount = 10;
+  let solAntVisibleCount = 10;
+  let histVisibleCount = 10;
+  let PAGE_SIZE = 10;
+  let solPendPage = 1;
+  let solAntPage = 1;
+  let histPage = 1;
     async function loadHistorial(){
       const r = await fetch(`/api/usuarios/${user.id}/historial`, { headers: authHeaders() });
       histTransData = await r.json();
@@ -1008,18 +1068,26 @@
         const estado = String(t.estado||'');
         return id.includes(q) || emp.toLowerCase().includes(q) || estado.toLowerCase().includes(q);
       });
-      list.forEach(t=>{
+      const sorted = list.slice().sort((a,b)=> new Date(b.fecha||0).getTime() - new Date(a.fecha||0).getTime());
+      const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+      if (histPage < 1) histPage = 1; if (histPage > totalPages) histPage = totalPages;
+      const start = (histPage-1) * PAGE_SIZE;
+      const toShow = sorted.slice(start, start + PAGE_SIZE);
+      toShow.forEach(t=>{
         const li = document.createElement('li');
-        li.innerHTML = `<div class="row" style="justify-content:space-between;">
-          <div>
-            <div><strong>Transacción #${t.id}</strong> con ${t.empresa_nombre||t.empresa_id}</div>
-            <div class="muted">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div>
-          </div>
-          <div class="right"><span class="badge">${new Date(t.fecha).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${t.id})">Ver detalle</button> ${role==='usuario' ? `<button class=\"btn secondary\" id=\"rate-emp-${t.id}\" onclick=\"openRating('empresa', ${t.id}, ${t.empresa_id}, null)\">Calificar empresa</button>` : ''}</div>
-        </div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Transacción #${t.id}</strong> con ${t.empresa_nombre||t.empresa_id}</div><div class=\"muted\">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div></div><div class=\"right\"><span class=\"badge\">${new Date(t.fecha).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTx(${t.id})\">Ver detalle</button> ${role==='usuario' ? `<button class=\\\"btn secondary\\\" id=\\\"rate-emp-${t.id}\\\" onclick=\\\"openRating('empresa', ${t.id}, ${t.empresa_id}, null)\\\">Calificar empresa</button>` : ''}</div></div>`;
         ul.appendChild(li);
         setTimeout(()=>updateRatingButtonsForTx(t.id),0);
       });
+      const totalPages2 = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+      if (sorted.length > PAGE_SIZE){
+        const li = document.createElement('li');
+        const prev = `<button ${histPage<=1?'disabled':''} onclick='(function(){ if (histPage>1){ histPage--; renderHistTransacciones(); } })()'>Anterior</button>`;
+        const next = `<button ${histPage>=totalPages2?'disabled':''} onclick='(function(){ if (histPage<${totalPages2}){ histPage++; renderHistTransacciones(); } })()'>Siguiente</button>`;
+        const pages = Array.from({length: totalPages2}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; renderHistTransacciones(); })()'>${i}</button>`).join('');
+        li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${histPage}/${totalPages2}</span>${pages}${next}</div>`;
+        ul.appendChild(li);
+      }
       document.getElementById('hist-detalle').style.display = 'none';
     }
     async function loadHistorialGastos(){
@@ -1037,11 +1105,24 @@
         if (!q) return true;
         return String(g.nombre||'').toLowerCase().includes(q) || String(g.puntos||'').includes(q) || new Date(g.creado_en).toLocaleString().toLowerCase().includes(q);
       });
-      list.forEach(g=>{
+      const sortedG = list.slice().sort((a,b)=> new Date(b.creado_en||0).getTime() - new Date(a.creado_en||0).getTime());
+      const totalPages = Math.max(1, Math.ceil(sortedG.length / PAGE_SIZE));
+      if (histPage < 1) histPage = 1; if (histPage > totalPages) histPage = totalPages;
+      const start = (histPage-1) * PAGE_SIZE;
+      const toShowG = sortedG.slice(start, start + PAGE_SIZE);
+      toShowG.forEach(g=>{
         const li = document.createElement('li');
-        li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\">\n          <div>\n            <div><strong>${g.nombre}</strong></div>\n            <div class=\"muted\">Gasto de puntos: ${Number(g.puntos)} · ${new Date(g.creado_en).toLocaleString()}</div>\n          </div>\n        </div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>${g.nombre}</strong></div><div class=\"muted\">Gasto de puntos: ${Number(g.puntos)} · ${new Date(g.creado_en).toLocaleString()}</div></div></div>`;
         ul.appendChild(li);
       });
+      if (sortedG.length > PAGE_SIZE){
+        const li = document.createElement('li');
+        const prev = `<button ${histPage<=1?'disabled':''} onclick='(function(){ if (histPage>1){ histPage--; renderHistGastos(); } })()'>Anterior</button>`;
+        const next = `<button ${histPage>=totalPages?'disabled':''} onclick='(function(){ if (histPage<${totalPages}){ histPage++; renderHistGastos(); } })()'>Siguiente</button>`;
+        const pages = Array.from({length: totalPages}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; renderHistGastos(); })()'>${i}</button>`).join('');
+        li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${histPage}/${totalPages}</span>${pages}${next}</div>`;
+        ul.appendChild(li);
+      }
       document.getElementById('hist-detalle').style.display = 'none';
     }
   function initHistorialUI(){
@@ -1059,21 +1140,28 @@
     }
     async function loadHistorialEmpresa(){
       const r = await fetch(`/api/empresas/${user.id}/historial`, { headers: authHeaders() });
-      const list = await r.json();
+      histEmpresaData = await r.json();
       const ul = document.getElementById('hist-list');
       ul.innerHTML = '';
-      list.forEach(t=>{
+      const sorted = histEmpresaData.slice().sort((a,b)=> new Date(b.fecha||0).getTime() - new Date(a.fecha||0).getTime());
+      const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+      if (histPage < 1) histPage = 1; if (histPage > totalPages) histPage = totalPages;
+      const start = (histPage-1) * PAGE_SIZE;
+      const toShow = sorted.slice(start, start + PAGE_SIZE);
+      toShow.forEach(t=>{
         const li = document.createElement('li');
-        li.innerHTML = `<div class="row" style="justify-content:space-between;">
-          <div>
-            <div><strong>Transacción #${t.id}</strong></div>
-            <div class="muted">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div>
-          </div>
-          <div class="right"><span class="badge">${new Date(t.fecha).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${t.id})">Ver detalle</button> <button class="btn secondary" id="rate-usr-${t.id}" onclick="openRating('usuario', ${t.id}, null, ${t.usuario_id})">Calificar usuario</button></div>
-        </div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Transacción #${t.id}</strong></div><div class=\"muted\">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div></div><div class=\"right\"><span class=\"badge\">${new Date(t.fecha).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTx(${t.id})\">Ver detalle</button> <button class=\"btn secondary\" id=\"rate-usr-${t.id}\" onclick=\"openRating('usuario', ${t.id}, null, ${t.usuario_id})\">Calificar usuario</button></div></div>`;
         ul.appendChild(li);
         setTimeout(()=>updateRatingButtonsForTx(t.id),0);
       });
+      if (sorted.length > PAGE_SIZE){
+        const li = document.createElement('li');
+        const prev = `<button ${histPage<=1?'disabled':''} onclick='(function(){ if (histPage>1){ histPage--; loadHistorialEmpresa(); } })()'>Anterior</button>`;
+        const next = `<button ${histPage>=totalPages?'disabled':''} onclick='(function(){ if (histPage<${totalPages}){ histPage++; loadHistorialEmpresa(); } })()'>Siguiente</button>`;
+        const pages = Array.from({length: totalPages}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; loadHistorialEmpresa(); })()'>${i}</button>`).join('');
+        li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${histPage}/${totalPages}</span>${pages}${next}</div>`;
+        ul.appendChild(li);
+      }
     }
     async function verDetalleTx(id){
       if (document.getElementById('view-historial').hidden) setView('historial');
@@ -1081,37 +1169,44 @@
       if (modal && !modal.hidden && histDetalleId === id){ modal.hidden = true; histDetalleId = null; return; }
       const r = await fetch(`/api/transacciones/${id}`, { headers: authHeaders() });
       const j = await r.json();
-      const filas = j.detalle.map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.precio_por_kg).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.subtotal).toFixed(2)}</td></tr>`).join('');
+      const filas = j.detalle.map(d=> `<tr><td>${d.nombre}</td><td class=\"ta-right\">${Number(d.precio_por_kg).toFixed(2)}</td><td class=\"ta-right\">${Number(d.kg_finales).toFixed(2)}</td><td class=\"ta-right\">${Number(d.subtotal).toFixed(2)}</td></tr>`).join('');
       const footer = role === 'usuario'
         ? `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong>${Number(j.delivery_fee||0)>0 ? ` · Delivery: <strong>S/ ${Number(j.delivery_fee||0).toFixed(2)}</strong> · Neto: <strong>S/ ${Number(j.usuario_neto||j.total).toFixed(2)}</strong>` : ''}</div>`
         : `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong> · Comisión 10%: <strong>S/ ${Number(j.comision_10).toFixed(2)}</strong> · Total con comisión: <strong>S/ ${Number(j.total_con_comision).toFixed(2)}</strong></div>`;
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
       if (titleEl) titleEl.textContent = `Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}`;
-      if (contentEl) contentEl.innerHTML = `<table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Precio/kg</th><th style=\"text-align:right\">Kg</th><th style=\"text-align:right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
+      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Precio/kg</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
       if (modal) modal.hidden = false;
       histDetalleId = id;
     }
     async function loadHistorialRecolector(){
       const r = await fetch(`/api/recolector/${user.id}/historial`, { headers: authHeaders() });
-      const list = await r.json();
+      histRecoData = await r.json();
       const ul = document.getElementById('hist-list');
       ul.innerHTML = '';
-      const total = list.reduce((a, s)=> a + Number(s.delivery_fee||0), 0);
+      const total = histRecoData.reduce((a, s)=> a + Number(s.delivery_fee||0), 0);
       const he = document.getElementById('hist-earnings');
       if (he) he.textContent = 'Ganancia total: S/ ' + total.toFixed(2);
-      list.forEach(s=>{
+      const sorted = histRecoData.slice().sort((a,b)=> new Date(b.creado_en||0).getTime() - new Date(a.creado_en||0).getTime());
+      const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+      if (histPage < 1) histPage = 1; if (histPage > totalPages) histPage = totalPages;
+      const start = (histPage-1) * PAGE_SIZE;
+      const toShow = sorted.slice(start, start + PAGE_SIZE);
+      toShow.forEach(s=>{
         const li = document.createElement('li');
         const banda = String(s.clasificacion_distancia||'').toLowerCase();
-        li.innerHTML = `<div class="row" style="justify-content:space-between;">
-          <div>
-            <div><strong>Trabajo #${s.id}</strong> · Gana: <strong>S/ ${Number(s.delivery_fee||0).toFixed(2)}</strong></div>
-            <div class="muted">Usuario #${s.usuario_id} · Empresa ${s.empresa_nombre||s.empresa_id} · Viaje: ${banda||'—'}</div>
-          </div>
-          <div class="right"><span class="badge">${new Date(s.creado_en).toLocaleString()}</span> <button class="btn" onclick="verDetalleTrabajo(${s.id})">Detalles</button></div>
-        </div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Trabajo #${s.id}</strong> · Gana: <strong>S/ ${Number(s.delivery_fee||0).toFixed(2)}</strong></div><div class=\"muted\">Usuario #${s.usuario_id} · Empresa ${s.empresa_nombre||s.empresa_id} · Viaje: ${banda||'—'}</div></div><div class=\"right\"><span class=\"badge\">${new Date(s.creado_en).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTrabajo(${s.id})\">Detalles</button></div></div>`;
         ul.appendChild(li);
       });
+      if (sorted.length > PAGE_SIZE){
+        const li = document.createElement('li');
+        const prev = `<button ${histPage<=1?'disabled':''} onclick='(function(){ if (histPage>1){ histPage--; loadHistorialRecolector(); } })()'>Anterior</button>`;
+        const next = `<button ${histPage>=totalPages?'disabled':''} onclick='(function(){ if (histPage<${totalPages}){ histPage++; loadHistorialRecolector(); } })()'>Siguiente</button>`;
+        const pages = Array.from({length: totalPages}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; loadHistorialRecolector(); })()'>${i}</button>`).join('');
+        li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${histPage}/${totalPages}</span>${pages}${next}</div>`;
+        ul.appendChild(li);
+      }
       const panel = document.getElementById('hist-detalle');
       if (panel) panel.style.display = 'none';
     }
@@ -1121,13 +1216,13 @@
       if (modal && !modal.hidden && histDetalleId === sid){ modal.hidden = true; histDetalleId = null; return; }
       const r = await fetch(`/api/recolector/trabajos/${sid}/detalle`, { headers: authHeaders() });
       const j = await r.json();
-      const filas = (j.materiales||[]).map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td></tr>`).join('');
+      const filas = (j.materiales||[]).map(d=> `<tr><td>${d.nombre}</td><td class=\"ta-right\">${Number(d.kg_finales).toFixed(2)}</td></tr>`).join('');
       const distRU = (j.dist_recolector_usuario_km!=null) ? `${Number(j.dist_recolector_usuario_km).toFixed(2)} km` : '—';
       const distUE = (j.dist_usuario_empresa_km!=null) ? `${Number(j.dist_usuario_empresa_km).toFixed(2)} km` : '—';
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
       if (titleEl) titleEl.textContent = `Detalle Trabajo #${sid}`;
-      if (contentEl) contentEl.innerHTML = `<table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right\" style=\"margin-top:10px\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right\" style=\"margin-top:6px\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>`;
+      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right mt-10\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right mt-8\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>`;
       if (modal) modal.hidden = false;
       histDetalleId = sid;
     }
@@ -1182,21 +1277,26 @@
     }
     async function loadHistorialEmpresa(){
       const r = await fetch(`/api/empresas/${user.id}/historial`, { headers: authHeaders() });
-      const list = await r.json();
+      histEmpresaData = await r.json();
       const ul = document.getElementById('hist-list');
       ul.innerHTML = '';
-      list.forEach(t=>{
+      const sorted = histEmpresaData.slice().sort((a,b)=> new Date(b.fecha||0).getTime() - new Date(a.fecha||0).getTime());
+      const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+      if (histPage < 1) histPage = 1; if (histPage > totalPages) histPage = totalPages;
+      const start = (histPage-1) * PAGE_SIZE;
+      const toShow = sorted.slice(start, start + PAGE_SIZE);
+      toShow.forEach(t=>{
         const li = document.createElement('li');
-        li.innerHTML = `<div class="row" style="justify-content:space-between;">
-          <div>
-            <div><strong>Transacción #${t.id}</strong></div>
-            <div class="muted">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div>
-          </div>
-          <div class="right"><span class="badge">${new Date(t.fecha).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${t.id})">Ver detalle</button> <button class="btn secondary" id="rate-usr-${t.id}" onclick="openRating('usuario', ${t.id}, null, ${t.usuario_id})">Calificar usuario</button></div>
-        </div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Transacción #${t.id}</strong></div><div class=\"muted\">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div></div><div class=\"right\"><span class=\"badge\">${new Date(t.fecha).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTx(${t.id})\">Ver detalle</button> <button class=\"btn secondary\" id=\"rate-usr-${t.id}\" onclick=\"openRating('usuario', ${t.id}, null, ${t.usuario_id})\">Calificar usuario</button></div></div>`;
         ul.appendChild(li);
         setTimeout(()=>updateRatingButtonsForTx(t.id),0);
       });
+      if (sorted.length > PAGE_SIZE){
+        const li = document.createElement('li');
+        const pages = Array.from({length: totalPages}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; loadHistorialEmpresa(); })()'>${i}</button>`).join('');
+        li.innerHTML = `<div class=\"pager\"><span class=\"badge\">Página ${histPage}/${totalPages}</span>${pages}</div>`;
+        ul.appendChild(li);
+      }
     }
     async function loadSolicitudesEmpresa(){
       const r = await fetch(`/api/empresas/${user.id}/solicitudes`, { headers: authHeaders() });
