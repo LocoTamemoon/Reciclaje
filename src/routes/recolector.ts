@@ -15,17 +15,25 @@ recolectorRouter.get("/feed", asyncHandler(async (req: Request, res: Response) =
 
 recolectorRouter.post("/:sid/aceptar", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
-  const { recolector_id } = req.body;
-  const s = await aceptarPorRecolector(sid, Number(recolector_id));
+  const { recolector_id, lat, lon } = req.body;
+  const s = await aceptarPorRecolector(sid, Number(recolector_id), lat!=null?Number(lat):null, lon!=null?Number(lon):null);
   if (!s) { res.status(409).json({ error: "no_disponible" }); return; }
   res.json(s);
 }));
 
-recolectorRouter.post("/:sid/estado", asyncHandler(async (req: Request, res: Response) => {
+recolectorRouter.post(":sid/estado", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
   const { estado } = req.body;
   const s = await actualizarEstadoOperativo(sid, String(estado));
   res.json(s);
+}));
+
+recolectorRouter.post("/:id/ubicacion_actual", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const { lat, lon } = req.body;
+  if (lat === undefined || lon === undefined) { res.status(400).json({ error: "invalid_coords" }); return; }
+  const r = await pool.query("UPDATE recolectores SET lat=$2, lon=$3 WHERE id=$1 RETURNING *", [id, Number(lat), Number(lon)]);
+  res.json({ ok: true, recolector: r.rows[0] || null });
 }));
 
 recolectorRouter.post("/:sid/items", asyncHandler(async (req: Request, res: Response) => {
@@ -57,19 +65,40 @@ recolectorRouter.get("/previsualizacion/:sid", asyncHandler(async (req: Request,
   if (!s) { res.status(404).json({ error: "not_found" }); return; }
   const usuario = await obtenerUsuario(Number(s.usuario_id));
   const empresa = await obtenerEmpresa(Number(s.empresa_id));
-  const rlatlon = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
-  const recolector = rlatlon.rows[0] || null;
-  const uLat = usuario?.lat !== null && usuario?.lat !== undefined ? Number(usuario.lat) : null;
-  const uLon = usuario?.lon !== null && usuario?.lon !== undefined ? Number(usuario.lon) : null;
+  const snapLat = (s as any)?.recolector_accept_lat;
+  const snapLon = (s as any)?.recolector_accept_lon;
+  let recolector: any = null;
+  if (snapLat != null && snapLon != null) {
+    recolector = { lat: Number(snapLat), lon: Number(snapLon) };
+  } else {
+    const rlatlon = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
+    recolector = rlatlon.rows[0] || null;
+  }
+  const uHomeLat = (usuario && usuario.home_lat !== undefined && usuario.home_lat !== null)
+    ? Number(usuario.home_lat)
+    : (usuario && usuario.lat !== undefined && usuario.lat !== null ? Number(usuario.lat) : null);
+  const uHomeLon = (usuario && usuario.home_lon !== undefined && usuario.home_lon !== null)
+    ? Number(usuario.home_lon)
+    : (usuario && usuario.lon !== undefined && usuario.lon !== null ? Number(usuario.lon) : null);
+  const uCurLat = (usuario && usuario.current_lat !== undefined && usuario.current_lat !== null)
+    ? Number(usuario.current_lat)
+    : null;
+  const uCurLon = (usuario && usuario.current_lon !== undefined && usuario.current_lon !== null)
+    ? Number(usuario.current_lon)
+    : null;
   const eLat = empresa?.lat !== null && empresa?.lat !== undefined ? Number(empresa.lat) : null;
   const eLon = empresa?.lon !== null && empresa?.lon !== undefined ? Number(empresa.lon) : null;
   const rLat = recolector?.lat !== null && recolector?.lat !== undefined ? Number(recolector.lat) : null;
   const rLon = recolector?.lon !== null && recolector?.lon !== undefined ? Number(recolector.lon) : null;
-  const distRU = (rLat!=null && rLon!=null && uLat!=null && uLon!=null) ? haversineKm(rLat, rLon, uLat, uLon) : null;
-  const distUE = (uLat!=null && uLon!=null && eLat!=null && eLon!=null) ? haversineKm(uLat, uLon, eLat, eLon) : null;
+  const useCur = Boolean((s as any)?.usuario_pick_actual);
+  const uPickLat = useCur && uCurLat!=null ? uCurLat : uHomeLat;
+  const uPickLon = useCur && uCurLon!=null ? uCurLon : uHomeLon;
+  const distRU = (rLat!=null && rLon!=null && uPickLat!=null && uPickLon!=null) ? haversineKm(rLat, rLon, uPickLat, uPickLon) : null;
+  const distUE = (uPickLat!=null && uPickLon!=null && eLat!=null && eLon!=null) ? haversineKm(uPickLat, uPickLon, eLat, eLon) : null;
   res.json({
     solicitud_id: sid,
-    usuario: { lat: uLat, lon: uLon },
+    usuario: { lat: uPickLat, lon: uPickLon },
+    usuario_actual: { lat: uCurLat, lon: uCurLon },
     empresa: { lat: eLat, lon: eLon },
     usuario_nombre: usuario?.nombre || usuario?.email || `Usuario #${s.usuario_id}`,
     empresa_nombre: empresa?.nombre || `Empresa #${s.empresa_id}`,
@@ -89,16 +118,36 @@ recolectorRouter.get("/trabajos/:sid/detalle", asyncHandler(async (req: Request,
   const totalKg = pesajes.reduce((a: number, p: any)=> a + Number(p.kg_finales||0), 0);
   const usuario = await obtenerUsuario(Number(s.usuario_id));
   const empresa = await obtenerEmpresa(Number(s.empresa_id));
-  const recoRow = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
-  const recolector = recoRow.rows[0] || null;
-  const uLat = usuario?.lat !== null && usuario?.lat !== undefined ? Number(usuario.lat) : NaN;
-  const uLon = usuario?.lon !== null && usuario?.lon !== undefined ? Number(usuario.lon) : NaN;
+  const snapLat2 = (s as any)?.recolector_accept_lat;
+  const snapLon2 = (s as any)?.recolector_accept_lon;
+  let recolector: any = null;
+  if (snapLat2 != null && snapLon2 != null) {
+    recolector = { lat: Number(snapLat2), lon: Number(snapLon2) };
+  } else {
+    const recoRow = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
+    recolector = recoRow.rows[0] || null;
+  }
+  const uHomeLat2 = (usuario && usuario.home_lat !== undefined && usuario.home_lat !== null)
+    ? Number(usuario.home_lat)
+    : (usuario && usuario.lat !== undefined && usuario.lat !== null ? Number(usuario.lat) : NaN);
+  const uHomeLon2 = (usuario && usuario.home_lon !== undefined && usuario.home_lon !== null)
+    ? Number(usuario.home_lon)
+    : (usuario && usuario.lon !== undefined && usuario.lon !== null ? Number(usuario.lon) : NaN);
+  const uCurLat2 = (usuario && usuario.current_lat !== undefined && usuario.current_lat !== null)
+    ? Number(usuario.current_lat)
+    : NaN;
+  const uCurLon2 = (usuario && usuario.current_lon !== undefined && usuario.current_lon !== null)
+    ? Number(usuario.current_lon)
+    : NaN;
   const eLat = empresa?.lat !== null && empresa?.lat !== undefined ? Number(empresa.lat) : NaN;
   const eLon = empresa?.lon !== null && empresa?.lon !== undefined ? Number(empresa.lon) : NaN;
   const rLat = recolector?.lat !== null && recolector?.lat !== undefined ? Number(recolector.lat) : NaN;
   const rLon = recolector?.lon !== null && recolector?.lon !== undefined ? Number(recolector.lon) : NaN;
-  const distRU = (!isNaN(rLat) && !isNaN(rLon) && !isNaN(uLat) && !isNaN(uLon)) ? haversineKm(rLat, rLon, uLat, uLon) : null;
-  const distUE = (!isNaN(uLat) && !isNaN(uLon) && !isNaN(eLat) && !isNaN(eLon)) ? haversineKm(uLat, uLon, eLat, eLon) : null;
+  const useCur2 = Boolean((s as any)?.usuario_pick_actual);
+  const uPickLat2 = useCur2 && !isNaN(uCurLat2) ? uCurLat2 : uHomeLat2;
+  const uPickLon2 = useCur2 && !isNaN(uCurLon2) ? uCurLon2 : uHomeLon2;
+  const distRU = (!isNaN(rLat) && !isNaN(rLon) && !isNaN(uPickLat2) && !isNaN(uPickLon2)) ? haversineKm(rLat, rLon, uPickLat2, uPickLon2) : null;
+  const distUE = (!isNaN(uPickLat2) && !isNaN(uPickLon2) && !isNaN(eLat) && !isNaN(eLon)) ? haversineKm(uPickLat2, uPickLon2, eLat, eLon) : null;
   res.json({
     solicitud_id: sid,
     materiales: pesajes,

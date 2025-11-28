@@ -33,7 +33,7 @@ function calcularFeePorBanda(banda: "ideal" | "normal" | "larga", km: number): n
   return Math.min(rounded, max);
 }
 
-export async function crearNuevaSolicitud(usuarioId: number, empresaId: number, items?: { material_id: number; kg: number }[], delivery?: boolean, consent?: boolean, termsVersion?: string | null) {
+export async function crearNuevaSolicitud(usuarioId: number, empresaId: number, items?: { material_id: number; kg: number }[], delivery?: boolean, consent?: boolean, termsVersion?: string | null, useCurrent?: boolean) {
   const empresa = await obtenerEmpresa(empresaId);
   if (!empresa) throw new Error("Empresa no encontrada");
   let solicitud: any;
@@ -48,14 +48,18 @@ export async function crearNuevaSolicitud(usuarioId: number, empresaId: number, 
       throw err;
     }
     const usuario = await obtenerUsuario(usuarioId);
-    const uLat = Number(usuario?.lat || 0);
-    const uLon = Number(usuario?.lon || 0);
+    const homeLat = Number(usuario?.home_lat || 0);
+    const homeLon = Number(usuario?.home_lon || 0);
+    const curLat = Number(usuario?.current_lat || 0);
+    const curLon = Number(usuario?.current_lon || 0);
+    const pickLat = useCurrent && curLat ? curLat : homeLat;
+    const pickLon = useCurrent && curLon ? curLon : homeLon;
     const eLat = Number(empresa?.lat || 0);
     const eLon = Number(empresa?.lon || 0);
-    const km = (uLat && uLon && eLat && eLon) ? haversineKm(uLat, uLon, eLat, eLon) : 6.1;
+    const km = (pickLat && pickLon && eLat && eLon) ? haversineKm(pickLat, pickLon, eLat, eLon) : 6.1;
     const banda = clasificarDistanciaPorKm(km);
     const fee = calcularFeePorBanda(banda, km);
-    solicitud = await crearSolicitudDelivery(usuarioId, empresaId, fee, banda, Boolean(consent), termsVersion || null);
+    solicitud = await crearSolicitudDelivery(usuarioId, empresaId, fee, banda, Boolean(consent), termsVersion || null, Boolean(useCurrent));
   } else {
     solicitud = await crearSolicitud(usuarioId, empresaId);
   }
@@ -79,11 +83,12 @@ export async function rechazarSolicitud(empresaId: number, solicitudId: number) 
 export async function cancelarSolicitudPorUsuario(usuarioId: number, solicitudId: number) {
   const solicitud = await obtenerSolicitud(solicitudId);
   if (!solicitud || solicitud.usuario_id !== usuarioId) throw new Error("Solicitud no válida");
-  if (solicitud.estado !== "pendiente_empresa") throw new Error("Solicitud no cancelable");
   if (String(solicitud.tipo_entrega) === "delivery") {
+    if (String(solicitud.estado) !== 'pendiente_delivery' || String(solicitud.estado_publicacion) !== 'publicada') throw new Error("Solicitud no cancelable");
     const s = await cancelarPublicacionSolicitud(solicitudId);
     return s;
   }
+  if (solicitud.estado !== "pendiente_empresa") throw new Error("Solicitud no cancelable");
   return await actualizarEstadoSolicitud(solicitudId, "cancelada");
 }
 

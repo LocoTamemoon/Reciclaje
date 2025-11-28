@@ -50,6 +50,8 @@
     .modal-card{ background:linear-gradient(180deg, #ffffff, #fbfdfc); border:1px solid var(--border); border-radius:16px; width:440px; max-width:92vw; padding:16px; box-shadow:0 10px 24px var(--shadow); }
     .modal-card h3{ margin:0 0 12px; font-weight:700; }
     .modal-card textarea{ width:100%; min-height:92px; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text); padding:10px; }
+    #ruta-modal .modal-card{ width:720px; max-width:95vw; }
+    #viaje-modal .modal-card{ width:720px; max-width:95vw; }
     .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
     @media (max-width: 880px){ .layout{ grid-template-columns: 1fr; } .sidebar{ position:sticky; top:0; z-index:10; } }
   </style>
@@ -62,7 +64,15 @@
       <div class="menu">
         <button id="m-empresas" onclick="setView('empresas')">Empresas</button>
         <button id="m-solicitudes" onclick="setView('solicitudes')">Mis Solicitudes</button>
+        <div id="sol-submenu" style="margin-left:12px; margin-top:6px;" hidden>
+          <button id="sol-nav-pend">Pendientes</button>
+          <button id="sol-nav-ant">Anteriores</button>
+        </div>
         <button id="m-historial" onclick="setView('historial')">Historial</button>
+        <div id="hist-submenu" style="margin-left:12px; margin-top:6px;" hidden>
+          <button id="hist-nav-trans">Transacciones Con Empresas</button>
+          <button id="hist-nav-puntos">Historial de Puntos</button>
+        </div>
         <button id="m-perfil" onclick="setView('perfil')">Perfil</button>
         <button id="m-resenas" onclick="setView('resenas')">Reseñas</button>
         <button id="m-rewards" onclick="setView('rewards')">Usa Puntos</button>
@@ -125,6 +135,11 @@
             <span>Solicito el delivery sabiendo las condiciones del Acuerdo de Usuario a VidaVerde</span>
           </label>
           <div class="muted" id="delivery-hint" style="margin-top:6px;">Delivery disponible desde S/ 35</div>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+            <input type="checkbox" id="delivery-actual-check" />
+            <span>Quiero que el recojo sea en mi ubicación actual (por defecto se usa el domicilio previamente registrado)</span>
+          </label>
+          <div class="muted" id="delivery-actual-hint" style="margin-top:4px; display:none;">Activa tu geolocalización para usar tu ubicación actual</div>
         </div>
         <div style="margin-top:16px;">
           <div class="row" style="justify-content:space-between; align-items:center;">
@@ -140,20 +155,60 @@
           <button class="btn secondary" onclick="loadSolicitudes()">Actualizar</button>
         </div>
         <div class="row cards-row">
-          <div style="flex:1" class="card">
+          <div id="sol-card-pend" style="flex:1" class="card">
             <div class="row" style="justify-content:space-between; align-items:center;">
               <h3>Pendientes</h3>
-              <button class="btn secondary" onclick="loadSolicitudes()">Refrescar</button>
+            </div>
+            <div class="row" style="margin:8px 0;">
+              <input id="sol-pend-search" type="text" placeholder="Buscar solicitud pendiente..." style="flex:1;" />
+            </div>
+            <div class="row" style="gap:8px; margin:4px 0 8px;">
+              <select id="sol-pend-estado">
+                <option value="todos">Todos</option>
+                <option value="pendiente_empresa">pendiente_empresa</option>
+                <option value="pendiente_delivery">pendiente_delivery</option>
+                <option value="completada">completada</option>
+                <option value="expirada">expirada</option>
+                <option value="rechazada">rechazada</option>
+                <option value="cancelada">cancelada</option>
+              </select>
+              <select id="sol-pend-tipo">
+                <option value="todos">Todos</option>
+                <option value="delivery">Delivery</option>
+                <option value="recoger">Recoger en empresa</option>
+              </select>
             </div>
             <ul id="sol-pend" class="list"></ul>
           </div>
-          <div style="flex:1" class="card">
+          <div id="sol-card-ant" style="flex:1" class="card">
             <div class="row" style="justify-content:space-between; align-items:center;">
               <h3>Anteriores</h3>
-              <button class="btn secondary" onclick="loadSolicitudes()">Refrescar</button>
+            </div>
+            <div class="row" style="margin:8px 0;">
+              <input id="sol-ant-search" type="text" placeholder="Buscar solicitud anterior..." style="flex:1;" />
+            </div>
+            <div class="row" style="gap:8px; margin:4px 0 8px;">
+              <select id="sol-ant-estado">
+                <option value="todos">Todos</option>
+                <option value="pendiente_empresa">pendiente_empresa</option>
+                <option value="pendiente_delivery">pendiente_delivery</option>
+                <option value="completada">completada</option>
+                <option value="expirada">expirada</option>
+                <option value="rechazada">rechazada</option>
+                <option value="cancelada">cancelada</option>
+              </select>
+              <select id="sol-ant-tipo">
+                <option value="todos">Todos</option>
+                <option value="delivery">Delivery</option>
+                <option value="recoger">Recoger en empresa</option>
+              </select>
             </div>
             <ul id="sol-ant" class="list"></ul>
           </div>
+        </div>
+        <div id="usr-preview" class="panel" style="margin-top:12px; display:none;">
+          <div id="usr-map" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
+          <div id="usr-route-meta" class="muted" style="margin-top:8px;"></div>
         </div>
       </section>
       <section id="view-historial" class="panel" hidden>
@@ -162,9 +217,12 @@
           <div class="badge" id="hist-earnings" style="margin-left:8px;">Ganancia total: S/ 0.00</div>
           <div class="row">
             <button class="btn secondary" id="hist-refresh">Actualizar</button>
-            <button class="btn" id="hist-toggle">Gasto de Puntos</button>
           </div>
         </div>
+        <div class="row" style="margin:8px 0;">
+          <input id="hist-search" type="text" placeholder="Buscar transacción..." style="flex:1;" />
+        </div>
+
         <ul id="hist-list" class="list"></ul>
         <div id="hist-detalle" class="panel" style="margin-top:12px; display:none;"></div>
       </section>
@@ -202,6 +260,7 @@
           <input id="addr-input" placeholder="Dirección" style="flex:1" />
           <button class="btn secondary" id="addr-btn">Buscar dirección</button>
           <button class="btn" id="distrito-btn">Ver distrito</button>
+          <button class="btn secondary" id="casa-btn">Ver ubicación de casa</button>
         </div>
         <div class="card" style="margin-top:8px; padding:8px;">
           <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
@@ -350,6 +409,34 @@
     </div>
   </div>
 
+  <div id="ruta-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h3>Ruta a la empresa</h3>
+        <button class="btn secondary" id="usr-instr-toggle">Ocultar indicaciones</button>
+      </div>
+      <div id="usr-map-modal" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
+      <div id="usr-route-meta-modal" class="muted" style="margin-top:8px;"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeRuta()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="viaje-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h3>Ver viaje</h3>
+        <button class="btn secondary" id="viaje-instr-toggle">Ocultar indicaciones</button>
+      </div>
+      <div id="usr-map-viaje" style="height:60vh; border:1px solid #1f2937; border-radius:12px;"></div>
+      <div id="usr-route-meta-viaje" class="muted" style="margin-top:8px;"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeViaje()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
   <script>
@@ -365,11 +452,41 @@
       const btnSol = document.getElementById('m-solicitudes');
       if (btnSol) btnSol.textContent = 'Solicitudes Disponibles';
     }
+    const navTrans = document.getElementById('hist-nav-trans');
+    const navPuntos = document.getElementById('hist-nav-puntos');
+    if (navTrans) navTrans.onclick = ()=>{ histGastosMode=false; setView('historial'); };
+    if (navPuntos) navPuntos.onclick = ()=>{ histGastosMode=true; setView('historial'); };
+    const solNavPend = document.getElementById('sol-nav-pend');
+    const solNavAnt = document.getElementById('sol-nav-ant');
+    if (solNavPend) solNavPend.onclick = ()=>{ solTab='pendientes'; setView('solicitudes'); };
+    if (solNavAnt) solNavAnt.onclick = ()=>{ solTab='anteriores'; setView('solicitudes'); };
 
     function setView(v){
       for (const id of ['empresas','solicitudes','historial','perfil','resenas','rewards','mapa']){
         document.getElementById('view-'+id).hidden = (id!==v);
         document.getElementById('m-'+id).classList.toggle('active', id===v);
+      }
+      const sub = document.getElementById('hist-submenu');
+      if (sub) sub.hidden = !(role==='usuario' && v==='historial');
+      const solSub = document.getElementById('sol-submenu');
+      if (solSub) solSub.hidden = (v!=='solicitudes');
+      const solNavPend2 = document.getElementById('sol-nav-pend');
+      const solNavAnt2 = document.getElementById('sol-nav-ant');
+      if (solNavPend2 && solNavAnt2){
+        solNavPend2.classList.toggle('active', solTab==='pendientes' && v==='solicitudes');
+        solNavAnt2.classList.toggle('active', solTab==='anteriores' && v==='solicitudes');
+      }
+      const solCardPend = document.getElementById('sol-card-pend');
+      const solCardAnt = document.getElementById('sol-card-ant');
+      if (solCardPend && solCardAnt){
+        solCardPend.hidden = !(v==='solicitudes' && solTab==='pendientes');
+        solCardAnt.hidden = !(v==='solicitudes' && solTab==='anteriores');
+      }
+      const navTrans2 = document.getElementById('hist-nav-trans');
+      const navPuntos2 = document.getElementById('hist-nav-puntos');
+      if (navTrans2 && navPuntos2){
+        navTrans2.classList.toggle('active', !histGastosMode && v==='historial');
+        navPuntos2.classList.toggle('active', histGastosMode && v==='historial');
       }
       document.getElementById('view-empresa').hidden = (v!=='empresa');
       document.getElementById('view-empresa-solicitudes').hidden = (v!=='empresa_solicitudes');
@@ -378,6 +495,8 @@
         document.getElementById('view-solicitudes').hidden = true;
         const rview = document.getElementById('view-recolector');
         if (rview) rview.hidden = false;
+        const solSub2 = document.getElementById('sol-submenu');
+        if (solSub2) solSub2.hidden = true;
         loadRecolectorFeed();
         return;
       } else {
@@ -386,6 +505,20 @@
       }
       if (v==='empresas') loadEmpresas();
       if (v==='solicitudes') loadSolicitudes();
+      if (v==='solicitudes'){
+        const sp = document.getElementById('sol-pend-search');
+        const sa = document.getElementById('sol-ant-search');
+        if (sp){ sp.value = solPendSearch; sp.oninput = ()=>{ solPendSearch = sp.value; renderSolicitudesPendientes(); }; }
+        if (sa){ sa.value = solAntSearch; sa.oninput = ()=>{ solAntSearch = sa.value; renderSolicitudesAnteriores(); }; }
+        const spe = document.getElementById('sol-pend-estado');
+        const spt = document.getElementById('sol-pend-tipo');
+        const sae = document.getElementById('sol-ant-estado');
+        const sat = document.getElementById('sol-ant-tipo');
+        if (spe){ spe.value = solPendEstado; spe.onchange = ()=>{ solPendEstado = spe.value; renderSolicitudesPendientes(); }; }
+        if (spt){ spt.value = solPendTipo; spt.onchange = ()=>{ solPendTipo = spt.value; renderSolicitudesPendientes(); }; }
+        if (sae){ sae.value = solAntEstado; sae.onchange = ()=>{ solAntEstado = sae.value; renderSolicitudesAnteriores(); }; }
+        if (sat){ sat.value = solAntTipo; sat.onchange = ()=>{ solAntTipo = sat.value; renderSolicitudesAnteriores(); }; }
+      }
       if (v==='historial') {
         if (role==='empresa') {
           loadHistorialEmpresa();
@@ -394,10 +527,10 @@
         } else if (role==='recolector') {
           const title = document.getElementById('hist-title');
           if (title) title.textContent = 'Historial de trabajos';
-          const toggle = document.getElementById('hist-toggle');
-          if (toggle) toggle.style.display = 'none';
-          const refresh = document.getElementById('hist-refresh');
-          if (refresh) refresh.onclick = ()=> loadHistorialRecolector();
+          const tabs = document.getElementById('hist-tabs');
+          if (tabs) tabs.style.display = 'none';
+          const refreshBtn = document.getElementById('hist-refresh');
+          if (refreshBtn) refreshBtn.onclick = ()=> loadHistorialRecolector();
           const he = document.getElementById('hist-earnings');
           if (he) he.style.display = 'inline-block';
           loadHistorialRecolector();
@@ -428,6 +561,9 @@
   let recoPrevLayer = null;
   let recoPrevRouteCtrl = null;
   let recoPrevSid = null;
+  let recoPrevCoords = null;
+  let recoSimMarker = null;
+  let recoSimTimer = null;
 
     async function loadEmpresas(){
       const r = await fetch('/api/empresas', { headers: authHeaders() });
@@ -497,8 +633,20 @@
       document.getElementById('estimado-total').textContent = 'S/ ' + total.toFixed(2);
       const dchk = document.getElementById('delivery-check');
       const dhint = document.getElementById('delivery-hint');
-      if (dchk) dchk.disabled = total < 35;
-      if (dhint) dhint.textContent = total < 35 ? 'Delivery disponible desde S/ 35' : 'Delivery habilitado';
+      const dact = document.getElementById('delivery-actual-check');
+      const dactHint = document.getElementById('delivery-actual-hint');
+      const hasCur = user && user.current_lat!=null && user.current_lon!=null && !isNaN(Number(user.current_lat)) && !isNaN(Number(user.current_lon));
+      if (total < 35){
+        if (dchk) { dchk.disabled = true; dchk.checked = false; }
+        if (dact) { dact.disabled = true; dact.checked = false; }
+        if (dhint) dhint.textContent = 'Delivery no disponible (mínimo S/ 35)';
+        if (dactHint) dactHint.style.display = 'none';
+      } else {
+        if (dchk) dchk.disabled = false;
+        if (dhint) dhint.textContent = 'Delivery habilitado';
+        if (dact) { dact.disabled = !hasCur; if (!hasCur) dact.checked = false; }
+        if (dactHint) dactHint.style.display = hasCur ? 'none' : '';
+      }
     }
     async function loadEmpresaResenas(empresaId){
       const ul = document.getElementById('empresa-resenas-list');
@@ -527,11 +675,12 @@
       if (!confirm('Crear solicitud con empresa '+empresaSeleccionada.nombre+' y estimado '+document.getElementById('estimado-total').textContent+'?')) return;
       const items = materialesSeleccionados.filter(m=>Number(m.kg)>0).map(m=>({ material_id: Number(m.material_id), kg: Number(m.kg) }));
       const delivery = Boolean(document.getElementById('delivery-check')?.checked);
+      const delivery_use_current = Boolean(document.getElementById('delivery-actual-check')?.checked);
       const delivery_consent = delivery ? true : false;
       const totalText = document.getElementById('estimado-total').textContent||'S/ 0';
       const totalNum = Number(totalText.replace('S/','').trim());
       if (delivery && totalNum < 35) { alert('Para solicitar delivery el total mínimo es S/ 35'); return; }
-      const r = await fetch('/api/solicitudes', { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id, empresa_id: empresaSeleccionada.id, items, delivery, delivery_consent, delivery_terms_version: 'v1' }) });
+      const r = await fetch('/api/solicitudes', { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id, empresa_id: empresaSeleccionada.id, items, delivery, delivery_consent, delivery_terms_version: 'v1', delivery_use_current }) });
       let j;
       try { j = await r.json(); } catch { j = {}; }
       if (j?.error === 'delivery_min_total') { alert('Para solicitar delivery el total mínimo es S/ 35'); return; }
@@ -554,22 +703,26 @@
           </div>
           <div class="right">
             <button class="btn" onclick="recolectorAceptar(${s.id})">Aceptar</button>
-            <button class="btn secondary" onclick="verPrevisualizacion(${s.id})">Previsualización</button>
+            <button class="btn" onclick="verPrevisualizacion(${s.id})">Previsualización</button>
+            <button class="btn" onclick="simularRecoViaje()">Simular viaje</button>
           </div>
         </div>`;
         ul.appendChild(li);
       });
     }
 
-    function clearRecoPreview(){
-      const panel = document.getElementById('reco-preview');
-      const meta = document.getElementById('reco-route-meta');
-      if (panel) panel.style.display = 'none';
-      if (meta) meta.textContent = '';
-      if (recoPrevLayer && recoPrevMap) { recoPrevLayer.remove(); recoPrevLayer = null; }
-      if (recoPrevRouteCtrl) { recoPrevRouteCtrl.remove(); recoPrevRouteCtrl = null; }
-      recoPrevSid = null;
-    }
+  function clearRecoPreview(){
+    const panel = document.getElementById('reco-preview');
+    const meta = document.getElementById('reco-route-meta');
+    if (panel) panel.style.display = 'none';
+    if (meta) meta.textContent = '';
+    if (recoPrevLayer && recoPrevMap) { recoPrevLayer.remove(); recoPrevLayer = null; }
+    if (recoPrevRouteCtrl) { recoPrevRouteCtrl.remove(); recoPrevRouteCtrl = null; }
+    recoPrevSid = null;
+    recoPrevCoords = null;
+    if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
+    if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
+  }
     async function verPrevisualizacion(sid){
       const panel = document.getElementById('reco-preview');
       if (panel && panel.style.display !== 'none' && recoPrevSid === sid) { clearRecoPreview(); return; }
@@ -630,42 +783,118 @@
             const min = Math.round(sum.totalTime/60);
             meta.innerHTML = `Objetivo: <strong>Usuario</strong> → <strong>Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
           }
+          const coords = e?.routes?.[0]?.coordinates || [];
+          recoPrevCoords = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : null;
         });
       }
       recoPrevSid = sid;
     }
 
+    function simularRecoViaje(){
+      if (!recoPrevMap || !recoPrevCoords || recoPrevCoords.length < 2) return;
+      if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
+      if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
+      recoSimMarker = L.circleMarker(recoPrevCoords[0], { radius: 6, color: '#0ea5e9', fillColor:'#0ea5e9', fillOpacity:1 }).addTo(recoPrevMap);
+      let i = 0;
+      recoSimTimer = setInterval(()=>{
+        i++;
+        if (i >= recoPrevCoords.length) { clearInterval(recoSimTimer); recoSimTimer = null; return; }
+        recoSimMarker.setLatLng(recoPrevCoords[i]);
+      }, 400);
+    }
+
     async function recolectorAceptar(sid){
       const body = { recolector_id: user.id };
+      try {
+        await new Promise((resolve)=>{
+          if (!navigator.geolocation) return resolve(null);
+          navigator.geolocation.getCurrentPosition(p=>{ body.lat = p.coords.latitude; body.lon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:3000 });
+        });
+      } catch {}
       const r = await fetch(`/api/recolector/${sid}/aceptar`, { method:'POST', headers: authHeaders(), body: JSON.stringify(body) });
       const j = await r.json();
       if (j?.error === 'no_disponible') { alert('Ya no está disponible'); return; }
+      clearRecoPreview();
       alert('Solicitud aceptada: #'+j.id);
       loadRecolectorFeed();
     }
     async function loadSolicitudes(){
-      const r = await fetch(`/api/usuarios/${user.id}/dashboard`, { headers: authHeaders() });
-      const j = await r.json();
-      const empList = await (await fetch('/api/empresas', { headers: authHeaders() })).json();
-      const empNames = new Map(empList.map((e)=> [Number(e.id), String(e.nombre||('Empresa '+e.id))]));
+      try {
+        const r = await fetch(`/api/usuarios/${user.id}/dashboard`, { headers: authHeaders() });
+        const j = await r.json();
+        const empResp = await fetch('/api/empresas', { headers: authHeaders() });
+        const empList = await empResp.json();
+        empNombreById = new Map(Array.isArray(empList) ? empList.map((e)=> [Number(e.id), String(e.nombre||('Empresa '+e.id))]) : []);
+        solPendData = Array.isArray(j?.solicitudes_pendientes) ? j.solicitudes_pendientes : [];
+        solAntData = Array.isArray(j?.solicitudes_anteriores) ? j.solicitudes_anteriores : [];
+      } catch (e) {
+        solPendData = [];
+        solAntData = [];
+      }
+      renderSolicitudesPendientes();
+      renderSolicitudesAnteriores();
+    }
+    function renderSolicitudesPendientes(){
       const pend = document.getElementById('sol-pend');
-      const ant = document.getElementById('sol-ant');
       pend.innerHTML = '';
-      ant.innerHTML = '';
-      (j.solicitudes_pendientes||[]).forEach(s=>{
+      const q = (solPendSearch||'').toLowerCase();
+      const list = solPendData.filter((s)=>{
+        const id = String(s.id||'');
+        const en = (empNombreById.get(Number(s.empresa_id)) || String(s.empresa_id||'')).toLowerCase();
+        const estado = String(s.estado||'').toLowerCase();
+        const tipo = String(s.tipo_entrega||'').toLowerCase();
+        const searchOk = !q || id.includes(q) || en.includes(q) || estado.includes(q);
+        const selEstado = solPendEstado.toLowerCase();
+        const estadoOk = (selEstado==='todos') || (estado === selEstado) || (selEstado==='completada' && estado==='aceptada');
+        const tipoOk = (solPendTipo==='todos') || (solPendTipo==='delivery' ? tipo==='delivery' : tipo!=='delivery');
+        return searchOk && estadoOk && tipoOk;
+      });
+      list.forEach(s=>{
         const li = document.createElement('li');
-        const en = empNames.get(Number(s.empresa_id)) || String(s.empresa_id);
+        const en = empNombreById.get(Number(s.empresa_id)) || String(s.empresa_id);
         const isExp = String(s.estado)==='expirada' && String(s.tipo_entrega)==='delivery';
-        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${isExp?`<button class="btn" onclick="usuarioRepublicarSolicitud(${s.id})">Re-publicar</button>`:`<button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`}`;
+        const isDelivery = String(s.tipo_entrega)==='delivery';
+        const canTrack = String(s.tipo_entrega)==='delivery' && s.recolector_id!=null && String(s.estado_publicacion||'')==='aceptada_recolector';
+        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${canTrack?`<button class="btn" onclick="usuarioVerViaje(${s.id})">Ver viaje</button>`:(!isDelivery?`<button class="btn" onclick="usuarioRutaEmpresa(${s.id}, ${s.empresa_id})">Ruta a la empresa</button>`:'')} ${isExp?`<button class="btn" onclick="usuarioRepublicarSolicitud(${s.id})">Re-publicar</button>`:`<button class="btn" onclick="usuarioCancelarSolicitud(${s.id})">Cancelar</button>`}`;
         pend.appendChild(li);
       });
-      (j.solicitudes_anteriores||[]).forEach(s=>{
+      if (pend.children.length === 0) {
         const li = document.createElement('li');
-        const en = empNames.get(Number(s.empresa_id)) || String(s.empresa_id);
+        li.className = 'muted';
+        li.textContent = 'No tienes solicitudes pendientes.';
+        pend.appendChild(li);
+      }
+    }
+    function renderSolicitudesAnteriores(){
+      const ant = document.getElementById('sol-ant');
+      ant.innerHTML = '';
+      const q = (solAntSearch||'').toLowerCase();
+      const list = solAntData.filter((s)=>{
+        const id = String(s.id||'');
+        const en = (empNombreById.get(Number(s.empresa_id)) || String(s.empresa_id||'')).toLowerCase();
+        const estado = String(s.estado||'').toLowerCase();
+        const tipo = String(s.tipo_entrega||'').toLowerCase();
+        const searchOk = !q || id.includes(q) || en.includes(q) || estado.includes(q);
+        const selEstado = solAntEstado.toLowerCase();
+        const estadoOk = (selEstado==='todos') || (estado === selEstado) || (selEstado==='completada' && estado==='aceptada');
+        const tipoOk = (solAntTipo==='todos') || (solAntTipo==='delivery' ? tipo==='delivery' : tipo!=='delivery');
+        return searchOk && estadoOk && tipoOk;
+      });
+      list.forEach(s=>{
+        const li = document.createElement('li');
+        const en = empNombreById.get(Number(s.empresa_id)) || String(s.empresa_id);
         const isExp = String(s.estado)==='expirada' && String(s.tipo_entrega)==='delivery';
-        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${isExp?`<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>`:''}`;
+        const isDelivery = String(s.tipo_entrega)==='delivery';
+        const canTrack = String(s.tipo_entrega)==='delivery' && s.recolector_id!=null && String(s.estado_publicacion||'')==='aceptada_recolector';
+        li.innerHTML = `Solicitud #${s.id} → ${en} <span class="badge">${displayEstadoSolicitud(s.estado)}</span> <button class="btn secondary" onclick="openSolicitudDetalle(${s.id}, ${s.empresa_id})">Ver detalle</button> ${canTrack?`<button class="btn" onclick="usuarioVerViaje(${s.id})">Ver viaje</button>`:(!isDelivery?`<button class="btn" onclick="usuarioRutaEmpresa(${s.id}, ${s.empresa_id})">Ruta a la empresa</button>`:'')} ${isExp?`<button class="btn" onclick="usuarioRepublicarSolicitud(${s.id})">Re-publicar</button>`:''}`;
         ant.appendChild(li);
       });
+      if (ant.children.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'muted';
+        li.textContent = 'No hay solicitudes anteriores.';
+        ant.appendChild(li);
+      }
     }
     async function usuarioCancelarSolicitud(sid){
       const r = await fetch(`/api/solicitudes/${sid}/cancelar`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id }) });
@@ -724,12 +953,47 @@
       document.getElementById('solicitud-detalle').innerHTML = html;
       document.getElementById('solicitud-modal').hidden = false;
     }
-    let histGastosMode = false;
+  let histGastosMode = false;
+  let viaMap = null;
+  let viaRouteCtrl = null;
+  let viaLayer = null;
+  let viaSimMarker = null;
+  let viaSimTimer = null;
+  let viaPrevCoords = null;
+  let rutaMap = null;
+  let rutaRouteCtrl = null;
+  let rutaLayer = null;
+  let usrSid = null;
+  let instrHidden = false;
+  let solTab = 'pendientes';
+  let histSearch = '';
+  let histTransData = [];
+  let histGastosData = [];
+  let solPendSearch = '';
+  let solAntSearch = '';
+  let solPendData = [];
+  let solAntData = [];
+  let empNombreById = new Map();
+  let solPendEstado = 'todos';
+  let solPendTipo = 'todos';
+  let solAntEstado = 'todos';
+  let solAntTipo = 'todos';
     async function loadHistorial(){
       const r = await fetch(`/api/usuarios/${user.id}/historial`, { headers: authHeaders() });
-      const list = await r.json();
+      histTransData = await r.json();
+      renderHistTransacciones();
+    }
+    function renderHistTransacciones(){
       const ul = document.getElementById('hist-list');
       ul.innerHTML = '';
+      const q = (histSearch||'').toLowerCase();
+      const list = histTransData.filter((t)=>{
+        if (!q) return true;
+        const id = String(t.id||'');
+        const emp = String(t.empresa_nombre||t.empresa_id||'');
+        const estado = String(t.estado||'');
+        return id.includes(q) || emp.toLowerCase().includes(q) || estado.toLowerCase().includes(q);
+      });
       list.forEach(t=>{
         const li = document.createElement('li');
         li.innerHTML = `<div class="row" style="justify-content:space-between;">
@@ -742,31 +1006,42 @@
         ul.appendChild(li);
         setTimeout(()=>updateRatingButtonsForTx(t.id),0);
       });
+      document.getElementById('hist-detalle').style.display = 'none';
     }
     async function loadHistorialGastos(){
-      const ul = document.getElementById('hist-list');
-      ul.innerHTML = '';
       const gastos = await (await fetch(`/api/usuarios/${user.id}/puntos/gastos`, { headers: authHeaders() })).json();
       const rewards = await (await fetch('/api/usuarios/recompensas', { headers: authHeaders() })).json();
       const names = new Map(rewards.map((r)=> [String(r.key), String(r.nombre)]));
-      gastos.forEach(g=>{
+      histGastosData = gastos.map((g)=>({ ...g, nombre: names.get(String(g.reward_key)) || String(g.reward_key) }));
+      renderHistGastos();
+    }
+    function renderHistGastos(){
+      const ul = document.getElementById('hist-list');
+      ul.innerHTML = '';
+      const q = (histSearch||'').toLowerCase();
+      const list = histGastosData.filter((g)=>{
+        if (!q) return true;
+        return String(g.nombre||'').toLowerCase().includes(q) || String(g.puntos||'').includes(q) || new Date(g.creado_en).toLocaleString().toLowerCase().includes(q);
+      });
+      list.forEach(g=>{
         const li = document.createElement('li');
-        const nombre = names.get(String(g.reward_key)) || String(g.reward_key);
-        li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\">\n          <div>\n            <div><strong>${nombre}</strong></div>\n            <div class=\"muted\">Gasto de puntos: ${Number(g.puntos)} · ${new Date(g.creado_en).toLocaleString()}</div>\n          </div>\n        </div>`;
+        li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\">\n          <div>\n            <div><strong>${g.nombre}</strong></div>\n            <div class=\"muted\">Gasto de puntos: ${Number(g.puntos)} · ${new Date(g.creado_en).toLocaleString()}</div>\n          </div>\n        </div>`;
         ul.appendChild(li);
       });
       document.getElementById('hist-detalle').style.display = 'none';
     }
-    function initHistorialUI(){
+  function initHistorialUI(){
       const refresh = document.getElementById('hist-refresh');
-      const toggle = document.getElementById('hist-toggle');
-      if (refresh) refresh.onclick = ()=>{ if (histGastosMode) loadHistorialGastos(); else loadHistorial(); };
-      if (toggle) toggle.onclick = ()=>{
-        histGastosMode = !histGastosMode;
-        document.getElementById('hist-title').textContent = histGastosMode ? 'Gasto de Puntos' : 'Historial de Transacciones';
-        toggle.textContent = histGastosMode ? 'Transacciones de Empresas' : 'Gasto de Puntos';
-        if (histGastosMode) loadHistorialGastos(); else loadHistorial();
-      };
+      document.getElementById('hist-title').textContent = histGastosMode ? 'Historial de Puntos' : 'Historial de Transacciones';
+      if (refresh) refresh.onclick = ()=>{ if (role==='recolector') loadHistorialRecolector(); else if (histGastosMode) loadHistorialGastos(); else loadHistorial(); };
+      const search = document.getElementById('hist-search');
+      if (search){
+        search.value = histSearch;
+        search.oninput = ()=>{
+          histSearch = search.value.toLowerCase();
+          if (histGastosMode) renderHistGastos(); else renderHistTransacciones();
+        };
+      }
     }
     async function loadHistorialEmpresa(){
       const r = await fetch(`/api/empresas/${user.id}/historial`, { headers: authHeaders() });
@@ -1044,6 +1319,202 @@
     };
     document.getElementById('aceptar-modal').hidden = false;
   }
+
+  function closeViaje(){
+    const modal = document.getElementById('viaje-modal');
+    if (modal) modal.hidden = true;
+    const metaV = document.getElementById('usr-route-meta-viaje');
+    if (metaV) metaV.textContent = '';
+    if (viaLayer && viaMap) { viaLayer.remove(); viaLayer = null; }
+    if (viaRouteCtrl) { viaRouteCtrl.remove(); viaRouteCtrl = null; }
+    if (viaSimMarker) { viaSimMarker.remove(); viaSimMarker = null; }
+    if (viaSimTimer) { clearInterval(viaSimTimer); viaSimTimer = null; }
+    if (viaMap) { viaMap.remove(); viaMap = null; }
+    usrSid = null;
+  }
+
+  async function usuarioVerViaje(sid){
+    const modal = document.getElementById('viaje-modal');
+    if (modal && !modal.hidden && usrSid === sid) { closeViaje(); return; }
+    if (modal) modal.hidden = false;
+    const r = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+    const j = await r.json();
+    const rLat = j?.recolector?.lat ?? null;
+    const rLon = j?.recolector?.lon ?? null;
+    const uLat = j?.usuario?.lat ?? null;
+    const uLon = j?.usuario?.lon ?? null;
+    const eLat = j?.empresa?.lat ?? null;
+    const eLon = j?.empresa?.lon ?? null;
+    const meta = document.getElementById('usr-route-meta-viaje');
+    const mapDiv = document.getElementById('usr-map-viaje');
+    if (!viaMap){ viaMap = L.map(mapDiv).setView([uLat||-12.05, uLon||-77.03], 13); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(viaMap); }
+    const toFit = [];
+    if (rLat!=null && rLon!=null) toFit.push([rLat, rLon]);
+    if (uLat!=null && uLon!=null) toFit.push([uLat, uLon]);
+    if (eLat!=null && eLon!=null) toFit.push([eLat, eLon]);
+    if (toFit.length>0) viaMap.fitBounds(toFit);
+    if (viaLayer) { viaLayer.remove(); viaLayer = null; }
+    const recolectorIcon = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    const hogarIcon = L.icon({ iconUrl: '/img/hogar.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    const empresaIcon = L.icon({ iconUrl: '/img/empresa.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    const layers = [];
+    if (rLat!=null && rLon!=null) layers.push(L.marker([rLat, rLon], { icon: recolectorIcon }).bindPopup('Recolector'));
+    if (uLat!=null && uLon!=null) layers.push(L.marker([uLat, uLon], { icon: hogarIcon }).bindPopup('Tu ubicación'));
+    if (eLat!=null && eLon!=null) layers.push(L.marker([eLat, eLon], { icon: empresaIcon }).bindPopup('Empresa'));
+    viaLayer = L.layerGroup(layers).addTo(viaMap);
+    if (viaRouteCtrl) { viaRouteCtrl.remove(); viaRouteCtrl = null; }
+    if (rLat!=null && rLon!=null && uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
+      viaRouteCtrl = L.Routing.control({
+        language: 'es',
+        waypoints: [ L.latLng(rLat, rLon), L.latLng(uLat, uLon), L.latLng(eLat, eLon) ],
+        router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
+        routeWhileDragging: false,
+        showAlternatives: false,
+        addWaypoints: false,
+        draggableWaypoints: false,
+        createMarker: function() { return null; },
+        fitSelectedRoutes: true,
+        lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
+      }).addTo(viaMap);
+      viaRouteCtrl.on('routesfound', (e)=>{
+        const sum = e?.routes?.[0]?.summary;
+        if (sum) {
+          const km = (sum.totalDistance/1000).toFixed(2);
+          const min = Math.round(sum.totalTime/60);
+          meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
+        }
+        const coords = e?.routes?.[0]?.coordinates || [];
+      const pts = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : [];
+      viaPrevCoords = pts;
+      if (Array.isArray(viaPrevCoords) && viaPrevCoords.length >= 2) {
+        if (viaSimMarker) { viaSimMarker.remove(); viaSimMarker = null; }
+        if (viaSimTimer) { clearInterval(viaSimTimer); viaSimTimer = null; }
+        let startIdx = 0;
+        if (rLat!=null && rLon!=null) {
+          let md = Infinity;
+          for (let k=0; k<viaPrevCoords.length; k++) {
+            const p = viaPrevCoords[k];
+            const d = (p.lat - rLat)*(p.lat - rLat) + (p.lng - rLon)*(p.lng - rLon);
+            if (d < md) { md = d; startIdx = k; }
+          }
+        }
+        viaSimMarker = L.marker(viaPrevCoords[startIdx], { icon: recolectorIcon }).addTo(viaMap);
+        let i = startIdx;
+        viaSimTimer = setInterval(()=>{
+          i++;
+          if (i >= viaPrevCoords.length) { clearInterval(viaSimTimer); viaSimTimer = null; return; }
+          viaSimMarker.setLatLng(viaPrevCoords[i]);
+        }, 400);
+      }
+    });
+    }
+    instrHidden = false;
+    const tbtnV = document.getElementById('viaje-instr-toggle');
+    if (tbtnV) {
+      tbtnV.textContent = 'Ocultar indicaciones';
+      tbtnV.onclick = toggleUsrInstructions;
+    }
+    const contV = (viaRouteCtrl && typeof viaRouteCtrl.getContainer === 'function') ? viaRouteCtrl.getContainer() : null;
+    if (contV && instrHidden) contV.style.display = 'none';
+    usrSid = sid;
+  }
+
+  async function usuarioRutaEmpresa(sid, empresaId){
+    const modal = document.getElementById('ruta-modal');
+    if (modal && !modal.hidden && usrSid === sid) { closeRuta(); return; }
+    if (modal) modal.hidden = false;
+    let uLat = null, uLon = null;
+    let eLat = null, eLon = null;
+    try {
+      const r = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+      const j = await r.json();
+      uLat = (j?.usuario_actual?.lat ?? null);
+      uLon = (j?.usuario_actual?.lon ?? null);
+      if (uLat==null || uLon==null) { uLat = j?.usuario?.lat ?? null; uLon = j?.usuario?.lon ?? null; }
+      eLat = j?.empresa?.lat ?? null;
+      eLon = j?.empresa?.lon ?? null;
+    } catch {}
+    try {
+      await new Promise((resolve)=>{
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(p=>{ uLat = p.coords.latitude; uLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:3000 });
+      });
+    } catch {}
+    if (uLat==null || uLon==null || eLat==null || eLon==null){
+      alert('No se puede trazar la ruta: ubicación o empresa sin coordenadas');
+      return;
+    }
+    const meta = document.getElementById('usr-route-meta-modal');
+    const mapDiv = document.getElementById('usr-map-modal');
+    if (!rutaMap){ rutaMap = L.map(mapDiv).setView([uLat||-12.05, uLon||-77.03], 13); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(rutaMap); }
+    const toFit = [];
+    toFit.push([uLat, uLon]);
+    toFit.push([eLat, eLon]);
+    rutaMap.fitBounds(toFit);
+    if (rutaLayer) { rutaLayer.remove(); rutaLayer = null; }
+    const hogarIcon = L.icon({ iconUrl: '/img/hogar.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    const empresaIcon = L.icon({ iconUrl: '/img/empresa.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    const layers = [];
+    layers.push(L.marker([uLat, uLon], { icon: hogarIcon }).bindPopup('Mi ubicación'));
+    layers.push(L.marker([eLat, eLon], { icon: empresaIcon }).bindPopup('Empresa'));
+    rutaLayer = L.layerGroup(layers).addTo(rutaMap);
+    if (rutaRouteCtrl) { rutaRouteCtrl.remove(); rutaRouteCtrl = null; }
+    rutaRouteCtrl = L.Routing.control({
+      language: 'es',
+      waypoints: [ L.latLng(uLat, uLon), L.latLng(eLat, eLon) ],
+      router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
+      routeWhileDragging: false,
+      showAlternatives: false,
+      addWaypoints: false,
+      draggableWaypoints: false,
+      createMarker: function() { return null; },
+      fitSelectedRoutes: true,
+      lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
+    }).addTo(rutaMap);
+    rutaRouteCtrl.on('routesfound', (e)=>{
+      const sum = e?.routes?.[0]?.summary;
+      if (sum) {
+        const km = (sum.totalDistance/1000).toFixed(2);
+        const min = Math.round(sum.totalTime/60);
+        meta.innerHTML = `Cómo llegar: <strong>Tu ubicación → Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
+      }
+    });
+    instrHidden = false;
+    const tbtn = document.getElementById('usr-instr-toggle');
+    if (tbtn) {
+      tbtn.textContent = 'Ocultar indicaciones';
+      tbtn.onclick = toggleUsrInstructions;
+    }
+    const cont = (rutaRouteCtrl && typeof rutaRouteCtrl.getContainer === 'function') ? rutaRouteCtrl.getContainer() : null;
+    if (cont && instrHidden) cont.style.display = 'none';
+    usrSid = sid;
+  }
+
+  function closeRuta(){
+    const modal = document.getElementById('ruta-modal');
+    if (modal) modal.hidden = true;
+    const meta = document.getElementById('usr-route-meta-modal');
+    if (meta) meta.textContent = '';
+    if (rutaLayer && rutaMap) { rutaLayer.remove(); rutaLayer = null; }
+    if (rutaRouteCtrl) { rutaRouteCtrl.remove(); rutaRouteCtrl = null; }
+    if (rutaMap) { rutaMap.remove(); rutaMap = null; }
+    usrSid = null;
+    instrHidden = false;
+  }
+
+  function toggleUsrInstructions(){
+    const rutaModal = document.getElementById('ruta-modal');
+    const viajeModal = document.getElementById('viaje-modal');
+    const ctrl = (rutaModal && !rutaModal.hidden) ? rutaRouteCtrl : ((viajeModal && !viajeModal.hidden) ? viaRouteCtrl : null);
+    if (!ctrl || typeof ctrl.getContainer !== 'function') return;
+    const cont = ctrl.getContainer();
+    instrHidden = !instrHidden;
+    cont.style.display = instrHidden ? 'none' : '';
+    const tbtn1 = document.getElementById('usr-instr-toggle');
+    if (tbtn1) tbtn1.textContent = instrHidden ? 'Mostrar indicaciones' : 'Ocultar indicaciones';
+    const tbtn2 = document.getElementById('viaje-instr-toggle');
+    if (tbtn2) tbtn2.textContent = instrHidden ? 'Mostrar indicaciones' : 'Ocultar indicaciones';
+  }
     async function empresaPesaje(sid, usuarioId){
       solicitudSeleccionada = { id: sid, usuario_id: usuarioId };
       const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
@@ -1313,6 +1784,8 @@
     const dbtn = document.getElementById('distrito-btn');
     if (dbtn) dbtn.onclick = verDistrito;
     if (document.getElementById('buscar-btn')) document.getElementById('buscar-btn').onclick = obtenerUbicacion;
+    const cbtn = document.getElementById('casa-btn');
+    if (cbtn) cbtn.onclick = verUbicacionCasa;
     obtenerUbicacion();
     if (document.getElementById('addr-btn')) document.getElementById('addr-btn').onclick = geocodeAddress;
     if (mapa) mapa.on('click', (e)=> updateSelf(e.latlng.lat, e.latlng.lng));
@@ -1380,6 +1853,13 @@
       }
     }catch{}
   }
+  function verUbicacionCasa(){
+    const hLat = (user && user.home_lat!=null) ? Number(user.home_lat) : NaN;
+    const hLon = (user && user.home_lon!=null) ? Number(user.home_lon) : NaN;
+    if (isNaN(hLat) || isNaN(hLon)) { alert('No hay ubicación de casa configurada'); return; }
+    updateSelf(hLat, hLon);
+    updateDistritoBadge();
+  }
   function updateSelf(lat, lon){
     center = [lat, lon];
     if (selfMarker) selfMarker.setLatLng(center);
@@ -1391,7 +1871,7 @@
     try{
       const r = await fetch("https://ipapi.co/json/");
       const d = await r.json();
-      if (d && typeof d.latitude === 'number' && typeof d.longitude === 'number') updateSelf(d.latitude, d.longitude);
+      if (d && typeof d.latitude === 'number' && typeof d.longitude === 'number') { updateSelf(d.latitude, d.longitude); persistCurrentLocation(d.latitude, d.longitude); }
       geoAccuracy = null;
       updateAccBadge();
     }catch{}
@@ -1399,7 +1879,7 @@
   function obtenerUbicacion(){
     if (navigator.geolocation){
       navigator.geolocation.getCurrentPosition(
-        p=>{ geoAccuracy = Number(p.coords.accuracy)||null; updateSelf(p.coords.latitude, p.coords.longitude); },
+        p=>{ geoAccuracy = Number(p.coords.accuracy)||null; const lat=p.coords.latitude, lon=p.coords.longitude; updateSelf(lat, lon); persistCurrentLocation(lat, lon); },
         _=>usarIP(),
         { enableHighAccuracy:true, timeout:8000 }
       );
@@ -1407,11 +1887,32 @@
       usarIP();
     }
   }
+  async function persistCurrentLocation(lat, lon){
+    try{
+      let j = null;
+      if (role === 'usuario'){
+        const r = await fetch(`/api/usuarios/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) });
+        j = await r.json();
+        if (j && j.usuario){ const nu = { ...user, current_lat: j.usuario.current_lat, current_lon: j.usuario.current_lon }; localStorage.setItem('user', JSON.stringify(nu)); }
+      } else if (role === 'recolector'){
+        const r = await fetch(`/api/recolector/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) });
+        j = await r.json();
+        if (j && j.recolector){ const nu = { ...user, lat: j.recolector.lat, lon: j.recolector.lon }; localStorage.setItem('user', JSON.stringify(nu)); }
+      }
+      actualizarEstimado();
+    }catch{}
+  }
   function updateAccBadge(){
     const b = document.getElementById('acc-badge');
     if (!b) return;
-    if (geoAccuracy!=null) b.textContent = 'Precisión ~'+Math.round(geoAccuracy)+' m';
-    else b.textContent = 'Precisión aprox.';
+    if (selfMarker && typeof selfMarker.getLatLng === 'function'){
+      const ll = selfMarker.getLatLng();
+      const lat = Number(ll.lat);
+      const lon = Number(ll.lng);
+      b.textContent = 'Lon '+lon.toFixed(5)+', Lat '+lat.toFixed(5);
+    } else {
+      b.textContent = 'Posición —';
+    }
   }
   async function updateDistritoBadge(){
     const bd = document.getElementById('dist-badge');

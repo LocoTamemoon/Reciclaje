@@ -19,7 +19,7 @@ function signToken(payload) {
 }
 async function registerUsuario(email, password, lat, lon) {
     const hash = await bcryptjs_1.default.hash(password, 10);
-    const res = await pool_1.pool.query("INSERT INTO usuarios(email, password_hash, lat, lon) VALUES($1,$2,$3,$4) RETURNING *", [email, hash, lat, lon]);
+    const res = await pool_1.pool.query("INSERT INTO usuarios(email, password_hash, home_lat, home_lon, current_lat, current_lon) VALUES($1,$2,$3,$4,$5,$6) RETURNING *", [email, hash, lat, lon, null, null]);
     const u = res.rows[0];
     const token = signToken({ tipo: "usuario", id: u.id });
     return { token, usuario: u };

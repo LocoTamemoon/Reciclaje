@@ -6,6 +6,7 @@ const transaccionesRepo_1 = require("../repositories/transaccionesRepo");
 const pool_1 = require("../db/pool");
 const asyncHandler_1 = require("../middleware/asyncHandler");
 const usuariosRepo_1 = require("../repositories/usuariosRepo");
+const usuariosRepo_2 = require("../repositories/usuariosRepo");
 exports.usuariosRouter = (0, express_1.Router)();
 exports.usuariosRouter.get("/:id/historial", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
@@ -14,8 +15,8 @@ exports.usuariosRouter.get("/:id/historial", (0, asyncHandler_1.asyncHandler)(as
 }));
 exports.usuariosRouter.get("/:id/dashboard", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
-    const pendientes = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND estado='pendiente_empresa' ORDER BY creado_en DESC", [id]);
-    const anteriores = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND estado <> 'pendiente_empresa' ORDER BY creado_en DESC", [id]);
+    const pendientes = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector')) OR (tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada') ) ORDER BY creado_en DESC", [id]);
+    const anteriores = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector')) OR (tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada') ) ORDER BY creado_en DESC", [id]);
     const historial = await (0, transaccionesRepo_1.historialUsuario)(id);
     res.json({ solicitudes_pendientes: pendientes.rows, solicitudes_anteriores: anteriores.rows, historial_transacciones: historial });
 }));
@@ -58,4 +59,14 @@ exports.usuariosRouter.get("/:id/puntos/gastos", (0, asyncHandler_1.asyncHandler
     const id = Number(req.params.id);
     const rows = await pool_1.pool.query("SELECT reward_key, puntos, creado_en FROM usuario_puntos_gastos WHERE usuario_id=$1 ORDER BY creado_en DESC", [id]);
     res.json(rows.rows);
+}));
+exports.usuariosRouter.post("/:id/ubicacion_actual", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const { lat, lon } = req.body;
+    if (lat === undefined || lon === undefined) {
+        res.status(400).json({ error: "invalid_coords" });
+        return;
+    }
+    const u = await (0, usuariosRepo_2.actualizarUbicacionActualUsuario)(id, Number(lat), Number(lon));
+    res.json({ ok: true, usuario: u });
 }));

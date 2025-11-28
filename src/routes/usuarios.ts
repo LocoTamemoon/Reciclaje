@@ -3,6 +3,7 @@ import { historialUsuario } from "../repositories/transaccionesRepo";
 import { pool } from "../db/pool";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { redimirPuntosUsuario } from "../repositories/usuariosRepo";
+import { actualizarUbicacionActualUsuario } from "../repositories/usuariosRepo";
 
 export const usuariosRouter = Router();
 
@@ -15,11 +16,11 @@ usuariosRouter.get("/:id/historial", asyncHandler(async (req: Request, res: Resp
 usuariosRouter.get("/:id/dashboard", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const pendientes = await pool.query(
-    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND estado='pendiente_empresa' ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector')) OR (tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada') ) ORDER BY creado_en DESC",
     [id]
   );
   const anteriores = await pool.query(
-    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND estado <> 'pendiente_empresa' ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector')) OR (tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada') ) ORDER BY creado_en DESC",
     [id]
   );
   const historial = await historialUsuario(id);
@@ -68,4 +69,12 @@ usuariosRouter.get("/:id/puntos/gastos", asyncHandler(async (req: Request, res: 
     [id]
   );
   res.json(rows.rows);
+}));
+
+usuariosRouter.post("/:id/ubicacion_actual", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const { lat, lon } = req.body;
+  if (lat === undefined || lon === undefined) { res.status(400).json({ error: "invalid_coords" }); return; }
+  const u = await actualizarUbicacionActualUsuario(id, Number(lat), Number(lon));
+  res.json({ ok: true, usuario: u });
 }));

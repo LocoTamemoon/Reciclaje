@@ -8,9 +8,10 @@ exports.actualizarReputacionUsuario = actualizarReputacionUsuario;
 exports.upsertUsuarioMaterialTotal = upsertUsuarioMaterialTotal;
 exports.obtenerUsuarioPorId = obtenerUsuarioPorId;
 exports.redimirPuntosUsuario = redimirPuntosUsuario;
+exports.actualizarUbicacionActualUsuario = actualizarUbicacionActualUsuario;
 const pool_1 = require("../db/pool");
 async function crearUsuarioInicial(lat, lon) {
-    const res = await pool_1.pool.query("INSERT INTO usuarios(lat, lon) VALUES($1, $2) RETURNING *", [lat, lon]);
+    const res = await pool_1.pool.query("INSERT INTO usuarios(home_lat, home_lon) VALUES($1, $2) RETURNING *", [lat, lon]);
     return res.rows[0];
 }
 async function obtenerUsuario(id) {
@@ -74,4 +75,8 @@ async function redimirPuntosUsuario(usuarioId, puntos, rewardKey) {
     finally {
         client.release();
     }
+}
+async function actualizarUbicacionActualUsuario(usuarioId, lat, lon) {
+    const res = await pool_1.pool.query("UPDATE usuarios SET current_lat=$2, current_lon=$3 WHERE id=$1 RETURNING *", [usuarioId, lat, lon]);
+    return res.rows[0] || null;
 }

@@ -53,7 +53,7 @@ function calcularFeePorBanda(banda, km) {
     const rounded = Math.round(bruto * 10) / 10;
     return Math.min(rounded, max);
 }
-async function crearNuevaSolicitud(usuarioId, empresaId, items, delivery, consent, termsVersion) {
+async function crearNuevaSolicitud(usuarioId, empresaId, items, delivery, consent, termsVersion, useCurrent) {
     const empresa = await (0, empresasRepo_1.obtenerEmpresa)(empresaId);
     if (!empresa)
         throw new Error("Empresa no encontrada");
@@ -70,14 +70,18 @@ async function crearNuevaSolicitud(usuarioId, empresaId, items, delivery, consen
             throw err;
         }
         const usuario = await (0, usuariosRepo_1.obtenerUsuario)(usuarioId);
-        const uLat = Number(usuario?.lat || 0);
-        const uLon = Number(usuario?.lon || 0);
+        const homeLat = Number(usuario?.home_lat || 0);
+        const homeLon = Number(usuario?.home_lon || 0);
+        const curLat = Number(usuario?.current_lat || 0);
+        const curLon = Number(usuario?.current_lon || 0);
+        const pickLat = useCurrent && curLat ? curLat : homeLat;
+        const pickLon = useCurrent && curLon ? curLon : homeLon;
         const eLat = Number(empresa?.lat || 0);
         const eLon = Number(empresa?.lon || 0);
-        const km = (uLat && uLon && eLat && eLon) ? haversineKm(uLat, uLon, eLat, eLon) : 6.1;
+        const km = (pickLat && pickLon && eLat && eLon) ? haversineKm(pickLat, pickLon, eLat, eLon) : 6.1;
         const banda = clasificarDistanciaPorKm(km);
         const fee = calcularFeePorBanda(banda, km);
-        solicitud = await (0, solicitudesRepo_1.crearSolicitudDelivery)(usuarioId, empresaId, fee, banda, Boolean(consent), termsVersion || null);
+        solicitud = await (0, solicitudesRepo_1.crearSolicitudDelivery)(usuarioId, empresaId, fee, banda, Boolean(consent), termsVersion || null, Boolean(useCurrent));
     }
     else {
         solicitud = await (0, solicitudesRepo_1.crearSolicitud)(usuarioId, empresaId);
@@ -103,12 +107,14 @@ async function cancelarSolicitudPorUsuario(usuarioId, solicitudId) {
     const solicitud = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
     if (!solicitud || solicitud.usuario_id !== usuarioId)
         throw new Error("Solicitud no válida");
-    if (solicitud.estado !== "pendiente_empresa")
-        throw new Error("Solicitud no cancelable");
     if (String(solicitud.tipo_entrega) === "delivery") {
+        if (String(solicitud.estado) !== 'pendiente_delivery' || String(solicitud.estado_publicacion) !== 'publicada')
+            throw new Error("Solicitud no cancelable");
         const s = await (0, solicitudesRepo_1.cancelarPublicacionSolicitud)(solicitudId);
         return s;
     }
+    if (solicitud.estado !== "pendiente_empresa")
+        throw new Error("Solicitud no cancelable");
     return await (0, solicitudesRepo_1.actualizarEstadoSolicitud)(solicitudId, "cancelada");
 }
 async function republicarSolicitudPorUsuario(usuarioId, solicitudId) {

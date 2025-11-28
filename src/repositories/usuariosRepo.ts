@@ -2,7 +2,7 @@ import { pool } from "../db/pool";
 
 export async function crearUsuarioInicial(lat: number | null, lon: number | null) {
   const res = await pool.query(
-    "INSERT INTO usuarios(lat, lon) VALUES($1, $2) RETURNING *",
+    "INSERT INTO usuarios(home_lat, home_lon) VALUES($1, $2) RETURNING *",
     [lat, lon]
   );
   return res.rows[0];
@@ -89,4 +89,12 @@ export async function redimirPuntosUsuario(usuarioId: number, puntos: number, re
   } finally {
     client.release();
   }
+}
+
+export async function actualizarUbicacionActualUsuario(usuarioId: number, lat: number, lon: number) {
+  const res = await pool.query(
+    "UPDATE usuarios SET current_lat=$2, current_lon=$3 WHERE id=$1 RETURNING *",
+    [usuarioId, lat, lon]
+  );
+  return res.rows[0] || null;
 }
