@@ -55,6 +55,10 @@
     .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
     @media (max-width: 880px){ .layout{ grid-template-columns: 1fr; } .sidebar{ position:sticky; top:0; z-index:10; } }
   </style>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/layout.css">
+  <script src="/js/micro.js" defer></script>
 </head>
 <body>
   <div class="layout">
@@ -130,12 +134,12 @@
         </div>
         <div class="muted" style="margin-top:10px;" id="empresa-cond"></div>
         <div style="margin-top:10px;">
-          <label style="display:flex; align-items:center; gap:8px;">
+          <label class="check-wrap">
             <input type="checkbox" id="delivery-check" />
             <span>Solicito el delivery sabiendo las condiciones del Acuerdo de Usuario a VidaVerde</span>
           </label>
           <div class="muted" id="delivery-hint" style="margin-top:6px;">Delivery disponible desde S/ 35</div>
-          <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+          <label class="check-wrap" style="margin-top:8px;">
             <input type="checkbox" id="delivery-actual-check" />
             <span>Quiero que el recojo sea en mi ubicación actual (por defecto se usa el domicilio previamente registrado)</span>
           </label>
@@ -273,7 +277,7 @@
               <option value="mejor_distrito">Distrito con mejores calificaciones</option>
             </select>
             <select id="map-material" style="min-width:240px; display:none;"></select>
-            <label style="display:none; align-items:center; gap:6px;" id="limit-dist-wrap">
+            <label class="check-wrap" style="display:none;" id="limit-dist-wrap">
               <input type="checkbox" id="map-limit-distrito" /> Limitar por distrito
             </label>
             <select id="map-limit-distrito-sel" style="min-width:240px; display:none;"></select>
@@ -327,7 +331,7 @@
           <div>Total a pagar: <strong id="pesaje-net">S/ 0.00</strong></div>
           <div class="row" style="gap:8px; align-items:center;">
             <input type="checkbox" id="pesaje-agree" />
-            <label for="pesaje-agree" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
+            <label for="pesaje-agree" class="check-wrap" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
           </div>
         </div>
       </section>
@@ -385,7 +389,7 @@
       <div id="aceptar-detalle" class="mono"></div>
       <div class="row" style="align-items:center; gap:8px; margin-top:10px;">
         <input type="checkbox" id="aceptar-agree" />
-        <label for="aceptar-agree" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
+        <label for="aceptar-agree" class="check-wrap" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
       </div>
       <div id="aceptar-fee-box" class="right" style="margin-top:8px;" hidden>
         <div>Comisión (10%): <strong id="aceptar-fee">S/ 0.00</strong></div>
@@ -433,6 +437,16 @@
       <div id="usr-route-meta-viaje" class="muted" style="margin-top:8px;"></div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="closeViaje()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="historial-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 id="historial-modal-title">Detalle</h3>
+      <div id="historial-modal-content"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeHistorialModal()">Cerrar</button>
       </div>
     </div>
   </div>
@@ -1063,25 +1077,19 @@
     }
     async function verDetalleTx(id){
       if (document.getElementById('view-historial').hidden) setView('historial');
-      const panel = document.getElementById('hist-detalle');
-      if (panel && panel.style.display !== 'none' && histDetalleId === id){
-        panel.style.display = 'none';
-        histDetalleId = null;
-        return;
-      }
+      const modal = document.getElementById('historial-modal');
+      if (modal && !modal.hidden && histDetalleId === id){ modal.hidden = true; histDetalleId = null; return; }
       const r = await fetch(`/api/transacciones/${id}`, { headers: authHeaders() });
       const j = await r.json();
       const filas = j.detalle.map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.precio_por_kg).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td><td style=\"text-align:right\">${Number(d.subtotal).toFixed(2)}</td></tr>`).join('');
       const footer = role === 'usuario'
         ? `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong>${Number(j.delivery_fee||0)>0 ? ` · Delivery: <strong>S/ ${Number(j.delivery_fee||0).toFixed(2)}</strong> · Neto: <strong>S/ ${Number(j.usuario_neto||j.total).toFixed(2)}</strong>` : ''}</div>`
         : `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong> · Comisión 10%: <strong>S/ ${Number(j.comision_10).toFixed(2)}</strong> · Total con comisión: <strong>S/ ${Number(j.total_con_comision).toFixed(2)}</strong></div>`;
-      panel.innerHTML = `
-        <h3>Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}</h3>
-        <table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Precio/kg</th><th style=\"text-align:right\">Kg</th><th style=\"text-align:right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>
-        ${footer}
-        <div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>
-      `;
-      panel.style.display = 'block';
+      const titleEl = document.getElementById('historial-modal-title');
+      const contentEl = document.getElementById('historial-modal-content');
+      if (titleEl) titleEl.textContent = `Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}`;
+      if (contentEl) contentEl.innerHTML = `<table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Precio/kg</th><th style=\"text-align:right\">Kg</th><th style=\"text-align:right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
+      if (modal) modal.hidden = false;
       histDetalleId = id;
     }
     async function loadHistorialRecolector(){
@@ -1109,25 +1117,25 @@
     }
     async function verDetalleTrabajo(sid){
       if (document.getElementById('view-historial').hidden) setView('historial');
-      const panel = document.getElementById('hist-detalle');
-      if (panel && panel.style.display !== 'none' && histDetalleId === sid){
-        panel.style.display = 'none';
-        histDetalleId = null;
-        return;
-      }
+      const modal = document.getElementById('historial-modal');
+      if (modal && !modal.hidden && histDetalleId === sid){ modal.hidden = true; histDetalleId = null; return; }
       const r = await fetch(`/api/recolector/trabajos/${sid}/detalle`, { headers: authHeaders() });
       const j = await r.json();
       const filas = (j.materiales||[]).map(d=> `<tr><td>${d.nombre}</td><td style=\"text-align:right\">${Number(d.kg_finales).toFixed(2)}</td></tr>`).join('');
       const distRU = (j.dist_recolector_usuario_km!=null) ? `${Number(j.dist_recolector_usuario_km).toFixed(2)} km` : '—';
       const distUE = (j.dist_usuario_empresa_km!=null) ? `${Number(j.dist_usuario_empresa_km).toFixed(2)} km` : '—';
-      panel.innerHTML = `
-        <h3>Detalle Trabajo #${sid}</h3>
-        <table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table>
-        <div class=\"right\" style=\"margin-top:10px\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div>
-        <div class=\"right\" style=\"margin-top:6px\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>
-      `;
-      panel.style.display = 'block';
+      const titleEl = document.getElementById('historial-modal-title');
+      const contentEl = document.getElementById('historial-modal-content');
+      if (titleEl) titleEl.textContent = `Detalle Trabajo #${sid}`;
+      if (contentEl) contentEl.innerHTML = `<table style=\"width:100%; border-collapse:collapse\"><thead><tr><th>Material</th><th style=\"text-align:right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right\" style=\"margin-top:10px\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right\" style=\"margin-top:6px\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>`;
+      if (modal) modal.hidden = false;
       histDetalleId = sid;
+    }
+
+    function closeHistorialModal(){
+      const modal = document.getElementById('historial-modal');
+      if (modal) modal.hidden = true;
+      histDetalleId = null;
     }
     let ratingCtx = { tipo:null, txId:null, empresaId:null, usuarioId:null };
     function openRating(tipo, txId, empresaId, usuarioId){
