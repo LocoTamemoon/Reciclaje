@@ -771,6 +771,7 @@
     if (meta) meta.textContent = '';
     if (recoPrevLayer && recoPrevMap) { recoPrevLayer.remove(); recoPrevLayer = null; }
     if (recoPrevRouteCtrl) { recoPrevRouteCtrl.remove(); recoPrevRouteCtrl = null; }
+    if (recoPrevMap) { try { recoPrevMap.remove(); } catch {} recoPrevMap = null; }
     recoPrevSid = null;
     recoPrevCoords = null;
     if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
@@ -822,7 +823,7 @@
       const hogarIcon = L.icon({ iconUrl: '/img/hogar.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
       const empresaIcon = L.icon({ iconUrl: '/img/empresa.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
       const layers = [];
-      if (rLat!=null && rLon!=null) layers.push(L.marker([rLat, rLon], { icon: recoIcon }).bindPopup(`Tú: ${user?.nombre||('Recolector #'+user?.id)}`));
+      if (rLat!=null && rLon!=null) layers.push(L.marker([rLat, rLon], { icon: mkIcon('Tú','#a7f3d0') }).bindPopup(`Tú: ${user?.nombre||('Recolector #'+user?.id)}`));
       if (uLat!=null && uLon!=null) layers.push(L.marker([uLat, uLon], { icon: hogarIcon }).bindPopup(`Usuario: ${j?.usuario_nombre||('Usuario')}`));
       if (eLat!=null && eLon!=null) layers.push(L.marker([eLat, eLon], { icon: empresaIcon }).bindPopup(`Empresa: ${j?.empresa_nombre||('Empresa')}`));
       recoPrevLayer = L.layerGroup(layers).addTo(recoPrevMap);
@@ -873,36 +874,75 @@
       if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
       const recolectorIconSim = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
       recoSimMarker = L.marker(recoPrevCoords[0], { icon: recolectorIconSim }).addTo(recoPrevMap);
-      let i = 0;
-      recoSimTimer = setInterval(()=>{
-        i++;
-        if (i >= recoPrevCoords.length) { clearInterval(recoSimTimer); recoSimTimer = null; return; }
-        const p = recoPrevCoords[i];
-        recoSimMarker.setLatLng(p);
-        if (publish && recoPrevSid) {
-          try { fetch(`/api/viajes/${recoPrevSid}/posicion`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat: p.lat, lon: p.lng, i }) }); } catch {}
+      const pts = recoPrevCoords;
+      const n = pts.length;
+      function distMeters(lat1, lon1, lat2, lon2){
+        const toRad = (x)=> x*Math.PI/180;
+        const R = 6371000;
+        const dLat = toRad(lat2-lat1);
+        const dLon = toRad(lon2-lon1);
+        const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+        const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R*c;
+      }
+      const lens = [];
+      let total = 0;
+      for (let k=1; k<n; k++){
+        const a = pts[k-1];
+        const b = pts[k];
+        const d = distMeters(a.lat, a.lng, b.lat, b.lng);
+        lens.push(d);
+        total += d;
+      }
+      const cum = [0];
+      for (let k=0; k<lens.length; k++) cum.push(cum[cum.length-1] + lens[k]);
+      const speed = 7;
+      let lastPub = 0;
+      const t0 = performance.now();
+      function step(){
+        const now = performance.now();
+        const dist = Math.min(((now - t0)/1000) * speed, total);
+        let idx = 0;
+        while (idx < lens.length && cum[idx+1] < dist) idx++;
+        const segStart = cum[idx];
+        const segLen = lens[idx] || 0;
+        const u = segLen>0 ? (dist - segStart)/segLen : 0;
+        const a = pts[idx];
+        const b = pts[Math.min(idx+1, n-1)];
+        const lat = a.lat + (b.lat - a.lat) * u;
+        const lon = a.lng + (b.lng - a.lng) * u;
+        recoSimMarker.setLatLng([lat, lon]);
+        if (publish && recoPrevSid && now - lastPub >= 300){
+          lastPub = now;
+          try { fetch(`/api/viajes/${recoPrevSid}/posicion`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon, i: idx }) }); } catch {}
         }
-      }, 400);
+        if (dist >= total){ clearInterval(recoSimTimer); recoSimTimer = null; return; }
+      }
+      recoSimTimer = setInterval(step, 33);
     }
 
-    function iniciarRecoPreview(){ runRecoSim(false); }
+    function iniciarRecoPreview(){ if (recoEventSource) return; runRecoSim(false); }
     function iniciarSimulacionOficial(){ runRecoSim(true); }
 
     async function recoVerUbicacion(sid){
       const panel = document.getElementById('reco-preview');
       const meta = document.getElementById('reco-route-meta');
       if (panel) panel.style.display = 'block';
+      if (recoSimTimer) { try { clearInterval(recoSimTimer); } catch {} recoSimTimer = null; }
       try {
         const rr = await fetch(`/api/viajes/${sid}/coords`, { headers: authHeaders() });
         const jj = await rr.json();
         const pts = Array.isArray(jj?.points) ? jj.points.map(p=> L.latLng(Number(p.lat), Number(p.lon))) : [];
         const mapDiv = document.getElementById('reco-map');
-        if (!recoPrevMap){ recoPrevMap = L.map(mapDiv).setView([pts[0]?.lat||-12.05, pts[0]?.lon||-77.03], 13); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(recoPrevMap); }
+        if (recoPrevMap) { try { recoPrevMap.remove(); } catch {} recoPrevMap = null; }
+        recoPrevMap = L.map(mapDiv).setView([pts[0]?.lat||-12.05, pts[0]?.lon||-77.03], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(recoPrevMap);
         if (pts.length>=2){
           const poly = L.polyline(pts, { color:'#22c55e', weight:4 }).addTo(recoPrevMap);
           recoPrevMap.fitBounds(poly.getBounds());
           if (meta) meta.textContent = 'Simulación en curso';
         }
+        setTimeout(()=>{ try { recoPrevMap.invalidateSize(); } catch {} }, 0);
       } catch {}
       if (recoEventSource) { try { recoEventSource.close(); } catch {} recoEventSource = null; }
       recoEventSource = new EventSource(`/api/viajes/${sid}/stream`);
@@ -942,7 +982,6 @@
         }
         recoPrevSid = sid;
         await fetch(`/api/viajes/${sid}/iniciar`, { method:'POST', headers: authHeaders() });
-        iniciarRecoPreview();
         recoSimSid = sid;
         const ub = document.getElementById('reco-ubic-btn');
         if (ub) ub.disabled = false;
