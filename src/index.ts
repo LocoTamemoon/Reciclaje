@@ -156,6 +156,19 @@ app.post("/api/viajes/:sid/finalizar", (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/viajes/:sid/cancelar", async (req, res) => {
+  const sid = Number(req.params.sid);
+  try {
+    const t = viajeSimTimers.get(sid);
+    if (t) { try { clearInterval(t); } catch {} viajeSimTimers.delete(sid); }
+    viajeSimProgress.delete(sid);
+    await pool.query("UPDATE solicitudes SET estado='cancelada', estado_publicacion='cancelada' WHERE id=$1", [sid]);
+    res.json({ ok: true, estado: "cancelada" });
+  } catch (e) {
+    res.status(500).json({ error: "cancel_failed" });
+  }
+});
+
 app.use((req, res) => {
   res.status(404).sendFile(path.resolve("public", "404.html"));
 });

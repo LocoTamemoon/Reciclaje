@@ -1116,8 +1116,21 @@
 
     async function recolectorFinalizarRuta(sid){
       try {
-        await fetch(`/api/viajes/${sid}/finalizar`, { method:'POST', headers: authHeaders() });
-        alert('Ruta finalizada');
+        await fetch(`/api/viajes/${sid}/cancelar`, { method:'POST', headers: authHeaders() });
+        closeViaje();
+        clearRecoPreview();
+        try {
+          const ul = document.getElementById('reco-feed');
+          if (ul){
+            Array.from(ul.children).forEach((li)=>{
+              const txt = String(li.textContent||'');
+              if (txt.includes('Solicitud #'+sid)){
+                li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">Cancelada</div></div><div class="right"></div></div>`;
+              }
+            });
+          }
+        } catch {}
+        alert('Ruta cancelada');
       } catch {}
     }
     async function loadSolicitudes(){
