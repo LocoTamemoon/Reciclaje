@@ -23,10 +23,31 @@ recolectorRouter.get("/:id/en_curso", asyncHandler(async (req: Request, res: Res
   res.json(rows.rows);
 }));
 
+recolectorRouter.get("/by_email", asyncHandler(async (req: Request, res: Response) => {
+  const email = String((req.query as any).email || '');
+  if (!email) { res.status(400).json({ error: "email_requerido" }); return; }
+  const r = await pool.query("SELECT id, email FROM recolectores WHERE email=$1", [email]);
+  if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+  res.json(r.rows[0]);
+}));
+
 recolectorRouter.post("/:sid/aceptar", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
-  const { recolector_id, lat, lon } = req.body;
-  const s = await aceptarPorRecolector(sid, Number(recolector_id), lat!=null?Number(lat):null, lon!=null?Number(lon):null);
+  const { recolector_id, vehiculo_id, lat, lon } = req.body;
+  let s: any = null;
+  try {
+    s = await aceptarPorRecolector(
+      sid,
+      Number(recolector_id),
+      vehiculo_id!=null?Number(vehiculo_id):null,
+      lat!=null?Number(lat):null,
+      lon!=null?Number(lon):null
+    );
+  } catch (e: any) {
+    const msg = String(e?.message||'');
+    if (msg === 'vehiculo_invalido' || msg === 'capacidad_insuficiente') { res.status(422).json({ error: msg }); return; }
+    throw e;
+  }
   if (!s) { res.status(409).json({ error: "no_disponible" }); return; }
   try { await recalcularClasificacionYFee(sid); } catch {}
   const s2 = await obtenerSolicitud(sid);
@@ -38,6 +59,57 @@ recolectorRouter.post(":sid/estado", asyncHandler(async (req: Request, res: Resp
   const { estado } = req.body;
   const s = await actualizarEstadoOperativo(sid, String(estado));
   res.json(s);
+}));
+
+recolectorRouter.post("/vehiculos", asyncHandler(async (req: Request, res: Response) => {
+  const { recolector_id, tipo, tipo_id, placa, capacidad_kg } = req.body;
+  if (!recolector_id || !placa || capacidad_kg==null) { res.status(400).json({ error: "invalid_body" }); return; }
+  let tipoId: number | null = null;
+  if (tipo_id != null) {
+    const t = await pool.query("SELECT id FROM vehiculo_tipos WHERE id=$1 AND activo=true", [Number(tipo_id)]);
+    if (!t.rows[0]) { res.status(422).json({ error: "tipo_invalido" }); return; }
+    tipoId = Number(t.rows[0].id);
+  } else if (tipo) {
+    const t = await pool.query("SELECT id FROM vehiculo_tipos WHERE LOWER(nombre)=LOWER($1) AND activo=true", [String(tipo)]);
+    if (!t.rows[0]) { res.status(422).json({ error: "tipo_invalido" }); return; }
+    tipoId = Number(t.rows[0].id);
+  } else {
+    res.status(400).json({ error: "tipo_requerido" }); return;
+  }
+  const r = await pool.query(
+    "INSERT INTO vehiculos(recolector_id, tipo_id, placa, capacidad_kg, activo) VALUES($1,$2,$3,$4,true) RETURNING *",
+    [Number(recolector_id), tipoId, String(placa), Number(capacidad_kg)]
+  );
+  res.json(r.rows[0] || null);
+}));
+
+recolectorRouter.get("/:id/vehiculos", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const r = await pool.query("SELECT * FROM vehiculos WHERE recolector_id=$1 ORDER BY creado_en DESC", [id]);
+  res.json(r.rows);
+}));
+
+recolectorRouter.patch("/vehiculos/:vid", asyncHandler(async (req: Request, res: Response) => {
+  const vid = Number(req.params.vid);
+  const { recolector_id, capacidad_kg, activo, tipo, tipo_id } = req.body;
+  if (!recolector_id) { res.status(400).json({ error: "invalid_body" }); return; }
+  const owner = await pool.query("SELECT id FROM vehiculos WHERE id=$1 AND recolector_id=$2", [vid, Number(recolector_id)]);
+  if (!owner.rows[0]) { res.status(404).json({ error: "vehiculo_not_found" }); return; }
+  let tipoId: number | null = tipo_id!=null ? Number(tipo_id) : null;
+  if (tipo_id != null) {
+    const t = await pool.query("SELECT id FROM vehiculo_tipos WHERE id=$1 AND activo=true", [Number(tipo_id)]);
+    if (!t.rows[0]) { res.status(422).json({ error: "tipo_invalido" }); return; }
+    tipoId = Number(t.rows[0].id);
+  } else if (tipo != null) {
+    const t = await pool.query("SELECT id FROM vehiculo_tipos WHERE LOWER(nombre)=LOWER($1) AND activo=true", [String(tipo)]);
+    if (!t.rows[0]) { res.status(422).json({ error: "tipo_invalido" }); return; }
+    tipoId = Number(t.rows[0].id);
+  }
+  const r = await pool.query(
+    "UPDATE vehiculos SET capacidad_kg=COALESCE($3, capacidad_kg), activo=COALESCE($4, activo), tipo_id=COALESCE($5, tipo_id) WHERE id=$1 RETURNING *",
+    [vid, Number(recolector_id), capacidad_kg!=null?Number(capacidad_kg):null, activo!=null?Boolean(activo):null, tipoId]
+  );
+  res.json(r.rows[0] || null);
 }));
 
 recolectorRouter.post("/:id/ubicacion_actual", asyncHandler(async (req: Request, res: Response) => {
@@ -189,4 +261,8 @@ recolectorRouter.post("/stats/recompute_all", asyncHandler(async (_req: Request,
     updated.push({ id, trabajos_completados: c });
   }
   res.json({ updated });
+}));
+recolectorRouter.get("/vehiculos_tipos", asyncHandler(async (_req: Request, res: Response) => {
+  const r = await pool.query("SELECT id, nombre FROM vehiculo_tipos WHERE activo=true ORDER BY nombre");
+  res.json(r.rows);
 }));

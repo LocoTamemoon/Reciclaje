@@ -58,9 +58,10 @@ export async function cancelarPublicacionSolicitud(id: number) {
   return res.rows[0] || null;
 }
 
-export async function aceptarPorRecolector(id: number, recolectorId: number, lat?: number | null, lon?: number | null) {
+export async function aceptarPorRecolector(id: number, recolectorId: number, vehiculoId?: number | null, lat?: number | null, lon?: number | null) {
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS recolector_accept_lat NUMERIC(9,6)");
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS recolector_accept_lon NUMERIC(9,6)");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS vehiculo_id INTEGER");
   let snapLat = lat != null ? Number(lat) : null;
   let snapLon = lon != null ? Number(lon) : null;
   if (snapLat == null || snapLon == null) {
@@ -68,9 +69,30 @@ export async function aceptarPorRecolector(id: number, recolectorId: number, lat
     snapLat = r.rows[0]?.lat != null ? Number(r.rows[0].lat) : snapLat;
     snapLon = r.rows[0]?.lon != null ? Number(r.rows[0].lon) : snapLon;
   }
+  let vehId: number | null = vehiculoId != null ? Number(vehiculoId) : null;
+  if (vehId != null && !isNaN(vehId)) {
+    const vRes = await pool.query("SELECT id, capacidad_kg FROM vehiculos WHERE id=$1 AND recolector_id=$2 AND activo=true", [vehId, recolectorId]);
+    const v = vRes.rows[0];
+    if (!v) { throw Object.assign(new Error("vehiculo_invalido"), { code: 422 }); }
+    const sRes = await pool.query("SELECT items_json FROM solicitudes WHERE id=$1", [id]);
+    const items = sRes.rows[0]?.items_json || null;
+    let kgTotal = 0;
+    if (items) {
+      try {
+        const arr = Array.isArray(items) ? items : JSON.parse(items);
+        kgTotal = arr.reduce((acc: number, it: any)=> acc + Number(it.kg||0), 0);
+      } catch {}
+    }
+    const capacidad = Number(v.capacidad_kg || 0);
+    if (kgTotal > 0 && capacidad > 0 && kgTotal > capacidad) {
+      throw Object.assign(new Error("capacidad_insuficiente"), { code: 422 });
+    }
+  } else {
+    vehId = null;
+  }
   const res = await pool.query(
-    "UPDATE solicitudes SET estado_publicacion='aceptada_recolector', recolector_id=$2, estado='pendiente_empresa', recolector_accept_lat=$3, recolector_accept_lon=$4 WHERE id=$1 AND estado_publicacion='publicada' RETURNING *",
-    [id, recolectorId, snapLat, snapLon]
+    "UPDATE solicitudes SET estado_publicacion='aceptada_recolector', recolector_id=$2, vehiculo_id=$5, estado='pendiente_empresa', recolector_accept_lat=$3, recolector_accept_lon=$4 WHERE id=$1 AND estado_publicacion='publicada' RETURNING *",
+    [id, recolectorId, snapLat, snapLon, vehId]
   );
   return res.rows[0] || null;
 }

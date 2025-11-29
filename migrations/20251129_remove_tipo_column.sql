@@ -1,0 +1,2 @@
+ALTER TABLE vehiculos DROP COLUMN IF EXISTS tipo;
+
