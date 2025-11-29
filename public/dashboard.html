@@ -1111,8 +1111,21 @@
         });
       } catch {}
       const r = await fetch(`/api/recolector/${sid}/aceptar`, { method:'POST', headers: authHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) {
+        if (r.status === 409) {
+          try {
+            const ul = document.getElementById('reco-feed');
+            if (ul) {
+              Array.from(ul.children).forEach((eli)=>{ const m = eli.querySelector(`.muted[data-sid="${sid}"]`); if (m) eli.remove(); });
+            }
+          } catch {}
+          alert('Ya no está disponible');
+          return;
+        }
+        try { const j2 = await r.json(); if (j2?.error) alert('Error: '+String(j2.error)); else alert('Error al aceptar'); } catch { alert('Error al aceptar'); }
+        return;
+      }
       const j = await r.json();
-      if (j?.error === 'no_disponible') { alert('Ya no está disponible'); return; }
       clearRecoPreview();
       alert('Solicitud aceptada: #'+j.id);
       loadRecolectorFeed();
