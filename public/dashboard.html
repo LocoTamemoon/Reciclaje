@@ -108,13 +108,11 @@
           <h2>Solicitudes Disponibles</h2>
           <div class="row gap-8">
             <button class="btn secondary" onclick="loadRecolectorFeed()">Actualizar</button>
-            <button class="btn" id="reco-ubic-btn" onclick="recoVerUbicacion(recoSimSid)" disabled>Ubicación</button>
           </div>
         </div>
         <div id="reco-current" class="card" style="display:none; margin-top:8px;">
           <div class="row jc-between ai-center">
             <div>Trabajo en curso · Solicitud <strong id="reco-current-sid">—</strong></div>
-            <div class="right"><button class="btn" onclick="recoVerUbicacion(recoSimSid)">Ubicación</button></div>
           </div>
         </div>
         <ul id="reco-feed" class="list"></ul>
@@ -598,6 +596,7 @@
   let recoPrevSid = null;
   let recoPrevCoords = null;
   let recoSimMarker = null;
+  let recoStartMarker = null;
   let recoSimTimer = null;
   let recoEventSource = null;
   let recoSimSid = null;
@@ -754,9 +753,11 @@
         if (Array.isArray(cur) && cur.length>0){
           if (curWrap) curWrap.style.display='';
           if (curSid) curSid.textContent = String(cur[0].id);
+          const ubBtn = document.getElementById('reco-ubic-btn');
+          if (ubBtn) ubBtn.disabled = false;
           recoSimSid = Number(cur[0].id);
           const li = document.createElement('li');
-          li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${cur[0].id}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="recoVerUbicacion(${cur[0].id})">Ubicación</button><button class="btn secondary" onclick="recolectorFinalizarRuta(${cur[0].id})">Finalizar ruta</button></div></div>`;
+          li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${cur[0].id}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn secondary" onclick="recolectorFinalizarRuta(${cur[0].id})">Finalizar ruta</button></div></div>`;
           ul.insertBefore(li, ul.firstChild);
         } else {
           if (curWrap) curWrap.style.display='none';
@@ -774,6 +775,7 @@
     if (recoPrevMap) { try { recoPrevMap.remove(); } catch {} recoPrevMap = null; }
     recoPrevSid = null;
     recoPrevCoords = null;
+    if (recoStartMarker) { try { recoStartMarker.remove(); } catch {} recoStartMarker = null; }
     if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
     if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
     if (recoEventSource) { try { recoEventSource.close(); } catch {} recoEventSource = null; }
@@ -868,12 +870,14 @@
       }, 400);
     }
 
-    function runRecoSim(publish){
-      if (!recoPrevMap || !recoPrevCoords || recoPrevCoords.length < 2) return;
-      if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
-      if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
-      const recolectorIconSim = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
-      recoSimMarker = L.marker(recoPrevCoords[0], { icon: recolectorIconSim }).addTo(recoPrevMap);
+  function runRecoSim(publish){
+    if (!recoPrevMap || !recoPrevCoords || recoPrevCoords.length < 2) return;
+    if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
+    if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
+    const partidaIconSim = L.icon({ iconUrl: '/img/partida.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    const recolectorIconSim = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    try { if (!recoStartMarker && recoPrevCoords[0]) { recoStartMarker = L.marker(recoPrevCoords[0], { icon: partidaIconSim }).addTo(recoPrevMap); } } catch {}
+    recoSimMarker = L.marker(recoPrevCoords[0], { icon: recolectorIconSim }).addTo(recoPrevMap);
       const pts = recoPrevCoords;
       const n = pts.length;
       function distMeters(lat1, lon1, lat2, lon2){
@@ -926,34 +930,109 @@
 
     async function recoVerUbicacion(sid){
       const panel = document.getElementById('reco-preview');
+      const sec = document.getElementById('view-recolector');
       const meta = document.getElementById('reco-route-meta');
+      if (sec) sec.hidden = false;
       if (panel) panel.style.display = 'block';
+      if (!sid || isNaN(Number(sid))){
+        try {
+          const rc = await fetch(`/api/recolector/${user.id}/en_curso`, { headers: authHeaders() });
+          const cur = await rc.json();
+          const found = Array.isArray(cur) && cur.length>0 ? Number(cur[0].id) : null;
+          if (found){ sid = found; recoSimSid = found; const cs = document.getElementById('reco-current-sid'); if (cs) cs.textContent = String(found); const ub = document.getElementById('reco-ubic-btn'); if (ub) ub.disabled = false; }
+        } catch {}
+      }
+      if (!sid || isNaN(Number(sid))) { return; }
       if (recoSimTimer) { try { clearInterval(recoSimTimer); } catch {} recoSimTimer = null; }
+      if (recoSimMarker) { try { recoSimMarker.remove(); } catch {} recoSimMarker = null; }
       try {
         const rr = await fetch(`/api/viajes/${sid}/coords`, { headers: authHeaders() });
         const jj = await rr.json();
         const pts = Array.isArray(jj?.points) ? jj.points.map(p=> L.latLng(Number(p.lat), Number(p.lon))) : [];
+        const pr = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+        const pj = await pr.json();
+        const rLat = pj?.recolector?.lat ?? null;
+        const rLon = pj?.recolector?.lon ?? null;
+        const uLat = pj?.usuario?.lat ?? null;
+        const uLon = pj?.usuario?.lon ?? null;
+        const eLat = pj?.empresa?.lat ?? null;
+        const eLon = pj?.empresa?.lon ?? null;
         const mapDiv = document.getElementById('reco-map');
         if (recoPrevMap) { try { recoPrevMap.remove(); } catch {} recoPrevMap = null; }
-        recoPrevMap = L.map(mapDiv).setView([pts[0]?.lat||-12.05, pts[0]?.lon||-77.03], 13);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(recoPrevMap);
-        if (pts.length>=2){
-          const poly = L.polyline(pts, { color:'#22c55e', weight:4 }).addTo(recoPrevMap);
-          recoPrevMap.fitBounds(poly.getBounds());
-          if (meta) meta.textContent = 'Simulación en curso';
+        if (mapDiv) { try { mapDiv.innerHTML = ''; mapDiv.style.minHeight = '300px'; } catch {} }
+        async function waitVisible(el, maxMs){
+          const deadline = Date.now() + (typeof maxMs==='number'?maxMs:1200);
+          return new Promise((resolve)=>{
+            const t = setInterval(()=>{
+              const ok = el && el.offsetWidth>0 && el.offsetHeight>0;
+              if (ok){ clearInterval(t); resolve(true); }
+              else if (Date.now()>=deadline){ clearInterval(t); resolve(false); }
+            }, 50);
+          });
         }
-        setTimeout(()=>{ try { recoPrevMap.invalidateSize(); } catch {} }, 0);
+        await waitVisible(mapDiv, 1500);
+        const baseLat = (pts[0]?.lat ?? uLat ?? -12.05);
+        const baseLon = (pts[0]?.lng ?? uLon ?? -77.03);
+        recoPrevMap = L.map(mapDiv).setView([baseLat, baseLon], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(recoPrevMap);
+        if (recoPrevLayer) { try { recoPrevLayer.remove(); } catch {} recoPrevLayer = null; }
+        if (recoPrevRouteCtrl) { try { recoPrevRouteCtrl.remove(); } catch {} recoPrevRouteCtrl = null; }
+        if (Array.isArray(pts) && pts.length>=2){
+          recoPrevCoords = pts;
+          const poly = L.polyline(pts, { color:'#22c55e', weight:4 }).addTo(recoPrevMap);
+          try { recoPrevMap.fitBounds(poly.getBounds()); } catch {}
+          if (meta) meta.textContent = 'Simulación en curso';
+          try { const partidaIconSim = L.icon({ iconUrl: '/img/partida.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] }); if (!recoStartMarker) { recoStartMarker = L.marker(recoPrevCoords[0], { icon: partidaIconSim }).addTo(recoPrevMap); } } catch {}
+        } else if (rLat!=null && rLon!=null && uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
+          recoPrevRouteCtrl = L.Routing.control({
+            language: 'es',
+            waypoints: [ L.latLng(rLat, rLon), L.latLng(uLat, uLon), L.latLng(eLat, eLon) ],
+            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
+            routeWhileDragging: false,
+            showAlternatives: false,
+            addWaypoints: false,
+            draggableWaypoints: false,
+            createMarker: function() { return null; },
+            fitSelectedRoutes: true,
+            lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
+          }).addTo(recoPrevMap);
+          recoPrevRouteCtrl.on('routesfound', (e)=>{
+            const coords = e?.routes?.[0]?.coordinates || [];
+            recoPrevCoords = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : null;
+            try { const partidaIconSim = L.icon({ iconUrl: '/img/partida.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] }); if (!recoStartMarker && Array.isArray(recoPrevCoords) && recoPrevCoords[0]) { recoStartMarker = L.marker(recoPrevCoords[0], { icon: partidaIconSim }).addTo(recoPrevMap); } } catch {}
+          });
+        }
+        setTimeout(()=>{ try { recoPrevMap.invalidateSize(); } catch {} }, 50);
       } catch {}
       if (recoEventSource) { try { recoEventSource.close(); } catch {} recoEventSource = null; }
       recoEventSource = new EventSource(`/api/viajes/${sid}/stream`);
+      function snapToRouteReco(lat, lon){
+        if (!Array.isArray(recoPrevCoords) || recoPrevCoords.length<2) return [lat, lon];
+        let best = 0, bd = Infinity;
+        for (let k=0; k<recoPrevCoords.length; k++){
+          const p = recoPrevCoords[k];
+          const d = (p.lat-lat)*(p.lat-lat)+(p.lng-lon)*(p.lng-lon);
+          if (d<bd){ bd=d; best=k; }
+        }
+        const bp = recoPrevCoords[best];
+        return [bp.lat, bp.lng];
+      }
       recoEventSource.onmessage = (ev)=>{
         try{
           const d = JSON.parse(ev.data||'{}');
           const lat = Number(d.lat), lon = Number(d.lon);
+          const idx = Number(d.i);
           if (!isNaN(lat) && !isNaN(lon)){
             const recolectorIconSim = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
-            if (!recoSimMarker) { recoSimMarker = L.marker([lat, lon], { icon: recolectorIconSim }).addTo(recoPrevMap); }
-            else { recoSimMarker.setLatLng([lat, lon]); }
+            let pt = [lat, lon];
+            if (!isNaN(idx) && Array.isArray(recoPrevCoords) && recoPrevCoords[idx]){
+              const p = recoPrevCoords[idx];
+              pt = [p.lat, p.lng];
+            } else {
+              pt = snapToRouteReco(lat, lon);
+            }
+            if (!recoSimMarker) { recoSimMarker = L.marker(pt, { icon: recolectorIconSim }).addTo(recoPrevMap); }
+            else { recoSimMarker.setLatLng(pt); }
           }
         }catch{}
       };
@@ -974,11 +1053,42 @@
       alert('Solicitud aceptada: #'+j.id);
       loadRecolectorFeed();
       try {
-        await verPrevisualizacion(sid);
-        await waitRecoRouteReady(8000);
-        if (Array.isArray(recoPrevCoords) && recoPrevCoords.length >= 2) {
-          const coords = recoPrevCoords.map(c=> ({ lat: c.lat, lon: c.lng }));
+        let coords = [];
+        try {
+          const pr = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+          const pj = await pr.json();
+          const rLat = pj?.recolector?.lat ?? null;
+          const rLon = pj?.recolector?.lon ?? null;
+          const uLat = pj?.usuario?.lat ?? null;
+          const uLon = pj?.usuario?.lon ?? null;
+          const eLat = pj?.empresa?.lat ?? null;
+          const eLon = pj?.empresa?.lon ?? null;
+          const wps = [];
+          if (rLat!=null && rLon!=null) wps.push({ lat:Number(rLat), lon:Number(rLon) });
+          if (uLat!=null && uLon!=null) wps.push({ lat:Number(uLat), lon:Number(uLon) });
+          if (eLat!=null && eLon!=null) wps.push({ lat:Number(eLat), lon:Number(eLon) });
+          if (wps.length>=2){
+            const q = wps.map(w=> `${w.lon},${w.lat}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${q}?overview=full&geometries=geojson`;
+            const rr = await fetch(url);
+            const jj = await rr.json();
+            const coordsGeo = jj?.routes?.[0]?.geometry?.coordinates || [];
+            coords = Array.isArray(coordsGeo) ? coordsGeo.map(([lon,lat])=> ({ lat:Number(lat), lon:Number(lon) })) : [];
+          }
+        } catch {}
+        if (Array.isArray(coords) && coords.length >= 2) {
           await fetch(`/api/viajes/${sid}/coords`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ coords }) });
+          try {
+            for (let i=0; i<6; i++){
+              try {
+                const gr = await fetch(`/api/viajes/${sid}/coords`, { headers: authHeaders() });
+                const gj = await gr.json();
+                const ok = Array.isArray(gj?.points) && gj.points.length>=2;
+                if (ok) break;
+              } catch {}
+              await new Promise(res=> setTimeout(res, 100));
+            }
+          } catch {}
         }
         recoPrevSid = sid;
         await fetch(`/api/viajes/${sid}/iniciar`, { method:'POST', headers: authHeaders() });
@@ -989,14 +1099,14 @@
         const curSid = document.getElementById('reco-current-sid');
         if (cur) cur.style.display = '';
         if (curSid) curSid.textContent = String(sid);
-        await recoVerUbicacion(sid);
+        await usuarioVerViaje(sid);
         try {
           const ul = document.getElementById('reco-feed');
           if (ul){
             Array.from(ul.children).forEach((li)=>{
               const txt = String(li.textContent||'');
               if (txt.includes('Solicitud #'+sid)){
-                li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="recoVerUbicacion(${sid})">Ubicación</button><button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
+                li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${sid})">Ubicación</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
               }
             });
           }
@@ -1195,6 +1305,7 @@
   let viaPrevCoords = null;
   let viaEventSource = null;
   let viaPoly = null;
+  let viaStartMarker = null;
   let rutaMap = null;
   let rutaRouteCtrl = null;
   let rutaLayer = null;
@@ -1605,6 +1716,7 @@
     if (metaV) metaV.textContent = '';
     if (viaLayer && viaMap) { viaLayer.remove(); viaLayer = null; }
     if (viaRouteCtrl) { viaRouteCtrl.remove(); viaRouteCtrl = null; }
+    if (viaStartMarker) { try { viaStartMarker.remove(); } catch {} viaStartMarker = null; }
     if (viaSimMarker) { viaSimMarker.remove(); viaSimMarker = null; }
     if (viaSimTimer) { clearInterval(viaSimTimer); viaSimTimer = null; }
     if (viaEventSource) { try { viaEventSource.close(); } catch {} viaEventSource = null; }
@@ -1616,6 +1728,7 @@
     const modal = document.getElementById('viaje-modal');
     if (modal && !modal.hidden && usrSid === sid) { closeViaje(); return; }
     if (modal) modal.hidden = false;
+    try { const mapDiv = document.getElementById('usr-map-viaje'); if (mapDiv) mapDiv.style.minHeight = '300px'; } catch {}
     const r = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
     const j = await r.json();
     const rLat = j?.recolector?.lat ?? null;
@@ -1626,7 +1739,55 @@
     const eLon = j?.empresa?.lon ?? null;
     const meta = document.getElementById('usr-route-meta-viaje');
     const mapDiv = document.getElementById('usr-map-viaje');
-    if (!viaMap){ viaMap = L.map(mapDiv).setView([uLat||-12.05, uLon||-77.03], 13); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(viaMap); }
+    let viaCum = null;
+    let viaTotalKm = 0;
+    function distMeters(lat1, lon1, lat2, lon2){
+      const toRad = (x)=> x*Math.PI/180;
+      const R = 6371000;
+      const dLat = toRad(lat2-lat1);
+      const dLon = toRad(lon2-lon1);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R*c;
+    }
+    function buildMetrics(arr){
+      try {
+        if (!Array.isArray(arr) || arr.length<2) return;
+        const lens = [];
+        let total = 0;
+        for (let k=1; k<arr.length; k++){
+          const a = arr[k-1];
+          const b = arr[k];
+          const d = distMeters(a.lat, a.lng, b.lat, b.lng);
+          lens.push(d);
+          total += d;
+        }
+        const cum = [0];
+        for (let k=0; k<lens.length; k++) cum.push(cum[cum.length-1] + lens[k]);
+        viaCum = cum;
+        viaTotalKm = total/1000;
+        const done = 0;
+        const left = Math.max(viaTotalKm - done, 0);
+        if (meta) meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Recorrido: <strong>${done.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${left.toFixed(2)} km</strong>`;
+      } catch {}
+    }
+    if (!viaMap){
+      const mapDiv = document.getElementById('usr-map-viaje');
+      async function waitVisible(el, maxMs){
+        const deadline = Date.now() + (typeof maxMs==='number'?maxMs:1200);
+        return new Promise((resolve)=>{
+          const t = setInterval(()=>{
+            const ok = el && el.offsetWidth>0 && el.offsetHeight>0;
+            if (ok){ clearInterval(t); resolve(true); }
+            else if (Date.now()>=deadline){ clearInterval(t); resolve(false); }
+          }, 50);
+        });
+      }
+      await waitVisible(mapDiv, 1500);
+      viaMap = L.map(mapDiv).setView([uLat||-12.05, uLon||-77.03], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(viaMap);
+    }
+    setTimeout(()=>{ try { viaMap.invalidateSize(); } catch {} }, 100);
     const toFit = [];
     if (rLat!=null && rLon!=null) toFit.push([rLat, rLon]);
     if (uLat!=null && uLon!=null) toFit.push([uLat, uLon]);
@@ -1634,6 +1795,7 @@
     if (toFit.length>0) viaMap.fitBounds(toFit);
     if (viaLayer) { viaLayer.remove(); viaLayer = null; }
     if (viaPoly) { viaPoly.remove(); viaPoly = null; }
+    const partidaIcon = L.icon({ iconUrl: '/img/partida.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
     const recolectorIcon = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
     const hogarIcon = L.icon({ iconUrl: '/img/hogar.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
     const empresaIcon = L.icon({ iconUrl: '/img/empresa.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
@@ -1649,32 +1811,111 @@
       if (pts.length >= 2) {
         viaPrevCoords = pts;
         viaPoly = L.polyline(pts, { color: '#22c55e', weight: 4 }).addTo(viaMap);
-        viaMap.fitBounds(viaPoly.getBounds());
-        meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong>`;
-      } else if (rLat!=null && rLon!=null && uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
-        viaRouteCtrl = L.Routing.control({
-          language: 'es',
-          waypoints: [ L.latLng(rLat, rLon), L.latLng(uLat, uLon), L.latLng(eLat, eLon) ],
-          router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
-          routeWhileDragging: false,
-          showAlternatives: false,
-          addWaypoints: false,
-          draggableWaypoints: false,
-          createMarker: function() { return null; },
-          fitSelectedRoutes: true,
-          lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
-        }).addTo(viaMap);
-        viaRouteCtrl.on('routesfound', (e)=>{
-          const sum = e?.routes?.[0]?.summary;
-          if (sum) {
-            const km = (sum.totalDistance/1000).toFixed(2);
-            const min = Math.round(sum.totalTime/60);
-            meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
+        try { if (!viaStartMarker && viaPrevCoords[0]) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+        try { viaMap.fitBounds(viaPoly.getBounds()); } catch {}
+        buildMetrics(viaPrevCoords);
+        if (rLat!=null && rLon!=null && uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
+          if (viaRouteCtrl) { try { viaRouteCtrl.remove(); } catch {} viaRouteCtrl = null; }
+          viaRouteCtrl = L.Routing.control({
+            language: 'es',
+            waypoints: [ L.latLng(rLat, rLon), L.latLng(uLat, uLon), L.latLng(eLat, eLon) ],
+            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
+            routeWhileDragging: false,
+            showAlternatives: false,
+            addWaypoints: false,
+            draggableWaypoints: false,
+            createMarker: function() { return null; },
+            fitSelectedRoutes: true,
+            lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
+          }).addTo(viaMap);
+          const contV2 = (viaRouteCtrl && typeof viaRouteCtrl.getContainer === 'function') ? viaRouteCtrl.getContainer() : null;
+          if (contV2) contV2.style.display = 'none';
+        }
+      } else {
+        if (rLat!=null && rLon!=null && uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
+          viaRouteCtrl = L.Routing.control({
+            language: 'es',
+            waypoints: [ L.latLng(rLat, rLon), L.latLng(uLat, uLon), L.latLng(eLat, eLon) ],
+            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
+            routeWhileDragging: false,
+            showAlternatives: false,
+            addWaypoints: false,
+            draggableWaypoints: false,
+            createMarker: function() { return null; },
+            fitSelectedRoutes: true,
+            lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
+          }).addTo(viaMap);
+          viaRouteCtrl.on('routesfound', (e)=>{
+            const sum = e?.routes?.[0]?.summary;
+            if (sum) {
+              const km = (sum.totalDistance/1000).toFixed(2);
+              const min = Math.round(sum.totalTime/60);
+              meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
+            }
+            const coords = e?.routes?.[0]?.coordinates || [];
+            const pts2 = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : [];
+            viaPrevCoords = pts2;
+            try {
+              if (viaPoly) { viaPoly.remove(); viaPoly = null; }
+            if (pts2.length >= 2) {
+              viaPoly = L.polyline(pts2, { color: '#22c55e', weight: 4 }).addTo(viaMap);
+              try { if (!viaStartMarker && viaPrevCoords[0]) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+              buildMetrics(viaPrevCoords);
+            }
+            } catch {}
+          });
+          setTimeout(()=>{
+            try {
+              if (!viaPoly && Array.isArray(viaPrevCoords) && viaPrevCoords.length>=2){
+                viaPoly = L.polyline(viaPrevCoords, { color:'#22c55e', weight:4 }).addTo(viaMap);
+              }
+            } catch {}
+          }, 300);
+        }
+        (async()=>{
+          try {
+            const wps = [];
+            if (rLat!=null && rLon!=null) wps.push([Number(rLat), Number(rLon)]);
+            if (uLat!=null && uLon!=null) wps.push([Number(uLat), Number(uLon)]);
+            if (eLat!=null && eLon!=null) wps.push([Number(eLat), Number(eLon)]);
+            if (wps.length>=2){
+              const q = wps.map(([lat,lon])=> `${lon},${lat}`).join(';');
+              const url = `https://router.project-osrm.org/route/v1/driving/${q}?overview=full&geometries=geojson`;
+              const rr2 = await fetch(url);
+              const jj2 = await rr2.json();
+              const coordsGeo = jj2?.routes?.[0]?.geometry?.coordinates || [];
+              const pts3 = Array.isArray(coordsGeo) ? coordsGeo.map(([lon,lat])=> L.latLng(Number(lat), Number(lon))) : [];
+              if (!viaPoly && pts3.length>=2){
+                viaPrevCoords = pts3;
+                viaPoly = L.polyline(pts3, { color:'#22c55e', weight:4 }).addTo(viaMap);
+                try { if (!viaStartMarker && viaPrevCoords[0]) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+                try { viaMap.fitBounds(viaPoly.getBounds()); } catch {}
+                try { viaMap.invalidateSize(); } catch {}
+                buildMetrics(viaPrevCoords);
+                try {
+                  const coordsToSave = pts3.map(p=> ({ lat: Number(p.lat), lon: Number(p.lng) }));
+                  await fetch(`/api/viajes/${sid}/coords`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ coords: coordsToSave }) });
+                } catch {}
+              }
+            }
+          } catch {}
+        })();
+        try {
+          if (!viaPoly){
+            const raw = [];
+            if (rLat!=null && rLon!=null) raw.push(L.latLng(Number(rLat), Number(rLon)));
+            if (uLat!=null && uLon!=null) raw.push(L.latLng(Number(uLat), Number(uLon)));
+            if (eLat!=null && eLon!=null) raw.push(L.latLng(Number(eLat), Number(eLon)));
+            if (raw.length>=2){
+              viaPoly = L.polyline(raw, { color:'#22c55e', weight:4 }).addTo(viaMap);
+              try { if (!viaStartMarker) { viaStartMarker = L.marker(raw[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+              try { viaMap.fitBounds(viaPoly.getBounds()); } catch {}
+              try { viaMap.invalidateSize(); } catch {}
+              viaPrevCoords = raw;
+              buildMetrics(viaPrevCoords);
+            }
           }
-          const coords = e?.routes?.[0]?.coordinates || [];
-          const pts2 = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : [];
-          viaPrevCoords = pts2;
-        });
+        } catch {}
       }
     } catch {}
     if (viaEventSource) { try { viaEventSource.close(); } catch {} viaEventSource = null; }
@@ -1706,6 +1947,22 @@
           }
           if (!viaSimMarker) { viaSimMarker = L.marker(pt, { icon: recolectorIcon }).addTo(viaMap); }
           else { viaSimMarker.setLatLng(pt); }
+          try {
+            let doneKm = 0;
+            if (!isNaN(idx) && Array.isArray(viaCum) && viaCum[idx]!=null){
+              doneKm = viaCum[idx]/1000;
+            } else if (Array.isArray(viaPrevCoords) && Array.isArray(viaCum)){
+              let best = 0, bd = Infinity;
+              for (let k=0; k<viaPrevCoords.length; k++){
+                const p2 = viaPrevCoords[k];
+                const dd = (p2.lat-pt[0])*(p2.lat-pt[0])+(p2.lng-pt[1])*(p2.lng-pt[1]);
+                if (dd<bd){ bd=dd; best=k; }
+              }
+              doneKm = viaCum[Math.min(best, viaCum.length-1)]/1000;
+            }
+            const leftKm = Math.max(viaTotalKm - doneKm, 0);
+            if (meta) meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Recorrido: <strong>${doneKm.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm.toFixed(2)} km</strong>`;
+          } catch {}
         }
       } catch {}
     };

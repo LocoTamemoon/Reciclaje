@@ -69,6 +69,12 @@ app.post("/api/viajes/:sid/coords", (req, res) => {
   res.json({ ok: true, points: coords.length });
 });
 
+app.get("/api/viajes/:sid/coords", (req, res) => {
+  const sid = Number(req.params.sid);
+  const pts = viajeSimPoints.get(sid) || [];
+  res.json({ points: pts });
+});
+
 async function obtenerPuntosSimulacion(sid: number): Promise<{ lat: number; lon: number }[]> {
   const sRes = await pool.query("SELECT * FROM solicitudes WHERE id=$1", [sid]);
   const s = sRes.rows[0];
@@ -158,9 +164,4 @@ app.use(errorHandler);
 
 app.listen(env.port, () => {
   console.log(`Servidor en puerto ${env.port}`);
-});
-app.get("/api/viajes/:sid/coords", (req, res) => {
-  const sid = Number(req.params.sid);
-  const pts = viajeSimPoints.get(sid) || [];
-  res.json({ points: pts });
 });

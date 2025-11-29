@@ -13,6 +13,11 @@ exports.recolectorRouter.get("/feed", (0, asyncHandler_1.asyncHandler)(async (re
     const list = await (0, solicitudesRepo_1.listarSolicitudesPublicadas)();
     res.json(list);
 }));
+exports.recolectorRouter.get("/:id/en_curso", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const rows = await pool_1.pool.query("SELECT * FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada') ORDER BY creado_en DESC", [id]);
+    res.json(rows.rows);
+}));
 exports.recolectorRouter.post("/:sid/aceptar", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const sid = Number(req.params.sid);
     const { recolector_id, lat, lon } = req.body;
