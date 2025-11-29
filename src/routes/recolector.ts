@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { listarSolicitudesPublicadas, aceptarPorRecolector, actualizarEstadoOperativo, guardarItemsSolicitudJSON, obtenerSolicitud, historialRecolector } from "../repositories/solicitudesRepo";
+import { recalcularClasificacionYFee } from "../services/solicitudesService";
 import { obtenerTransaccionPorSolicitud, obtenerPesajesTransaccion } from "../repositories/transaccionesRepo";
 import { obtenerUsuario } from "../repositories/usuariosRepo";
 import { obtenerEmpresa } from "../repositories/empresasRepo";
@@ -27,7 +28,9 @@ recolectorRouter.post("/:sid/aceptar", asyncHandler(async (req: Request, res: Re
   const { recolector_id, lat, lon } = req.body;
   const s = await aceptarPorRecolector(sid, Number(recolector_id), lat!=null?Number(lat):null, lon!=null?Number(lon):null);
   if (!s) { res.status(409).json({ error: "no_disponible" }); return; }
-  res.json(s);
+  try { await recalcularClasificacionYFee(sid); } catch {}
+  const s2 = await obtenerSolicitud(sid);
+  res.json(s2 || s);
 }));
 
 recolectorRouter.post(":sid/estado", asyncHandler(async (req: Request, res: Response) => {
@@ -76,12 +79,17 @@ recolectorRouter.get("/previsualizacion/:sid", asyncHandler(async (req: Request,
   const empresa = await obtenerEmpresa(Number(s.empresa_id));
   const snapLat = (s as any)?.recolector_accept_lat;
   const snapLon = (s as any)?.recolector_accept_lon;
+  const viewerId = Number((req.query.viewer_id as any) || NaN);
   let recolector: any = null;
   if (snapLat != null && snapLon != null) {
     recolector = { lat: Number(snapLat), lon: Number(snapLon) };
   } else {
-    const rlatlon = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
-    recolector = rlatlon.rows[0] || null;
+    let lookupId = Number(s.recolector_id);
+    if (!lookupId || isNaN(lookupId)) lookupId = !isNaN(viewerId) ? viewerId : NaN;
+    if (lookupId && !isNaN(lookupId)) {
+      const rlatlon = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [lookupId]);
+      recolector = rlatlon.rows[0] || null;
+    }
   }
   const uHomeLat = (usuario && usuario.home_lat !== undefined && usuario.home_lat !== null)
     ? Number(usuario.home_lat)

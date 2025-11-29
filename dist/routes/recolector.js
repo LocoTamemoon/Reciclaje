@@ -4,6 +4,7 @@ exports.recolectorRouter = void 0;
 const express_1 = require("express");
 const asyncHandler_1 = require("../middleware/asyncHandler");
 const solicitudesRepo_1 = require("../repositories/solicitudesRepo");
+const solicitudesService_1 = require("../services/solicitudesService");
 const transaccionesRepo_1 = require("../repositories/transaccionesRepo");
 const usuariosRepo_1 = require("../repositories/usuariosRepo");
 const empresasRepo_1 = require("../repositories/empresasRepo");
@@ -26,7 +27,12 @@ exports.recolectorRouter.post("/:sid/aceptar", (0, asyncHandler_1.asyncHandler)(
         res.status(409).json({ error: "no_disponible" });
         return;
     }
-    res.json(s);
+    try {
+        await (0, solicitudesService_1.recalcularClasificacionYFee)(sid);
+    }
+    catch { }
+    const s2 = await (0, solicitudesRepo_1.obtenerSolicitud)(sid);
+    res.json(s2 || s);
 }));
 exports.recolectorRouter.post(":sid/estado", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const sid = Number(req.params.sid);
@@ -75,13 +81,19 @@ exports.recolectorRouter.get("/previsualizacion/:sid", (0, asyncHandler_1.asyncH
     const empresa = await (0, empresasRepo_1.obtenerEmpresa)(Number(s.empresa_id));
     const snapLat = s?.recolector_accept_lat;
     const snapLon = s?.recolector_accept_lon;
+    const viewerId = Number(req.query.viewer_id || NaN);
     let recolector = null;
     if (snapLat != null && snapLon != null) {
         recolector = { lat: Number(snapLat), lon: Number(snapLon) };
     }
     else {
-        const rlatlon = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
-        recolector = rlatlon.rows[0] || null;
+        let lookupId = Number(s.recolector_id);
+        if (!lookupId || isNaN(lookupId))
+            lookupId = !isNaN(viewerId) ? viewerId : NaN;
+        if (lookupId && !isNaN(lookupId)) {
+            const rlatlon = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [lookupId]);
+            recolector = rlatlon.rows[0] || null;
+        }
     }
     const uHomeLat = (usuario && usuario.home_lat !== undefined && usuario.home_lat !== null)
         ? Number(usuario.home_lat)

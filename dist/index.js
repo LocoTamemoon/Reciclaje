@@ -71,6 +71,11 @@ app.post("/api/viajes/:sid/coords", (req, res) => {
     viajeSimPoints.set(sid, coords);
     res.json({ ok: true, points: coords.length });
 });
+app.get("/api/viajes/:sid/coords", (req, res) => {
+    const sid = Number(req.params.sid);
+    const pts = viajeSimPoints.get(sid) || [];
+    res.json({ points: pts });
+});
 async function obtenerPuntosSimulacion(sid) {
     const sRes = await pool_1.pool.query("SELECT * FROM solicitudes WHERE id=$1", [sid]);
     const s = sRes.rows[0];
@@ -169,15 +174,29 @@ app.post("/api/viajes/:sid/finalizar", (req, res) => {
     viajeSimProgress.delete(sid);
     res.json({ ok: true });
 });
+app.post("/api/viajes/:sid/cancelar", async (req, res) => {
+    const sid = Number(req.params.sid);
+    try {
+        const t = viajeSimTimers.get(sid);
+        if (t) {
+            try {
+                clearInterval(t);
+            }
+            catch { }
+            viajeSimTimers.delete(sid);
+        }
+        viajeSimProgress.delete(sid);
+        await pool_1.pool.query("UPDATE solicitudes SET estado='cancelada', estado_publicacion='cancelada' WHERE id=$1", [sid]);
+        res.json({ ok: true, estado: "cancelada" });
+    }
+    catch (e) {
+        res.status(500).json({ error: "cancel_failed" });
+    }
+});
 app.use((req, res) => {
     res.status(404).sendFile(path_1.default.resolve("public", "404.html"));
 });
 app.use(errorHandler_1.errorHandler);
 app.listen(env_1.env.port, () => {
     console.log(`Servidor en puerto ${env_1.env.port}`);
-});
-app.get("/api/viajes/:sid/coords", (req, res) => {
-    const sid = Number(req.params.sid);
-    const pts = viajeSimPoints.get(sid) || [];
-    res.json({ points: pts });
 });

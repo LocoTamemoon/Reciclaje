@@ -2,6 +2,7 @@ import { obtenerEmpresa, materialesDeEmpresa } from "../repositories/empresasRep
 import { crearSolicitud, crearSolicitudDelivery, actualizarEstadoSolicitud, obtenerSolicitud, guardarItemsSolicitudJSON, cancelarPublicacionSolicitud, republicarSolicitudExpirada } from "../repositories/solicitudesRepo";
 import { obtenerUsuario } from "../repositories/usuariosRepo";
 import { incrementarSolicitudesUsuario } from "../repositories/usuariosRepo";
+import { pool } from "../db/pool";
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
@@ -98,4 +99,37 @@ export async function republicarSolicitudPorUsuario(usuarioId: number, solicitud
   if (String(solicitud.tipo_entrega) !== "delivery" || String(solicitud.estado) !== "expirada") throw new Error("Solicitud no republicable");
   const s = await republicarSolicitudExpirada(solicitudId);
   return s;
+}
+
+export async function recalcularClasificacionYFee(solicitudId: number): Promise<{ banda: string; fee: number; km_total: number } | null> {
+  const s: any = await obtenerSolicitud(solicitudId);
+  if (!s) return null;
+  if (String(s.tipo_entrega) !== "delivery") return null;
+  const usuario = await obtenerUsuario(Number(s.usuario_id));
+  const empresa = await obtenerEmpresa(Number(s.empresa_id));
+  const eLat = empresa?.lat != null ? Number(empresa.lat) : NaN;
+  const eLon = empresa?.lon != null ? Number(empresa.lon) : NaN;
+  const useCur = Boolean(s.usuario_pick_actual);
+  const uHomeLat = usuario?.home_lat != null ? Number(usuario.home_lat) : (usuario?.lat != null ? Number(usuario.lat) : NaN);
+  const uHomeLon = usuario?.home_lon != null ? Number(usuario.home_lon) : (usuario?.lon != null ? Number(usuario.lon) : NaN);
+  const uCurLat = usuario?.current_lat != null ? Number(usuario.current_lat) : NaN;
+  const uCurLon = usuario?.current_lon != null ? Number(usuario.current_lon) : NaN;
+  const uLat = useCur && !isNaN(uCurLat) && !isNaN(uCurLon) ? uCurLat : uHomeLat;
+  const uLon = useCur && !isNaN(uCurLat) && !isNaN(uCurLon) ? uCurLon : uHomeLon;
+  let rLat = s.recolector_accept_lat != null ? Number(s.recolector_accept_lat) : NaN;
+  let rLon = s.recolector_accept_lon != null ? Number(s.recolector_accept_lon) : NaN;
+  if (isNaN(rLat) || isNaN(rLon)) {
+    try {
+      const rRow = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
+      rLat = rRow.rows[0]?.lat != null ? Number(rRow.rows[0].lat) : rLat;
+      rLon = rRow.rows[0]?.lon != null ? Number(rRow.rows[0].lon) : rLon;
+    } catch {}
+  }
+  const kmRU = (!isNaN(rLat) && !isNaN(rLon) && !isNaN(uLat) && !isNaN(uLon)) ? haversineKm(rLat, rLon, uLat, uLon) : 0;
+  const kmUE = (!isNaN(uLat) && !isNaN(uLon) && !isNaN(eLat) && !isNaN(eLon)) ? haversineKm(uLat, uLon, eLat, eLon) : 0;
+  const kmTotal = kmRU + kmUE;
+  const banda = clasificarDistanciaPorKm(kmTotal);
+  const fee = calcularFeePorBanda(banda, kmTotal);
+  await pool.query("UPDATE solicitudes SET clasificacion_distancia=$2, delivery_fee=$3 WHERE id=$1", [solicitudId, banda, fee]);
+  return { banda, fee, km_total: kmTotal };
 }

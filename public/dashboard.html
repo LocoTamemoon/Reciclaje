@@ -529,7 +529,7 @@
         if (rview) rview.hidden = false;
         const solSub2 = document.getElementById('sol-submenu');
         if (solSub2) solSub2.hidden = true;
-        loadRecolectorFeed();
+        try { iniciarUbicacionRecolector(); setTimeout(()=> loadRecolectorFeed(), 400); } catch { loadRecolectorFeed(); }
         return;
       } else {
         const rview = document.getElementById('view-recolector');
@@ -600,6 +600,32 @@
   let recoSimTimer = null;
   let recoEventSource = null;
   let recoSimSid = null;
+
+    function iniciarUbicacionRecolector(){
+      try {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (p)=>{
+              const lat = p.coords.latitude;
+              const lon = p.coords.longitude;
+              fetch(`/api/recolector/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) }).catch(()=>{});
+            },
+            async ()=>{
+              try {
+                const r = await fetch('https://ipapi.co/json');
+                const j = await r.json();
+                const lat = Number(j?.latitude);
+                const lon = Number(j?.longitude);
+                if (!isNaN(lat) && !isNaN(lon)) {
+                  fetch(`/api/recolector/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) }).catch(()=>{});
+                }
+              } catch {}
+            },
+            { enableHighAccuracy:true, timeout:3000 }
+          );
+        }
+      } catch {}
+    }
 
     async function loadEmpresas(){
       const r = await fetch('/api/empresas', { headers: authHeaders() });
@@ -735,7 +761,7 @@
         li.innerHTML = `<div class="row" style="justify-content:space-between;">
           <div>
             <div><strong>Solicitud #${s.id}</strong> → Empresa ${s.empresa_id}</div>
-            <div class="muted">Clasificación: ${s.clasificacion_distancia||'—'} · Fee: S/ ${Number(s.delivery_fee||0).toFixed(2)}</div>
+            <div class="muted" data-sid="${s.id}">Clasificación: ${s.clasificacion_distancia||'—'} · Fee: S/ ${Number(s.delivery_fee||0).toFixed(2)}</div>
           </div>
           <div class="right">
             <button class="btn" onclick="recolectorAceptar(${s.id})">Aceptar</button>
@@ -744,6 +770,43 @@
           </div>
         </div>`;
         ul.appendChild(li);
+        (async function(){
+          try {
+            const pr = await fetch(`/api/recolector/previsualizacion/${s.id}?viewer_id=${user.id}`, { headers: authHeaders() });
+            const pj = await pr.json();
+            const rLat = pj?.recolector?.lat; const rLon = pj?.recolector?.lon;
+            const uLat = pj?.usuario?.lat; const uLon = pj?.usuario?.lon;
+            const eLat = pj?.empresa?.lat; const eLon = pj?.empresa?.lon;
+            let kmRU = Number(pj?.dist_recolector_usuario_km || 0);
+            let kmUE = Number(pj?.dist_usuario_empresa_km || 0);
+            let kmRUroute = NaN, kmUEroute = NaN;
+            if (rLat!=null && rLon!=null && uLat!=null && uLon!=null) {
+              const qRU = `${Number(rLon)},${Number(rLat)};${Number(uLon)},${Number(uLat)}`;
+              try {
+                const ruResp = await fetch(`https://router.project-osrm.org/route/v1/driving/${qRU}?overview=false`);
+                const ruJson = await ruResp.json();
+                kmRUroute = Number(ruJson?.routes?.[0]?.distance||NaN)/1000;
+              } catch {}
+            }
+            if (uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
+              const qUE = `${Number(uLon)},${Number(uLat)};${Number(eLon)},${Number(eLat)}`;
+              try {
+                const ueResp = await fetch(`https://router.project-osrm.org/route/v1/driving/${qUE}?overview=false`);
+                const ueJson = await ueResp.json();
+                kmUEroute = Number(ueJson?.routes?.[0]?.distance||NaN)/1000;
+              } catch {}
+            }
+            const kmRUfinal = !isNaN(kmRUroute) ? kmRUroute : kmRU;
+            const kmUEfinal = !isNaN(kmUEroute) ? kmUEroute : kmUE;
+            const kmTotal = (isNaN(kmRUfinal)?0:kmRUfinal) + (isNaN(kmUEfinal)?0:kmUEfinal);
+            function clasificarDistanciaPorKm(km){ if (km <= 2) return 'ideal'; if (km <= 6) return 'normal'; return 'larga'; }
+            function calcularFeePorBanda(banda, km){ let min=0,max=0,span=0; if (banda==='ideal'){min=3.5;max=4.0;span=2;} else if (banda==='normal'){min=4.5;max=6.0;span=4;} else {min=6.0;max=8.0;span=12;} let f=0; if (banda==='ideal') f=Math.min(km/2,1); else if (banda==='normal') f=Math.min((km-2)/(6-2),1); else f=Math.min((km-6)/span,1); const bruto=min+(max-min)*Math.max(0,Math.min(1,f)); const rounded=Math.round(bruto*10)/10; return Math.min(rounded,max); }
+            const banda = clasificarDistanciaPorKm(kmTotal);
+            const fee = calcularFeePorBanda(banda, kmTotal);
+            const el = li.querySelector('.muted[data-sid="'+s.id+'"]');
+            if (el) el.textContent = `Clasificación: ${banda} · Fee: S/ ${fee.toFixed(2)} · Recolector→Usuario: ${(!isNaN(kmRUfinal)?kmRUfinal:0).toFixed(2)} km · Usuario→Empresa: ${(!isNaN(kmUEfinal)?kmUEfinal:0).toFixed(2)} km · Total: ${kmTotal.toFixed(2)} km`;
+          } catch {}
+        })();
       });
       try{
         const rc = await fetch(`/api/recolector/${user.id}/en_curso`, { headers: authHeaders() });
@@ -794,7 +857,7 @@
       const panel = document.getElementById('reco-preview');
       if (panel && panel.style.display !== 'none' && recoPrevSid === sid) { clearRecoPreview(); return; }
       panel.style.display = 'block';
-      const r = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+      const r = await fetch(`/api/recolector/previsualizacion/${sid}?viewer_id=${user.id}`, { headers: authHeaders() });
       const j = await r.json();
       let rLat = null, rLon = null;
       try {
@@ -848,7 +911,7 @@
           if (sum) {
             const km = (sum.totalDistance/1000).toFixed(2);
             const min = Math.round(sum.totalTime/60);
-            meta.innerHTML = `Objetivo: <strong>Usuario</strong> → <strong>Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
+            meta.innerHTML = `Objetivo: <strong>Recolector → Usuario → Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
           }
           const coords = e?.routes?.[0]?.coordinates || [];
           recoPrevCoords = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : null;
@@ -861,7 +924,8 @@
       if (!recoPrevMap || !recoPrevCoords || recoPrevCoords.length < 2) return;
       if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
       if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
-      recoSimMarker = L.circleMarker(recoPrevCoords[0], { radius: 6, color: '#0ea5e9', fillColor:'#0ea5e9', fillOpacity:1 }).addTo(recoPrevMap);
+      const partidaIconSim = L.icon({ iconUrl: '/img/partida.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+      recoSimMarker = L.marker(recoPrevCoords[0], { icon: partidaIconSim }).addTo(recoPrevMap);
       let i = 0;
       recoSimTimer = setInterval(()=>{
         i++;
@@ -949,7 +1013,7 @@
         const rr = await fetch(`/api/viajes/${sid}/coords`, { headers: authHeaders() });
         const jj = await rr.json();
         const pts = Array.isArray(jj?.points) ? jj.points.map(p=> L.latLng(Number(p.lat), Number(p.lon))) : [];
-        const pr = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+        const pr = await fetch(`/api/recolector/previsualizacion/${sid}?viewer_id=${user.id}`, { headers: authHeaders() });
         const pj = await pr.json();
         const rLat = pj?.recolector?.lat ?? null;
         const rLon = pj?.recolector?.lon ?? null;
@@ -1055,7 +1119,7 @@
       try {
         let coords = [];
         try {
-          const pr = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+          const pr = await fetch(`/api/recolector/previsualizacion/${sid}?viewer_id=${user.id}`, { headers: authHeaders() });
           const pj = await pr.json();
           const rLat = pj?.recolector?.lat ?? null;
           const rLon = pj?.recolector?.lon ?? null;
@@ -1742,7 +1806,7 @@
     if (modal && !modal.hidden && usrSid === sid) { closeViaje(); return; }
     if (modal) modal.hidden = false;
     try { const mapDiv = document.getElementById('usr-map-viaje'); if (mapDiv) mapDiv.style.minHeight = '300px'; } catch {}
-    const r = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+    const r = await fetch(`/api/recolector/previsualizacion/${sid}?viewer_id=${user.id}`, { headers: authHeaders() });
     const j = await r.json();
     const rLat = j?.recolector?.lat ?? null;
     const rLon = j?.recolector?.lon ?? null;
@@ -1997,7 +2061,7 @@
     let uLat = null, uLon = null;
     let eLat = null, eLon = null;
     try {
-      const r = await fetch(`/api/recolector/previsualizacion/${sid}`, { headers: authHeaders() });
+      const r = await fetch(`/api/recolector/previsualizacion/${sid}?viewer_id=${user.id}`, { headers: authHeaders() });
       const j = await r.json();
       uLat = (j?.usuario_actual?.lat ?? null);
       uLon = (j?.usuario_actual?.lon ?? null);
