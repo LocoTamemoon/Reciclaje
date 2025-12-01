@@ -1738,6 +1738,8 @@
   let viaProgIdx = 0;
   let viaLastSentIdx = -1;
   let viaLastPt = null;
+  let viaHoldTimer = null;
+  let viaPlaceTick = null;
   let rutaMap = null;
   let rutaRouteCtrl = null;
   let rutaLayer = null;
@@ -2151,6 +2153,8 @@
     if (viaStartMarker) { try { viaStartMarker.remove(); } catch {} viaStartMarker = null; }
     if (viaSimMarker) { viaSimMarker.remove(); viaSimMarker = null; }
     if (viaSimTimer) { clearInterval(viaSimTimer); viaSimTimer = null; }
+    if (viaHoldTimer) { try { clearInterval(viaHoldTimer); } catch {} viaHoldTimer = null; }
+    if (viaPlaceTick) { try { clearTimeout(viaPlaceTick); } catch {} viaPlaceTick = null; }
     if (viaEventSource) { try { viaEventSource.close(); } catch {} viaEventSource = null; }
     if (viaMap) { viaMap.remove(); viaMap = null; }
     usrSid = null;
@@ -2263,12 +2267,26 @@
         buildMetrics(viaPrevCoords);
         try {
           if (viaPausedAtUser){
-            const hold = (rLat!=null && rLon!=null) ? snapToRoute(Number(rLat), Number(rLon)) : (Array.isArray(viaPrevCoords) && viaPrevCoords.length>0 ? [viaPrevCoords[0].lat, viaPrevCoords[0].lng] : null);
+            let hold = null;
+            if (rLat!=null && rLon!=null) {
+              hold = snapToRoute(Number(rLat), Number(rLon));
+            } else if (Array.isArray(viaPrevCoords) && viaPrevCoords.length>0 && uLat!=null && uLon!=null) {
+              let best = 0, bd = Infinity;
+              for (let k=0; k<viaPrevCoords.length; k++){
+                const p = viaPrevCoords[k];
+                const dd = (p.lat-Number(uLat))*(p.lat-Number(uLat))+(p.lng-Number(uLon))*(p.lng-Number(uLon));
+                if (dd<bd){ bd=dd; best=k; }
+              }
+              const bp = viaPrevCoords[best];
+              hold = [bp.lat, bp.lng];
+            }
             if (hold){
-              placeSimMarker(hold);
+              ensureHoldMarker(hold);
+              viaLastPt = hold;
               const doneKm2 = computeDoneKmFromPt(hold);
               const leftKm2 = Math.max(viaTotalKm - doneKm2, 0);
               if (meta) meta.innerHTML = `Detenido en usuario: <strong>Esperando confirmaciones</strong> · Recorrido: <strong>${doneKm2.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm2.toFixed(2)} km</strong>`;
+              try { viaMap.invalidateSize(); } catch {}
             }
           }
         } catch {}
@@ -2389,13 +2407,28 @@
       const bp = viaPrevCoords[best];
       return [bp.lat, bp.lng];
     }
-    function placeSimMarker(pt){
-      try {
-        if (!pt) return;
-        if (!viaSimMarker) { viaSimMarker = L.marker(pt, { icon: recolectorIcon, zIndexOffset: 1000 }).addTo(viaMap); }
-        else { viaSimMarker.setLatLng(pt); }
-      } catch {}
-    }
+  function placeSimMarker(pt){
+    try {
+      if (!pt) return;
+      if (!viaSimMarker) { viaSimMarker = L.marker(pt, { icon: recolectorIcon, zIndexOffset: 1000 }).addTo(viaMap); }
+      else { viaSimMarker.setLatLng(pt); }
+    } catch {}
+  }
+  function placeSimMarkerDebounced(pt){
+    try {
+      if (!pt) return;
+      if (viaPlaceTick) { try{ clearTimeout(viaPlaceTick); }catch{} }
+      viaPlaceTick = setTimeout(()=>{ try { placeSimMarker(pt); } catch {} }, 33);
+    } catch {}
+  }
+  function ensureHoldMarker(pt){
+    try {
+      if (!pt) return;
+      placeSimMarker(pt);
+      if (viaHoldTimer) { try{ clearInterval(viaHoldTimer); }catch{} viaHoldTimer = null; }
+      viaHoldTimer = setInterval(()=>{ try { if (viaSimMarker) { viaSimMarker.setLatLng(pt); } else { placeSimMarker(pt); } } catch {} }, 1000);
+    } catch {}
+  }
     function computeDoneKmFromPt(pt){
       try {
         if (!pt || !Array.isArray(viaPrevCoords) || !Array.isArray(viaCum)) return 0;
@@ -2451,7 +2484,7 @@
               fetch(`/api/recolector/${recoId}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat: pt[0], lon: pt[1] }) });
             }
           } catch {}
-          placeSimMarker(pt);
+          placeSimMarkerDebounced(pt);
           try {
             let doneKm = 0;
             if (progressIdx!=null && Array.isArray(viaCum) && viaCum[progressIdx]!=null){
@@ -2482,7 +2515,8 @@
                   const leftKm = Math.max(viaTotalKm - doneKm, 0);
                   meta.innerHTML = `Detenido en usuario: <strong>Esperando confirmaciones</strong> · Recorrido: <strong>${doneKm.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm.toFixed(2)} km</strong>`;
                 }
-                placeSimMarker(viaLastPt || pt);
+                ensureHoldMarker(viaLastPt || pt);
+                try { viaMap.invalidateSize(); } catch {}
                 if (viaResumePoll) { try{ clearInterval(viaResumePoll); }catch{} }
                 viaResumePoll = setInterval(async ()=>{
                   try {
@@ -2494,9 +2528,11 @@
                     if ((ok1 && ok2) || est==='rumbo_a_empresa'){
                       clearInterval(viaResumePoll); viaResumePoll = null;
                       viaPausedAtUser = false;
-                      placeSimMarker(viaLastPt || pt);
+                      if (viaHoldTimer) { try{ clearInterval(viaHoldTimer); }catch{} viaHoldTimer = null; }
+                      placeSimMarkerDebounced(viaLastPt || pt);
                       console.log('viaje_resume', { sid });
                       if (meta) meta.innerHTML = `En camino a empresa: <strong>Confirmaciones recibidas</strong>`;
+                      try { viaMap.invalidateSize(); } catch {}
                     }
                   } catch {}
                 }, 1500);
