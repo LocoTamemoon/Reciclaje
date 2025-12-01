@@ -49,7 +49,7 @@ exports.recolectorRouter.post("/:sid/aceptar", (0, asyncHandler_1.asyncHandler)(
     catch (e) {
         console.log("reco_aceptar_err", { sid, message: String(e?.message || '') });
         const msg = String(e?.message || '');
-        if (msg === 'vehiculo_invalido' || msg === 'capacidad_insuficiente') {
+        if (msg === 'vehiculo_invalido' || msg === 'capacidad_insuficiente' || msg === 'vehiculo_obligatorio' || msg === 'recolector_ocupado') {
             res.status(422).json({ error: msg });
             return;
         }

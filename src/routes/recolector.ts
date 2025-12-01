@@ -53,7 +53,7 @@ recolectorRouter.post("/:sid/aceptar", asyncHandler(async (req: Request, res: Re
   } catch (e: any) {
     console.log("reco_aceptar_err", { sid, message: String(e?.message||'') });
     const msg = String(e?.message||'');
-    if (msg === 'vehiculo_invalido' || msg === 'capacidad_insuficiente') { res.status(422).json({ error: msg }); return; }
+    if (msg === 'vehiculo_invalido' || msg === 'capacidad_insuficiente' || msg === 'vehiculo_obligatorio' || msg === 'recolector_ocupado') { res.status(422).json({ error: msg }); return; }
     throw e;
   }
   if (!s) { res.status(409).json({ error: "no_disponible" }); return; }

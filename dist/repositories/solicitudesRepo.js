@@ -45,6 +45,21 @@ async function aceptarPorRecolector(id, recolectorId, vehiculoId, lat, lon) {
     await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS recolector_accept_lat NUMERIC(9,6)");
     await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS recolector_accept_lon NUMERIC(9,6)");
     await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS vehiculo_id INTEGER");
+    const busy = await pool_1.pool.query("SELECT 1 FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada') LIMIT 1", [recolectorId]);
+    if (busy.rows[0]) {
+        throw Object.assign(new Error("recolector_ocupado"), { code: 422 });
+    }
+    const sRow = await pool_1.pool.query("SELECT tipo_entrega, items_json FROM solicitudes WHERE id=$1", [id]);
+    const tipoEntrega = String(sRow.rows[0]?.tipo_entrega || '');
+    const itemsRaw = sRow.rows[0]?.items_json || null;
+    let kgTotal = 0;
+    if (itemsRaw) {
+        try {
+            const arr = Array.isArray(itemsRaw) ? itemsRaw : JSON.parse(itemsRaw);
+            kgTotal = arr.reduce((acc, it) => acc + Number(it.kg || 0), 0);
+        }
+        catch { }
+    }
     let snapLat = lat != null ? Number(lat) : null;
     let snapLon = lon != null ? Number(lon) : null;
     if (snapLat == null || snapLon == null) {
@@ -53,21 +68,25 @@ async function aceptarPorRecolector(id, recolectorId, vehiculoId, lat, lon) {
         snapLon = r.rows[0]?.lon != null ? Number(r.rows[0].lon) : snapLon;
     }
     let vehId = vehiculoId != null ? Number(vehiculoId) : null;
-    if (vehId != null && !isNaN(vehId)) {
+    if (tipoEntrega === 'delivery') {
+        if (vehId == null || isNaN(vehId)) {
+            throw Object.assign(new Error("vehiculo_obligatorio"), { code: 422 });
+        }
         const vRes = await pool_1.pool.query("SELECT id, capacidad_kg FROM vehiculos WHERE id=$1 AND recolector_id=$2 AND activo=true", [vehId, recolectorId]);
         const v = vRes.rows[0];
         if (!v) {
             throw Object.assign(new Error("vehiculo_invalido"), { code: 422 });
         }
-        const sRes = await pool_1.pool.query("SELECT items_json FROM solicitudes WHERE id=$1", [id]);
-        const items = sRes.rows[0]?.items_json || null;
-        let kgTotal = 0;
-        if (items) {
-            try {
-                const arr = Array.isArray(items) ? items : JSON.parse(items);
-                kgTotal = arr.reduce((acc, it) => acc + Number(it.kg || 0), 0);
-            }
-            catch { }
+        const capacidad = Number(v.capacidad_kg || 0);
+        if (kgTotal > 0 && capacidad > 0 && kgTotal > capacidad) {
+            throw Object.assign(new Error("capacidad_insuficiente"), { code: 422 });
+        }
+    }
+    else if (vehId != null && !isNaN(vehId)) {
+        const vRes = await pool_1.pool.query("SELECT id, capacidad_kg FROM vehiculos WHERE id=$1 AND recolector_id=$2 AND activo=true", [vehId, recolectorId]);
+        const v = vRes.rows[0];
+        if (!v) {
+            throw Object.assign(new Error("vehiculo_invalido"), { code: 422 });
         }
         const capacidad = Number(v.capacidad_kg || 0);
         if (kgTotal > 0 && capacidad > 0 && kgTotal > capacidad) {

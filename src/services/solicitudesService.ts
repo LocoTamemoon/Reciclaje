@@ -108,6 +108,14 @@ export async function crearNuevaSolicitud(usuarioId: number, empresaId: number, 
   if (!empresa) throw new Error("Empresa no encontrada");
   let solicitud: any;
   if (delivery) {
+    await pool.query("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS delivery_cooldown_until TIMESTAMPTZ");
+    const cd = await pool.query("SELECT delivery_cooldown_until FROM usuarios WHERE id=$1", [usuarioId]);
+    const until = cd.rows[0]?.delivery_cooldown_until ? new Date(cd.rows[0].delivery_cooldown_until) : null;
+    if (until && until.getTime() > Date.now()) {
+      const err = new Error("delivery_cooldown");
+      (err as any).retry_after_sec = Math.ceil((until.getTime() - Date.now())/1000);
+      throw err;
+    }
     const mats = await materialesDeEmpresa(empresaId);
     const precioMap = new Map<number, number>();
     for (const m of mats) precioMap.set(Number(m.material_id), Number(m.precio_por_kg));
@@ -154,9 +162,20 @@ export async function cancelarSolicitudPorUsuario(usuarioId: number, solicitudId
   const solicitud = await obtenerSolicitud(solicitudId);
   if (!solicitud || solicitud.usuario_id !== usuarioId) throw new Error("Solicitud no válida");
   if (String(solicitud.tipo_entrega) === "delivery") {
-    if (String(solicitud.estado) !== 'pendiente_delivery' || String(solicitud.estado_publicacion) !== 'publicada') throw new Error("Solicitud no cancelable");
-    const s = await cancelarPublicacionSolicitud(solicitudId);
-    return s;
+    await pool.query("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS delivery_cooldown_until TIMESTAMPTZ");
+    const estado = String(solicitud.estado||'');
+    const pub = String(solicitud.estado_publicacion||'');
+    if (estado === 'pendiente_delivery' && pub === 'publicada') {
+      const s = await cancelarPublicacionSolicitud(solicitudId);
+      await pool.query("UPDATE usuarios SET delivery_cooldown_until = NOW() + INTERVAL '1 minute' WHERE id=$1", [usuarioId]);
+      return s;
+    }
+    if (estado === 'rumbo_usuario' || estado === 'cerca_usuario') {
+      const s = await cancelarPublicacionSolicitud(solicitudId);
+      await pool.query("UPDATE usuarios SET delivery_cooldown_until = NOW() + INTERVAL '1 minute' WHERE id=$1", [usuarioId]);
+      return s;
+    }
+    throw new Error("Solicitud no cancelable");
   }
   if (solicitud.estado !== "pendiente_empresa") throw new Error("Solicitud no cancelable");
   return await actualizarEstadoSolicitud(solicitudId, "cancelada");

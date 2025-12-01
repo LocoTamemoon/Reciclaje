@@ -10,5 +10,10 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     res.status(400).json({ error: "delivery_min_total" });
     return;
   }
+  if (String(err?.message) === "delivery_cooldown") {
+    const retry = Number((err as any)?.retry_after_sec || 60);
+    res.status(429).json({ error: "delivery_cooldown", retry_after_sec: retry });
+    return;
+  }
   res.status(500).json({ error: "internal_error", message: err?.message || "Error" });
 }

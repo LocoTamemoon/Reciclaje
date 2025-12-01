@@ -112,6 +112,11 @@
             <button class="btn secondary" onclick="loadRecolectorFeed()">Actualizar</button>
           </div>
         </div>
+        <div class="row" style="gap:8px; align-items:center; margin-top:8px;">
+          <div class="muted">Vehículo activo:</div>
+          <select id="reco-vehiculo" style="min-width:220px;"></select>
+          <button class="btn secondary" onclick="loadVehiculosRecolector()">Actualizar vehículos</button>
+        </div>
         <div id="reco-current" class="card" style="display:none; margin-top:8px;">
           <div class="row jc-between ai-center">
             <div>Trabajo en curso · Solicitud <strong id="reco-current-sid">—</strong></div>
@@ -558,6 +563,7 @@
         if (rview) rview.hidden = false;
         const solSub2 = document.getElementById('sol-submenu');
         if (solSub2) solSub2.hidden = true;
+        try { loadVehiculosRecolector(); } catch {}
         try { iniciarUbicacionRecolector(); setTimeout(()=> loadRecolectorFeed(), 400); } catch { loadRecolectorFeed(); }
         try { const last = localStorage.getItem('last_reco_sid'); if (last && !isNaN(Number(last))) { setTimeout(()=>{ try{ recoVerUbicacion(Number(last)); }catch{} }, 500); } } catch {}
         return;
@@ -1019,8 +1025,42 @@
       let j;
       try { j = await r.json(); } catch { j = {}; }
       if (j?.error === 'delivery_min_total') { alert('Para solicitar delivery el total mínimo es S/ 35'); return; }
+      if (j?.error === 'delivery_cooldown') {
+        const secs = Number(j?.retry_after_sec||60);
+        showErrorBox('Penalidad activa', `No puedes solicitar delivery por ${secs} segundos`);
+        return;
+      }
       alert('Solicitud creada: #'+j.id);
       setView('solicitudes');
+    }
+
+    async function loadVehiculosRecolector(){
+      try {
+        const sel = document.getElementById('reco-vehiculo');
+        if (!sel) return;
+        sel.innerHTML = '';
+        const r = await fetch(`/api/recolector/${user.id}/vehiculos`, { headers: authHeaders() });
+        const list = await r.json();
+        const actives = Array.isArray(list) ? list.filter(v=> Boolean(v?.activo)) : [];
+        const saved = Number(localStorage.getItem('reco_vehiculo_id')||'');
+        actives.forEach(v=>{
+          const opt = document.createElement('option');
+          opt.value = String(v.id);
+          opt.textContent = `${v.placa||('Vehículo '+v.id)} · ${Number(v.capacidad_kg||0)} kg`;
+          sel.appendChild(opt);
+        });
+        if (actives.length===0){
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'Sin vehículos activos';
+          sel.appendChild(opt);
+        }
+        if (!Number.isNaN(saved)) {
+          const ok = actives.some(v=> Number(v.id)===saved);
+          if (ok) sel.value = String(saved);
+        }
+        sel.onchange = ()=>{ const v = Number(sel.value||''); if (!Number.isNaN(v)) localStorage.setItem('reco_vehiculo_id', String(v)); };
+      } catch {}
     }
 
     async function loadRecolectorFeed(){
@@ -1385,7 +1425,10 @@
     }
 
     async function recolectorAceptar(sid){
-      const body = { recolector_id: user.id };
+      const selVeh = document.getElementById('reco-vehiculo');
+      const vehId = selVeh && selVeh.value ? Number(selVeh.value) : NaN;
+      if (Number.isNaN(vehId)) { showErrorBox('Vehículo obligatorio', 'Debes seleccionar un vehículo activo para aceptar el delivery.'); return; }
+      const body = { recolector_id: user.id, vehiculo_id: vehId };
       try {
         await new Promise((resolve)=>{
           if (!navigator.geolocation) return resolve(null);
@@ -1401,10 +1444,30 @@
               Array.from(ul.children).forEach((eli)=>{ const m = eli.querySelector(`.muted[data-sid="${sid}"]`); if (m) eli.remove(); });
             }
           } catch {}
-          alert('Ya no está disponible');
+          showErrorBox('No disponible', 'La solicitud ya no está disponible');
           return;
         }
-        try { const j2 = await r.json(); if (j2?.error) alert('Error: '+String(j2.error)); else alert('Error al aceptar'); } catch { alert('Error al aceptar'); }
+        try {
+          const j2 = await r.json();
+          const code = String(j2?.error||'');
+          const msgMap = {
+            vehiculo_obligatorio: 'Debes seleccionar un vehículo activo para aceptar el delivery.',
+            capacidad_insuficiente: 'La capacidad de carga de tu vehiculo actual no es la optima para aceptar este pedido',
+            vehiculo_invalido: 'El vehículo seleccionado no es válido o no está activo.',
+            recolector_ocupado: 'Ya tienes un viaje en curso. Finaliza antes de aceptar otro.'
+          };
+          const titleMap = {
+            vehiculo_obligatorio: 'Vehículo obligatorio',
+            capacidad_insuficiente: 'Capacidad insuficiente',
+            vehiculo_invalido: 'Vehículo inválido',
+            recolector_ocupado: 'Recolector ocupado'
+          };
+          const title = titleMap[code] || 'No se pudo aceptar';
+          const message = msgMap[code] || 'Intenta de nuevo más tarde.';
+          showErrorBox(title, message);
+        } catch {
+          showErrorBox('No se pudo aceptar', 'Ocurrió un error al aceptar la solicitud');
+        }
         return;
       }
       const j = await r.json();
@@ -1477,6 +1540,46 @@
             li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${sid})">Ver viaje</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
           }
         } catch {}
+      } catch {}
+    }
+
+    function showErrorBox(title, message){
+      try {
+        const wrap = document.createElement('div');
+        wrap.style.position = 'fixed';
+        wrap.style.top = '0';
+        wrap.style.left = '0';
+        wrap.style.right = '0';
+        wrap.style.bottom = '0';
+        wrap.style.background = 'rgba(0,0,0,0.4)';
+        wrap.style.zIndex = '9999';
+        wrap.style.display = 'flex';
+        wrap.style.alignItems = 'center';
+        wrap.style.justifyContent = 'center';
+        const box = document.createElement('div');
+        box.style.background = '#1f2937';
+        box.style.color = '#fff';
+        box.style.minWidth = '280px';
+        box.style.maxWidth = '420px';
+        box.style.padding = '16px';
+        box.style.borderRadius = '8px';
+        box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
+        const h = document.createElement('div');
+        h.style.fontWeight = '600';
+        h.style.marginBottom = '8px';
+        h.textContent = title;
+        const p = document.createElement('div');
+        p.textContent = message;
+        p.style.marginBottom = '12px';
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = 'Entendido';
+        btn.onclick = ()=>{ try{ document.body.removeChild(wrap); }catch{} };
+        box.appendChild(h);
+        box.appendChild(p);
+        box.appendChild(btn);
+        wrap.appendChild(box);
+        document.body.appendChild(wrap);
       } catch {}
     }
 
@@ -1665,6 +1768,7 @@
       const r = await fetch(`/api/solicitudes/${sid}/cancelar`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: user.id }) });
       const j = await r.json();
       alert('Solicitud cancelada: #'+j.id);
+      try { showErrorBox('Penalidad aplicada', 'No podrás solicitar delivery durante 1 minuto'); } catch {}
       loadSolicitudes();
     }
     async function usuarioRepublicarSolicitud(sid){
