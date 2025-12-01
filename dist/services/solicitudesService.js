@@ -24,7 +24,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 exports.NEAR_USER_KM = 0.8;
-exports.AT_USER_KM = 0.05;
+exports.AT_USER_KM = 0.1;
 exports.NEAR_EMP_KM = 0.8;
 exports.ARRIVE_EMP_KM = 0.1;
 async function updateDeliveryProximityAndState(sid, lat, lon) {

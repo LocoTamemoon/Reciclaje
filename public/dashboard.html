@@ -808,13 +808,6 @@
             } catch {}
             if (show) actionHtml = `<button class=\"btn\" onclick=\"notifAction(${sid}, 'recolector_confirmo_recojo', '${liId}', ${nid!=null?nid:'null'})\">Confirmar recojo</button>`;
           } else if (n.tipo === 'llego_empresa' && role === 'recolector'){
-            let show = !Boolean(n?.leido);
-            try {
-              const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
-              const est3 = String(sj?.estado||'');
-              if (['empresa_confirmo_recepcion','completada','rechazada','cancelada','expirada'].includes(est3)) show = false;
-            } catch {}
-            if (show) actionHtml = `<button class=\"btn\" onclick=\"notifAction(${sid}, 'entregado_empresa', '${liId}', ${nid!=null?nid:'null'})\">Marcar entregado</button>`;
           } else if (n.tipo === 'entregado' && role === 'empresa'){
             let show = true;
             if (Boolean(n?.leido)) show = false;
@@ -2481,7 +2474,7 @@
               const dUserM = distanciaMetros(pt[0], pt[1], Number(viaUserLat), Number(viaUserLon));
               const dKm = dUserM/1000;
               console.log('viaje_dist_usuario', { sid, dKm });
-              if (dKm <= 0.8){
+              if (dKm <= 0.1){
                 viaPausedAtUser = true;
                 console.log('viaje_paused_at_usuario', { sid });
                 if (meta) {
@@ -2514,7 +2507,7 @@
             if (viaEmpLat!=null && viaEmpLon!=null){
               const dEmpM = distanciaMetros(pt[0], pt[1], Number(viaEmpLat), Number(viaEmpLon));
               const dEmpKm = dEmpM/1000;
-              if (dEmpKm <= 0.05){
+              if (dEmpKm <= 0.1){
                 const doneKmE = computeDoneKmFromPt(viaLastPt || pt);
                 const leftKmE = Math.max(viaTotalKm - doneKmE, 0);
                 if (meta) meta.innerHTML = `Llegó a empresa: <strong>Esperando confirmaciones</strong> · Recorrido: <strong>${doneKmE.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKmE.toFixed(2)} km</strong>`;

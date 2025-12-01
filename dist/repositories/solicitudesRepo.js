@@ -30,7 +30,7 @@ async function obtenerSolicitud(id) {
 }
 async function solicitudesPendientesEmpresa(empresaId) {
     await pool_1.pool.query("UPDATE solicitudes SET estado='expirada', estado_publicacion='expirada' WHERE tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada' AND publicacion_expira_en IS NOT NULL AND publicacion_expira_en <= NOW()");
-    const res = await pool_1.pool.query("SELECT * FROM solicitudes WHERE empresa_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND estado IN ('llego_empresa') AND estado NOT IN ('completada','rechazada','cancelada','expirada')) ) ORDER BY creado_en DESC", [empresaId]);
+    const res = await pool_1.pool.query("SELECT * FROM solicitudes WHERE empresa_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND estado IN ('llego_empresa','entregado_empresa') AND estado NOT IN ('empresa_confirmo_recepcion','completada','rechazada','cancelada','expirada')) ) ORDER BY creado_en DESC", [empresaId]);
     return res.rows;
 }
 async function actualizarEstadoSolicitud(id, estado) {

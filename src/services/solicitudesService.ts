@@ -15,7 +15,7 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
 }
 
 export const NEAR_USER_KM = 0.8;
-export const AT_USER_KM = 0.05;
+export const AT_USER_KM = 0.1;
 export const NEAR_EMP_KM = 0.8;
 export const ARRIVE_EMP_KM = 0.1;
 
