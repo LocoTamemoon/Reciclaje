@@ -36,7 +36,7 @@ export async function solicitudesPendientesEmpresa(empresaId: number) {
     "UPDATE solicitudes SET estado='expirada', estado_publicacion='expirada' WHERE tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada' AND publicacion_expira_en IS NOT NULL AND publicacion_expira_en <= NOW()"
   );
   const res = await pool.query(
-    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector') ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND estado IN ('llego_empresa') AND estado NOT IN ('completada','rechazada','cancelada','expirada')) ) ORDER BY creado_en DESC",
     [empresaId]
   );
   return res.rows;
@@ -91,7 +91,7 @@ export async function aceptarPorRecolector(id: number, recolectorId: number, veh
     vehId = null;
   }
   const res = await pool.query(
-    "UPDATE solicitudes SET estado_publicacion='aceptada_recolector', recolector_id=$2, vehiculo_id=$5, estado='pendiente_empresa', recolector_accept_lat=$3, recolector_accept_lon=$4 WHERE id=$1 AND estado_publicacion='publicada' RETURNING *",
+    "UPDATE solicitudes SET estado_publicacion='aceptada_recolector', recolector_id=$2, vehiculo_id=$5, estado='rumbo_usuario', recolector_accept_lat=$3, recolector_accept_lon=$4 WHERE id=$1 AND estado_publicacion='publicada' RETURNING *",
     [id, recolectorId, snapLat, snapLon, vehId]
   );
   return res.rows[0] || null;

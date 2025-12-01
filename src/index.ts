@@ -11,6 +11,7 @@ import { transaccionesRouter } from "./routes/transacciones";
 import { materialesRouter } from "./routes/materiales";
 import { recolectorRouter } from "./routes/recolector";
 import { pool } from "./db/pool";
+import { updateDeliveryProximityAndState } from "./services/solicitudesService";
 
 const app = express();
 app.use(express.json());
@@ -36,6 +37,7 @@ const viajeSimPoints: Map<number, { lat: number; lon: number }[]> = new Map();
 
 app.get("/api/viajes/:sid/stream", (req, res) => {
   const sid = Number(req.params.sid);
+  console.log("viajes_stream_subscribe", { sid });
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -43,6 +45,7 @@ app.get("/api/viajes/:sid/stream", (req, res) => {
   if (!viajeStreams.has(sid)) viajeStreams.set(sid, set);
   set.add(res);
   req.on("close", () => {
+    console.log("viajes_stream_unsubscribe", { sid });
     const s = viajeStreams.get(sid);
     if (s) s.delete(res);
   });
@@ -51,14 +54,32 @@ app.get("/api/viajes/:sid/stream", (req, res) => {
 app.post("/api/viajes/:sid/posicion", (req, res) => {
   const sid = Number(req.params.sid);
   const { lat, lon, phase, i } = req.body || {};
-  const payload = JSON.stringify({ sid, lat: lat!=null?Number(lat):null, lon: lon!=null?Number(lon):null, phase: phase||null, i: i!=null?Number(i):null, ts: Date.now() });
+  console.log("viajes_posicion_in", { sid, lat, lon, phase, i });
   const set = viajeStreams.get(sid);
-  if (set) {
-    set.forEach((r) => {
-      try { r.write(`data: ${payload}\n\n`); } catch {}
-    });
+  try {
+    const latNum = lat!=null?Number(lat):NaN;
+    const lonNum = lon!=null?Number(lon):NaN;
+    if (!Number.isNaN(latNum) && !Number.isNaN(lonNum)) {
+      (async ()=>{
+        const r = await updateDeliveryProximityAndState(sid, latNum, lonNum);
+        const shouldPause = Boolean(r.pauseAtUser);
+        if (shouldPause) { const t = viajeSimTimers.get(sid); if (t) { try { clearInterval(t); } catch {} viajeSimTimers.delete(sid); } }
+        const allowEmit = !shouldPause;
+        if (allowEmit && set) {
+          const payload = JSON.stringify({ sid, lat: latNum, lon: lonNum, phase: phase||null, i: i!=null?Number(i):null, ts: Date.now() });
+          set.forEach((rr) => { try { rr.write(`data: ${payload}\n\n`); } catch {} });
+          console.log("viajes_posicion_emit", { sid, listeners: set?.size||0, pauseAtUser: shouldPause });
+        } else {
+          console.log("viajes_posicion_block", { sid, pauseAtUser: shouldPause });
+        }
+        res.json({ ok: true });
+      })().catch((e)=>{ console.error("viajes_posicion_dist_fail", { sid, error: String(e) }); res.json({ ok: true }); });
+    } else {
+      res.json({ ok: true });
+    }
+  } catch {
+    res.json({ ok: true });
   }
-  res.json({ ok: true });
 });
 
 app.post("/api/viajes/:sid/coords", (req, res) => {
@@ -115,10 +136,19 @@ async function obtenerPuntosSimulacion(sid: number): Promise<{ lat: number; lon:
 
 function emitirSSE(sid: number, lat: number, lon: number, i: number) {
   const set = viajeStreams.get(sid);
-  if (set) {
-    const payload = JSON.stringify({ sid, lat, lon, i, ts: Date.now() });
-    set.forEach((r) => { try { r.write(`data: ${payload}\n\n`); } catch {} });
-  }
+  (async ()=>{
+    const r = await updateDeliveryProximityAndState(sid, Number(lat), Number(lon));
+    const shouldPause = Boolean(r.pauseAtUser);
+    if (shouldPause) { const t = viajeSimTimers.get(sid); if (t) { try { clearInterval(t); } catch {} viajeSimTimers.delete(sid); } }
+    const allowEmit = !shouldPause;
+    if (allowEmit && set) {
+      const payload = JSON.stringify({ sid, lat, lon, i, ts: Date.now() });
+      set.forEach((rr) => { try { rr.write(`data: ${payload}\n\n`); } catch {} });
+      console.log("emitirSSE_emit", { sid, i, pauseAtUser: shouldPause });
+    } else {
+      console.log("emitirSSE_block", { sid, i, pauseAtUser: shouldPause });
+    }
+  })().catch((e)=>{ console.error("emitirSSE_dist_fail", { sid, error: String(e) }); });
 }
 
 app.post("/api/viajes/:sid/iniciar", async (req, res) => {
@@ -130,7 +160,7 @@ app.post("/api/viajes/:sid/iniciar", async (req, res) => {
       viajeSimPoints.set(sid, pts);
     }
     const prevTimer = viajeSimTimers.get(sid);
-    if (prevTimer) { clearInterval(prevTimer); viajeSimTimers.delete(sid); }
+    if (prevTimer) { res.json({ ok: true, running: true, points: (pts||[]).length }); return; }
     let i = 0;
     viajeSimProgress.set(sid, 0);
     const timer = setInterval(() => {
@@ -142,9 +172,43 @@ app.post("/api/viajes/:sid/iniciar", async (req, res) => {
       viajeSimProgress.set(sid, i);
     }, 400);
     viajeSimTimers.set(sid, timer);
+    console.log("viajes_iniciar", { sid, points: (pts||[]).length });
     res.json({ ok: true, points: (pts||[]).length });
   } catch (e) {
+    console.error("viajes_iniciar_fail", { sid, error: String(e) });
     res.status(500).json({ error: "sim_start_failed" });
+  }
+});
+
+app.post("/api/viajes/:sid/pausar", (req, res) => {
+  const sid = Number(req.params.sid);
+  const t = viajeSimTimers.get(sid);
+  if (t) { try { clearInterval(t); } catch {} viajeSimTimers.delete(sid); }
+  const prog = viajeSimProgress.get(sid) || 0;
+  console.log("viajes_pausar", { sid, progress: prog });
+  res.json({ ok: true, paused: true, progress: prog });
+});
+
+app.post("/api/viajes/:sid/reanudar", (req, res) => {
+  const sid = Number(req.params.sid);
+  try {
+    const arr = viajeSimPoints.get(sid) || [];
+    if (!arr || arr.length < 2) { res.status(400).json({ error: "no_points" }); return; }
+    if (viajeSimTimers.get(sid)) { res.json({ ok: true, running: true }); return; }
+    let i = viajeSimProgress.get(sid) || 0;
+    const timer = setInterval(() => {
+      const pts = viajeSimPoints.get(sid) || [];
+      if (i >= pts.length) { clearInterval(timer); viajeSimTimers.delete(sid); return; }
+      const p = pts[i];
+      emitirSSE(sid, p.lat, p.lon, i);
+      i++;
+      viajeSimProgress.set(sid, i);
+    }, 400);
+    viajeSimTimers.set(sid, timer);
+    console.log("viajes_reanudar", { sid, from: viajeSimProgress.get(sid) || 0 });
+    res.json({ ok: true, running: true, from: viajeSimProgress.get(sid) || 0 });
+  } catch (e) {
+    res.status(500).json({ error: "resume_failed" });
   }
 });
 

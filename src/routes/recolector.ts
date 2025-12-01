@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { listarSolicitudesPublicadas, aceptarPorRecolector, actualizarEstadoOperativo, guardarItemsSolicitudJSON, obtenerSolicitud, historialRecolector } from "../repositories/solicitudesRepo";
-import { recalcularClasificacionYFee } from "../services/solicitudesService";
+import { recalcularClasificacionYFee, haversineKm, updateDeliveryProximityAndState } from "../services/solicitudesService";
 import { obtenerTransaccionPorSolicitud, obtenerPesajesTransaccion } from "../repositories/transaccionesRepo";
 import { obtenerUsuario } from "../repositories/usuariosRepo";
 import { obtenerEmpresa } from "../repositories/empresasRepo";
@@ -10,30 +10,37 @@ import { pool } from "../db/pool";
 export const recolectorRouter = Router();
 
 recolectorRouter.get("/feed", asyncHandler(async (req: Request, res: Response) => {
+  console.log("reco_feed");
   const list = await listarSolicitudesPublicadas();
+  console.log("reco_feed_out", { count: Array.isArray(list)?list.length:0 });
   res.json(list);
 }));
 
 recolectorRouter.get("/:id/en_curso", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  console.log("reco_en_curso_in", { id });
   const rows = await pool.query(
     "SELECT * FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada') ORDER BY creado_en DESC",
     [id]
   );
+  console.log("reco_en_curso_out", { id, count: rows.rows.length });
   res.json(rows.rows);
 }));
 
 recolectorRouter.get("/by_email", asyncHandler(async (req: Request, res: Response) => {
   const email = String((req.query as any).email || '');
   if (!email) { res.status(400).json({ error: "email_requerido" }); return; }
+  console.log("reco_by_email_in", { email });
   const r = await pool.query("SELECT id, email FROM recolectores WHERE email=$1", [email]);
   if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+  console.log("reco_by_email_out", { id: Number(r.rows[0].id) });
   res.json(r.rows[0]);
 }));
 
 recolectorRouter.post("/:sid/aceptar", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
   const { recolector_id, vehiculo_id, lat, lon } = req.body;
+  console.log("reco_aceptar_in", { sid, recolector_id, vehiculo_id, lat, lon });
   let s: any = null;
   try {
     s = await aceptarPorRecolector(
@@ -44,6 +51,7 @@ recolectorRouter.post("/:sid/aceptar", asyncHandler(async (req: Request, res: Re
       lon!=null?Number(lon):null
     );
   } catch (e: any) {
+    console.log("reco_aceptar_err", { sid, message: String(e?.message||'') });
     const msg = String(e?.message||'');
     if (msg === 'vehiculo_invalido' || msg === 'capacidad_insuficiente') { res.status(422).json({ error: msg }); return; }
     throw e;
@@ -51,12 +59,64 @@ recolectorRouter.post("/:sid/aceptar", asyncHandler(async (req: Request, res: Re
   if (!s) { res.status(409).json({ error: "no_disponible" }); return; }
   try { await recalcularClasificacionYFee(sid); } catch {}
   const s2 = await obtenerSolicitud(sid);
+  console.log("reco_aceptar_ok", { sid, recolector_id: Number((s2||s)?.recolector_id||0) });
+  try {
+    const subs: any = (global as any).__notifSubs || ((global as any).__notifSubs = {});
+    const notify = async (destRole: string, destId: number, tipo: string, mensaje: string) => {
+      const safeId = (destId!=null && !Number.isNaN(destId) && destId>0) ? destId : null;
+      if (!safeId) return;
+      const payload = `event: notif\ndata: ${JSON.stringify({ solicitud_id: sid, actor_destino: destRole, destino_id: Number(destId), tipo, mensaje })}\n\n`;
+      try { await pool.query("INSERT INTO notificaciones(solicitud_id, actor_destino, destino_id, tipo, mensaje) VALUES($1,$2,$3,$4,$5)", [sid, destRole, safeId, tipo, mensaje]); console.log("notif_insert_ok", { sid, actor_destino: destRole, destino_id: safeId, tipo }); } catch { console.log("notif_insert_err", { sid, actor_destino: destRole, destino_id: safeId, tipo }); }
+      const k = `${destRole}:${destId}`;
+      const arr = subs[k] || [];
+      for (const r of arr) { try { r.write(payload); } catch {} }
+      console.log("notif_emit", { destino: k, listeners: arr.length, tipo });
+    };
+    const usuarioId = Number((s2||s)?.usuario_id);
+    const recoId = Number((s2||s)?.recolector_id);
+    if (usuarioId && !Number.isNaN(usuarioId)) {
+      await notify('usuario', usuarioId, 'aceptada_recolector', 'Tu solicitud delivery fue aceptada por un recolector');
+    }
+    if (recoId && !Number.isNaN(recoId)) {
+      await notify('recolector', recoId, 'pedido_asignado', 'Se te asignó un pedido delivery');
+    }
+    try {
+      const srow = await obtenerSolicitud(sid);
+      const u = await obtenerUsuario(Number(srow?.usuario_id));
+      const e = await obtenerEmpresa(Number(srow?.empresa_id));
+      const useCur = Boolean(srow?.usuario_pick_actual);
+      const uLat = useCur && u?.current_lat!=null ? Number(u.current_lat) : (u?.home_lat!=null ? Number(u.home_lat) : null);
+      const uLon = useCur && u?.current_lon!=null ? Number(u.current_lon) : (u?.home_lon!=null ? Number(u.home_lon) : null);
+      const rLat = (req.body?.lat!=null) ? Number(req.body.lat) : null;
+      const rLon = (req.body?.lon!=null) ? Number(req.body.lon) : null;
+      if (rLat!=null && rLon!=null && uLat!=null && uLon!=null) {
+        const dUserKm = haversineKm(Number(rLat), Number(rLon), Number(uLat), Number(uLon));
+        if (dUserKm <= 0.8) {
+          const ex = await pool.query("SELECT 1 FROM notificaciones WHERE solicitud_id=$1 AND tipo='solicitar_confirmaciones' LIMIT 1", [sid]);
+          if (!ex.rows[0]) {
+            await notify('usuario', usuarioId, 'solicitar_confirmaciones', 'Confirma llegada del recolector');
+            await notify('recolector', recoId, 'solicitar_confirmaciones', 'Confirma que ya recogiste del usuario');
+          }
+          const ex2 = await pool.query("SELECT 1 FROM notificaciones WHERE solicitud_id=$1 AND tipo IN ('cerca_usuario','cerca_recolector') LIMIT 1", [sid]);
+          if (!ex2.rows[0]) {
+            await notify('usuario', usuarioId, 'cerca_recolector', 'Recolector está a 0.8 km de tu ubicación');
+            await notify('recolector', recoId, 'cerca_usuario', 'Estás a 0.8 km de la casa del usuario');
+          }
+          try { await pool.query("UPDATE solicitudes SET estado='cerca_usuario' WHERE id=$1", [sid]); } catch {}
+          console.log('reco_aceptar_near_user', { sid, dUserKm });
+        }
+      }
+      
+      await updateDeliveryProximityAndState(sid, lat!=null?Number(lat):null, lon!=null?Number(lon):null);
+    } catch {}
+  } catch {}
   res.json(s2 || s);
 }));
 
-recolectorRouter.post(":sid/estado", asyncHandler(async (req: Request, res: Response) => {
+recolectorRouter.post("/:sid/estado", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
   const { estado } = req.body;
+  console.log("reco_estado_in", { sid, estado });
   const s = await actualizarEstadoOperativo(sid, String(estado));
   res.json(s);
 }));
@@ -64,6 +124,7 @@ recolectorRouter.post(":sid/estado", asyncHandler(async (req: Request, res: Resp
 recolectorRouter.post("/vehiculos", asyncHandler(async (req: Request, res: Response) => {
   const { recolector_id, tipo, tipo_id, placa, capacidad_kg } = req.body;
   if (!recolector_id || !placa || capacidad_kg==null) { res.status(400).json({ error: "invalid_body" }); return; }
+  console.log("vehiculo_add_in", { recolector_id, tipo, tipo_id, placa, capacidad_kg });
   let tipoId: number | null = null;
   if (tipo_id != null) {
     const t = await pool.query("SELECT id FROM vehiculo_tipos WHERE id=$1 AND activo=true", [Number(tipo_id)]);
@@ -80,12 +141,15 @@ recolectorRouter.post("/vehiculos", asyncHandler(async (req: Request, res: Respo
     "INSERT INTO vehiculos(recolector_id, tipo_id, placa, capacidad_kg, activo) VALUES($1,$2,$3,$4,true) RETURNING *",
     [Number(recolector_id), tipoId, String(placa), Number(capacidad_kg)]
   );
+  console.log("vehiculo_add_ok", { id: Number((r.rows[0]||{}).id||0) });
   res.json(r.rows[0] || null);
 }));
 
 recolectorRouter.get("/:id/vehiculos", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  console.log("vehiculos_list_in", { id });
   const r = await pool.query("SELECT * FROM vehiculos WHERE recolector_id=$1 ORDER BY creado_en DESC", [id]);
+  console.log("vehiculos_list_out", { id, count: r.rows.length });
   res.json(r.rows);
 }));
 
@@ -93,6 +157,7 @@ recolectorRouter.patch("/vehiculos/:vid", asyncHandler(async (req: Request, res:
   const vid = Number(req.params.vid);
   const { recolector_id, capacidad_kg, activo, tipo, tipo_id } = req.body;
   if (!recolector_id) { res.status(400).json({ error: "invalid_body" }); return; }
+  console.log("vehiculo_update_in", { vid, recolector_id, capacidad_kg, activo, tipo, tipo_id });
   const owner = await pool.query("SELECT id FROM vehiculos WHERE id=$1 AND recolector_id=$2", [vid, Number(recolector_id)]);
   if (!owner.rows[0]) { res.status(404).json({ error: "vehiculo_not_found" }); return; }
   let tipoId: number | null = tipo_id!=null ? Number(tipo_id) : null;
@@ -109,6 +174,7 @@ recolectorRouter.patch("/vehiculos/:vid", asyncHandler(async (req: Request, res:
     "UPDATE vehiculos SET capacidad_kg=COALESCE($3, capacidad_kg), activo=COALESCE($4, activo), tipo_id=COALESCE($5, tipo_id) WHERE id=$1 RETURNING *",
     [vid, Number(recolector_id), capacidad_kg!=null?Number(capacidad_kg):null, activo!=null?Boolean(activo):null, tipoId]
   );
+  console.log("vehiculo_update_ok", { id: Number((r.rows[0]||{}).id||0) });
   res.json(r.rows[0] || null);
 }));
 
@@ -116,35 +182,39 @@ recolectorRouter.post("/:id/ubicacion_actual", asyncHandler(async (req: Request,
   const id = Number(req.params.id);
   const { lat, lon } = req.body;
   if (lat === undefined || lon === undefined) { res.status(400).json({ error: "invalid_coords" }); return; }
+  console.log("reco_ubic_in", { id, lat, lon });
   const r = await pool.query("UPDATE recolectores SET lat=$2, lon=$3 WHERE id=$1 RETURNING *", [id, Number(lat), Number(lon)]);
+  console.log("reco_ubic_update_ok", { id });
+  try {
+    const actives = await pool.query("SELECT id FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada')", [id]);
+    for (const s of actives.rows) {
+      await updateDeliveryProximityAndState(Number(s.id), Number(lat), Number(lon));
+    }
+  } catch {}
   res.json({ ok: true, recolector: r.rows[0] || null });
 }));
 
 recolectorRouter.post("/:sid/items", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
   const items = Array.isArray(req.body?.items) ? req.body.items.map((it: any)=>({ material_id: Number(it.material_id), kg: Number(it.kg) })) : [];
+  console.log("reco_items_in", { sid, count: items.length });
   const s = await guardarItemsSolicitudJSON(sid, items);
   res.json(s);
 }));
 
 recolectorRouter.get("/:id/historial", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  console.log("reco_historial_in", { id });
   const list = await historialRecolector(id);
+  console.log("reco_historial_out", { id, count: Array.isArray(list)?list.length:0 });
   res.json(list);
 }));
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const toRad = (x: number) => (x * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
+ 
 
 recolectorRouter.get("/previsualizacion/:sid", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
+  console.log("reco_previsualizacion_in", { sid });
   const s = await obtenerSolicitud(sid);
   if (!s) { res.status(404).json({ error: "not_found" }); return; }
   const usuario = await obtenerUsuario(Number(s.usuario_id));
@@ -184,6 +254,7 @@ recolectorRouter.get("/previsualizacion/:sid", asyncHandler(async (req: Request,
   const uPickLon = useCur && uCurLon!=null ? uCurLon : uHomeLon;
   const distRU = (rLat!=null && rLon!=null && uPickLat!=null && uPickLon!=null) ? haversineKm(rLat, rLon, uPickLat, uPickLon) : null;
   const distUE = (uPickLat!=null && uPickLon!=null && eLat!=null && eLon!=null) ? haversineKm(uPickLat, uPickLon, eLat, eLon) : null;
+  console.log("reco_previsualizacion_out", { sid, distRU, distUE, uPickLat, uPickLon, eLat, eLon, rLat, rLon });
   res.json({
     solicitud_id: sid,
     usuario: { lat: uPickLat, lon: uPickLon },
@@ -199,6 +270,7 @@ recolectorRouter.get("/previsualizacion/:sid", asyncHandler(async (req: Request,
 
 recolectorRouter.get("/trabajos/:sid/detalle", asyncHandler(async (req: Request, res: Response) => {
   const sid = Number(req.params.sid);
+  console.log("reco_trabajo_detalle_in", { sid });
   const s = await obtenerSolicitud(sid);
   if (!s) { res.status(404).json({ error: "not_found" }); return; }
   const tx = await obtenerTransaccionPorSolicitud(sid);
@@ -237,6 +309,7 @@ recolectorRouter.get("/trabajos/:sid/detalle", asyncHandler(async (req: Request,
   const uPickLon2 = useCur2 && !isNaN(uCurLon2) ? uCurLon2 : uHomeLon2;
   const distRU = (!isNaN(rLat) && !isNaN(rLon) && !isNaN(uPickLat2) && !isNaN(uPickLon2)) ? haversineKm(rLat, rLon, uPickLat2, uPickLon2) : null;
   const distUE = (!isNaN(uPickLat2) && !isNaN(uPickLon2) && !isNaN(eLat) && !isNaN(eLon)) ? haversineKm(uPickLat2, uPickLon2, eLat, eLon) : null;
+  console.log("reco_trabajo_detalle_out", { sid, totalKg, distRU, distUE });
   res.json({
     solicitud_id: sid,
     materiales: pesajes,
@@ -248,6 +321,7 @@ recolectorRouter.get("/trabajos/:sid/detalle", asyncHandler(async (req: Request,
 }));
 
 recolectorRouter.post("/stats/recompute_all", asyncHandler(async (_req: Request, res: Response) => {
+  console.log("reco_stats_recompute_in");
   const idsRes = await pool.query("SELECT id FROM recolectores");
   const updated: { id: number; trabajos_completados: number }[] = [];
   for (const r of idsRes.rows) {
@@ -260,9 +334,12 @@ recolectorRouter.post("/stats/recompute_all", asyncHandler(async (_req: Request,
     await pool.query("UPDATE recolectores SET trabajos_completados=$2 WHERE id=$1", [id, c]);
     updated.push({ id, trabajos_completados: c });
   }
+  console.log("reco_stats_recompute_out", { count: updated.length });
   res.json({ updated });
 }));
 recolectorRouter.get("/vehiculos_tipos", asyncHandler(async (_req: Request, res: Response) => {
+  console.log("vehiculos_tipos_in");
   const r = await pool.query("SELECT id, nombre FROM vehiculo_tipos WHERE activo=true ORDER BY nombre");
+  console.log("vehiculos_tipos_out", { count: r.rows.length });
   res.json(r.rows);
 }));

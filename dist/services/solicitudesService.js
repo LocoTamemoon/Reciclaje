@@ -1,5 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ARRIVE_EMP_KM = exports.NEAR_EMP_KM = exports.AT_USER_KM = exports.NEAR_USER_KM = void 0;
+exports.haversineKm = haversineKm;
+exports.updateDeliveryProximityAndState = updateDeliveryProximityAndState;
 exports.crearNuevaSolicitud = crearNuevaSolicitud;
 exports.aceptarSolicitud = aceptarSolicitud;
 exports.rechazarSolicitud = rechazarSolicitud;
@@ -19,6 +22,85 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+}
+exports.NEAR_USER_KM = 0.8;
+exports.AT_USER_KM = 0.05;
+exports.NEAR_EMP_KM = 0.8;
+exports.ARRIVE_EMP_KM = 0.1;
+async function updateDeliveryProximityAndState(sid, lat, lon) {
+    const sRes = await pool_1.pool.query("SELECT id, usuario_id, empresa_id, recolector_id, usuario_pick_actual, estado FROM solicitudes WHERE id=$1", [sid]);
+    const s = sRes.rows[0] || null;
+    if (!s)
+        return { dUserKm: null, dEmpKm: null, pauseAtUser: false };
+    const uRes = await pool_1.pool.query("SELECT home_lat, home_lon, current_lat, current_lon FROM usuarios WHERE id=$1", [Number(s.usuario_id)]);
+    const usuario = uRes.rows[0] || null;
+    const eRes = await pool_1.pool.query("SELECT lat, lon FROM empresas WHERE id=$1", [Number(s.empresa_id)]);
+    const empresa = eRes.rows[0] || null;
+    const useCur = Boolean(s.usuario_pick_actual);
+    const uLat = useCur && usuario?.current_lat != null ? Number(usuario.current_lat) : (usuario?.home_lat != null ? Number(usuario.home_lat) : null);
+    const uLon = useCur && usuario?.current_lon != null ? Number(usuario.current_lon) : (usuario?.home_lon != null ? Number(usuario.home_lon) : null);
+    const eLat = empresa?.lat != null ? Number(empresa.lat) : null;
+    const eLon = empresa?.lon != null ? Number(empresa.lon) : null;
+    const dUserKm = (lat != null && lon != null && uLat != null && uLon != null) ? haversineKm(Number(lat), Number(lon), uLat, uLon) : null;
+    const dEmpKm = (lat != null && lon != null && eLat != null && eLon != null) ? haversineKm(Number(lat), Number(lon), eLat, eLon) : null;
+    const subs = global.__notifSubs || (global.__notifSubs = {});
+    const send = async (role, destId, tipo, mensaje) => {
+        const safeId = (destId != null && !Number.isNaN(destId) && destId > 0) ? destId : null;
+        if (!safeId)
+            return;
+        const payload = `event: notif\ndata: ${JSON.stringify({ solicitud_id: Number(s.id), actor_destino: role, destino_id: Number(destId), tipo, mensaje })}\n\n`;
+        try {
+            await pool_1.pool.query("INSERT INTO notificaciones(solicitud_id, actor_destino, destino_id, tipo, mensaje) VALUES($1,$2,$3,$4,$5)", [Number(s.id), role, safeId, tipo, mensaje]);
+        }
+        catch { }
+        const k = `${role}:${destId}`;
+        const arr = subs[k] || [];
+        for (const rr of arr) {
+            try {
+                rr.write(payload);
+            }
+            catch { }
+        }
+    };
+    if (dUserKm != null && dUserKm <= exports.NEAR_USER_KM) {
+        const exists = await pool_1.pool.query("SELECT 1 FROM notificaciones WHERE solicitud_id=$1 AND tipo IN ('cerca_usuario','cerca_recolector') LIMIT 1", [Number(s.id)]);
+        if (!exists.rows[0]) {
+            await send('recolector', Number(s.recolector_id || 0), 'cerca_usuario', 'Estás a 0.8 km de la casa del usuario');
+            await send('usuario', Number(s.usuario_id || 0), 'cerca_recolector', 'Recolector está a 0.8 km de tu ubicación');
+            const existsAsk = await pool_1.pool.query("SELECT 1 FROM notificaciones WHERE solicitud_id=$1 AND tipo='solicitar_confirmaciones' LIMIT 1", [Number(s.id)]);
+            if (!existsAsk.rows[0]) {
+                await send('usuario', Number(s.usuario_id || 0), 'solicitar_confirmaciones', 'Confirma llegada del recolector');
+                await send('recolector', Number(s.recolector_id || 0), 'solicitar_confirmaciones', 'Confirma que ya recogiste del usuario');
+            }
+            await pool_1.pool.query("UPDATE solicitudes SET estado='cerca_usuario' WHERE id=$1", [Number(s.id)]);
+        }
+    }
+    const canEmpresa = String(s.estado || '') === 'rumbo_a_empresa' || true;
+    if (canEmpresa && dEmpKm != null && dEmpKm <= exports.NEAR_EMP_KM) {
+        const exists2 = await pool_1.pool.query("SELECT 1 FROM notificaciones WHERE solicitud_id=$1 AND tipo='cerca_empresa' LIMIT 1", [Number(s.id)]);
+        if (!exists2.rows[0]) {
+            if (s.empresa_id)
+                await send('empresa', Number(s.empresa_id), 'cerca_empresa', 'Recolector está a 0.8 km de tu local');
+            await send('recolector', Number(s.recolector_id || 0), 'cerca_empresa', 'Estás a 0.8 km de tu destino');
+            await pool_1.pool.query("UPDATE solicitudes SET estado='cerca_empresa' WHERE id=$1", [Number(s.id)]);
+        }
+    }
+    if (dEmpKm != null && dEmpKm <= exports.ARRIVE_EMP_KM) {
+        const exists3 = await pool_1.pool.query("SELECT 1 FROM notificaciones WHERE solicitud_id=$1 AND tipo='llego_empresa' LIMIT 1", [Number(s.id)]);
+        if (!exists3.rows[0]) {
+            if (s.empresa_id)
+                await send('empresa', Number(s.empresa_id), 'llego_empresa', 'Recolector llegó a tu local');
+            await send('recolector', Number(s.recolector_id || 0), 'llego_empresa', 'Has llegado a la empresa');
+        }
+        await pool_1.pool.query("UPDATE solicitudes SET estado='llego_empresa' WHERE id=$1", [Number(s.id)]);
+    }
+    const flagsQ = await pool_1.pool.query("SELECT usuario_llegada_ok, recolector_recojo_ok FROM solicitudes WHERE id=$1", [sid]);
+    const flags = flagsQ.rows[0] || { usuario_llegada_ok: false, recolector_recojo_ok: false };
+    const atUsuario = (dUserKm != null) ? (dUserKm <= exports.AT_USER_KM) : false;
+    const isCercaUsuario = String(s?.estado || '') === 'cerca_usuario';
+    const bothOk = Boolean(flags.usuario_llegada_ok) && Boolean(flags.recolector_recojo_ok);
+    const pauseAtUser = isCercaUsuario && !bothOk && atUsuario;
+    return { dUserKm, dEmpKm, pauseAtUser };
 }
 function clasificarDistanciaPorKm(km) {
     if (km <= 2)

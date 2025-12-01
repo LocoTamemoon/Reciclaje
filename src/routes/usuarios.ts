@@ -16,11 +16,11 @@ usuariosRouter.get("/:id/historial", asyncHandler(async (req: Request, res: Resp
 usuariosRouter.get("/:id/dashboard", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const pendientes = await pool.query(
-    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector')) OR (tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada') ) ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado NOT IN ('aceptada','rechazada','completada','cancelada','expirada')) OR (estado IN ('rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC",
     [id]
   );
   const anteriores = await pool.query(
-    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (estado='pendiente_empresa' AND (tipo_entrega IS DISTINCT FROM 'delivery' OR estado_publicacion='aceptada_recolector')) OR (tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada') ) ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado NOT IN ('aceptada','rechazada','completada','cancelada','expirada')) OR (estado IN ('rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC",
     [id]
   );
   const historial = await historialUsuario(id);

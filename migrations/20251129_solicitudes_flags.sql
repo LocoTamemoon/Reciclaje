@@ -1,0 +1,2 @@
+ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS usuario_llegada_ok BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS recolector_recojo_ok BOOLEAN NOT NULL DEFAULT false;

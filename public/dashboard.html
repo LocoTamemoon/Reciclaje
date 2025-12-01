@@ -83,6 +83,8 @@
         <button id="m-resenas" onclick="setView('resenas')">Reseñas</button>
         <button id="m-rewards" onclick="setView('rewards')">Usa Puntos</button>
         <button id="m-mapa" onclick="setView('mapa')">Mapa</button>
+        <button id="m-notificaciones" onclick="setView('notificaciones')">Notificaciones <span id="notif-count" class="badge">0</span></button>
+        <button id="m-progreso" onclick="setView('progreso')">Trabajo en Progreso ni bien que le doy aceptar</button>
       </div>
       <div class="sidebar-footer">
         <button class="btn danger icon" onclick="logout()">
@@ -120,6 +122,20 @@
           <div id="reco-map" class="map-box"></div>
           <div id="reco-route-meta" class="muted mt-8"></div>
         </div>
+        <div id="reco-detalle" class="panel mt-12" style="display:none;">
+          <div class="row jc-between ai-center">
+            <h3>Detalles de la solicitud</h3>
+            <button class="btn secondary" onclick="(function(){ const d=document.getElementById('reco-detalle'); if(d) d.style.display='none'; })()">Cerrar</button>
+          </div>
+          <div id="reco-detalle-body" class="muted"></div>
+        </div>
+      </section>
+      <section id="view-progreso" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
+        <div class="row jc-between">
+          <h2>Trabajo en Progreso</h2>
+          <button class="btn secondary" onclick="loadProgreso()">Actualizar</button>
+        </div>
+        <ul id="progreso-list" class="list"></ul>
       </section>
       <section id="view-empresa" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
         <div class="row jc-between">
@@ -309,6 +325,16 @@
           <div id="map" class="map-box"></div>
         </div>
       </section>
+      <section id="view-notificaciones" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
+        <div class="row jc-between ai-center">
+          <h2>Notificaciones</h2>
+          <div class="row gap-8">
+            <button class="btn secondary" id="notif-refresh">Actualizar</button>
+          </div>
+        </div>
+        <ul id="notif-list" class="list"></ul>
+        <div id="notif-pager" class="row jc-end gap-8 mt-10"></div>
+      </section>
       <section id="view-pesaje" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
         <div class="row jc-between">
           <h2 id="pesaje-titulo">Pesaje</h2>
@@ -450,6 +476,7 @@
       <div class="row jc-between ai-center">
         <h3>Ver viaje</h3>
         <button class="btn secondary" id="viaje-instr-toggle">Ocultar indicaciones</button>
+        <button class="btn secondary" id="viaje-speed-toggle">x2</button>
       </div>
       <div id="usr-map-viaje" class="map-box"></div>
       <div id="usr-route-meta-viaje" class="muted mt-8"></div>
@@ -494,7 +521,7 @@
     if (solNavAnt) solNavAnt.onclick = ()=>{ solTab='anteriores'; setView('solicitudes'); };
 
     function setView(v){
-      for (const id of ['empresas','solicitudes','historial','perfil','resenas','rewards','mapa']){
+      for (const id of ['empresas','solicitudes','historial','perfil','resenas','rewards','mapa','notificaciones','progreso']){
         document.getElementById('view-'+id).hidden = (id!==v);
         document.getElementById('m-'+id).classList.toggle('active', id===v);
       }
@@ -523,6 +550,8 @@
       document.getElementById('view-empresa').hidden = (v!=='empresa');
       document.getElementById('view-empresa-solicitudes').hidden = (v!=='empresa_solicitudes');
       document.getElementById('view-pesaje').hidden = (v!=='pesaje');
+      const mProg = document.getElementById('m-progreso');
+      if (mProg) mProg.style.display = (role==='recolector') ? '' : 'none';
       if (role === 'recolector' && v === 'solicitudes') {
         document.getElementById('view-solicitudes').hidden = true;
         const rview = document.getElementById('view-recolector');
@@ -530,13 +559,16 @@
         const solSub2 = document.getElementById('sol-submenu');
         if (solSub2) solSub2.hidden = true;
         try { iniciarUbicacionRecolector(); setTimeout(()=> loadRecolectorFeed(), 400); } catch { loadRecolectorFeed(); }
+        try { const last = localStorage.getItem('last_reco_sid'); if (last && !isNaN(Number(last))) { setTimeout(()=>{ try{ recoVerUbicacion(Number(last)); }catch{} }, 500); } } catch {}
         return;
       } else {
         const rview = document.getElementById('view-recolector');
         if (rview) rview.hidden = true;
       }
+      if (role==='recolector' && v==='progreso') { loadProgreso(); }
       if (v==='empresas') loadEmpresas();
       if (v==='solicitudes') { solPendVisibleCount = 10; solAntVisibleCount = 10; solPendPage = 1; solAntPage = 1; loadSolicitudes(); }
+      if (v==='notificaciones') { initNotificaciones(); }
       if (v==='solicitudes'){
         const sp = document.getElementById('sol-pend-search');
         const sa = document.getElementById('sol-ant-search');
@@ -580,9 +612,257 @@
       if (v==='rewards' && role==='usuario') loadRewards();
       if (v==='mapa'){ if (!mapaInit) initMapa(); }
     }
+    let notifES = null;
+    let notifCache = [];
+    let notifPage = 1;
+    const NOTIF_PAGE_SIZE = 10;
+    function initNotificaciones(){
+      console.log('notif_init');
+      const ul = document.getElementById('notif-list');
+      const btn = document.getElementById('notif-refresh');
+      if (btn) btn.onclick = loadNotificaciones;
+      loadNotificaciones();
+      if (notifES) { try{ notifES.close(); }catch{} notifES = null; }
+      const url = `/api/solicitudes/notificaciones/stream?role=${encodeURIComponent(role)}&id=${encodeURIComponent(user.id)}`;
+      console.log('notif_stream_subscribe', { url });
+      notifES = new EventSource(url);
+      notifES.onopen = function(){ try{ console.log('notif_stream_open', { role, id: user.id }); }catch{} };
+      notifES.onerror = function(err){ try{ console.log('notif_stream_error', { role, id: user.id, err: String(err) }); }catch{} };
+      notifES.addEventListener('notif', (ev)=>{
+        try {
+          const data = JSON.parse(ev.data);
+          console.log('notif_stream_event', { data });
+          try {
+            if (!Array.isArray(notifCache)) notifCache = [];
+            const k = String(data?.solicitud_id||'') + '|' + String(data?.tipo||'');
+            const ts = new Date(data?.creado_en||Date.now()).getTime();
+            let replaced = false;
+            notifCache = notifCache.filter((n)=>{
+              const nk = String(n?.solicitud_id||'') + '|' + String(n?.tipo||'');
+              if (nk===k){
+                replaced = true;
+                const nts = new Date(n?.creado_en||Date.now()).getTime();
+                return ts >= nts ? false : true;
+              }
+              return true;
+            });
+            notifCache.unshift(data);
+            updateNotifCount(notifCache);
+            renderNotificaciones();
+          } catch {
+            appendNotif(data);
+          }
+        } catch {}
+      });
+    }
+    async function loadNotificaciones(){
+      console.log('notif_list_in');
+      const ul = document.getElementById('notif-list');
+      let list = [];
+      try {
+        const r = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(user.id)}`, { headers: authHeaders() });
+        list = await r.json();
+      } catch {}
+      if (!Array.isArray(list)) list = [];
+      if (list.length === 0){
+        try {
+          const r2 = await fetch(`/api/solicitudes/notificaciones?id=${encodeURIComponent(user.id)}`, { headers: authHeaders() });
+          const list2 = await r2.json();
+          if (Array.isArray(list2)) list = list2;
+        } catch {}
+      }
+      try {
+        list = Array.isArray(list) ? list.filter((n)=> !Boolean(n?.leido)) : [];
+        const byKey = {};
+        for (const n of list){
+          const k = String(n?.solicitud_id||'') + '|' + String(n?.tipo||'');
+          const ts = new Date(n?.creado_en||Date.now()).getTime();
+          const prev = byKey[k];
+          if (!prev || ts > new Date(prev?.creado_en||Date.now()).getTime()) byKey[k] = n;
+        }
+        list = Object.values(byKey);
+      } catch {}
+      if (!Array.isArray(list)) list = [];
+      notifCache = list;
+      notifPage = 1;
+      renderNotificaciones();
+      updateNotifCount(notifCache);
+      console.log('notif_list_out', { count: notifCache.length });
+    }
+    function notifPriority(n){
+      const t = String(n?.tipo||'');
+      const leido = Boolean(n?.leido);
+      let p = 0;
+      if (role==='recolector'){
+        if (t==='solicitar_confirmaciones' || t==='cerca_empresa') p = 100;
+        else if (t==='pedido_asignado' || t==='cerca_usuario') p = 50;
+      } else if (role==='usuario'){
+        if (t==='solicitar_confirmaciones') p = 100;
+        else if (t==='cerca_recolector' || t==='entregado') p = 50;
+      } else if (role==='empresa'){
+        if (t==='entregado') p = 100;
+        else if (t==='cerca_empresa') p = 50;
+      }
+      if (leido) p -= 1000;
+      return p;
+    }
+    function notifIsAction(n){
+      const t = String(n?.tipo||'');
+      if (role==='recolector') return (t==='solicitar_confirmaciones');
+      if (role==='usuario') return (t==='solicitar_confirmaciones');
+      if (role==='empresa') return (t==='entregado');
+      return false;
+    }
+    function renderNotificaciones(){
+      const ul = document.getElementById('notif-list');
+      const pager = document.getElementById('notif-pager');
+      if (!ul || !pager) return;
+      ul.innerHTML = '';
+      const total = Array.isArray(notifCache) ? notifCache.length : 0;
+      const pages = Math.max(1, Math.ceil(total / NOTIF_PAGE_SIZE));
+      notifPage = Math.min(Math.max(1, notifPage), pages);
+      const bySid = {};
+      for (const n of (Array.isArray(notifCache)? notifCache : [])){
+        const sid = Number(n?.solicitud_id||0);
+        if (!bySid[sid]) bySid[sid] = [];
+        bySid[sid].push(n);
+      }
+      const sidsDesc = Object.keys(bySid).map(Number).sort((a,b)=> b-a);
+      const sorted = [];
+      for (const sid of sidsDesc){
+        const arr = bySid[sid].slice().sort((a,b)=>{
+          const isAct = (x)=>{
+            const t = String(x?.tipo||'');
+            if (role==='recolector') return (t==='solicitar_confirmaciones' || t==='cerca_usuario' || t==='cerca_empresa') && !Boolean(x?.leido);
+            if (role==='usuario') return (t==='solicitar_confirmaciones') && !Boolean(x?.leido);
+            if (role==='empresa') return (t==='entregado') && !Boolean(x?.leido);
+            return false;
+          };
+          const aAct = isAct(a);
+          const bAct = isAct(b);
+          if (aAct !== bAct) return aAct ? -1 : 1;
+          const rank = (x)=>{
+            const t = String(x?.tipo||'');
+            if (role==='recolector'){
+              if (t==='solicitar_confirmaciones') return 3;
+              if (t==='cerca_usuario') return 1;
+              if (t==='cerca_empresa') return 1;
+              return 0;
+            }
+            if (role==='usuario'){
+              if (t==='solicitar_confirmaciones') return 2;
+              if (t==='cerca_recolector') return 1;
+              return 0;
+            }
+            if (role==='empresa'){
+              if (t==='entregado') return 1;
+              return 0;
+            }
+            return 0;
+          };
+          const ra = rank(a);
+          const rb = rank(b);
+          if (ra !== rb) return rb - ra;
+          const tb = new Date(b?.creado_en||0).getTime();
+          const ta = new Date(a?.creado_en||0).getTime();
+          return tb - ta;
+        });
+        for (const n of arr) sorted.push(n);
+      }
+      const start = (notifPage-1)*NOTIF_PAGE_SIZE;
+      const slice = sorted.slice(start, start+NOTIF_PAGE_SIZE);
+      slice.forEach(n=> appendNotif(n));
+      const prevDis = notifPage<=1 ? 'disabled' : '';
+      const nextDis = notifPage>=pages ? 'disabled' : '';
+      pager.innerHTML = `<button class=\"btn secondary\" ${prevDis} onclick=\"notifPrev()\">Anterior</button><span class=\"muted\">Página ${notifPage} / ${pages}</span><button class=\"btn secondary\" ${nextDis} onclick=\"notifNext()\">Siguiente</button>`;
+    }
+    function notifPrev(){ notifPage = Math.max(1, notifPage-1); renderNotificaciones(); }
+    function notifNext(){ const pages = Math.max(1, Math.ceil((notifCache?.length||0)/NOTIF_PAGE_SIZE)); notifPage = Math.min(pages, notifPage+1); renderNotificaciones(); }
+    async function appendNotif(n){
+      console.log('notif_append', { tipo: n.tipo, solicitud_id: Number(n.solicitud_id||0) });
+      const ul = document.getElementById('notif-list');
+      const li = document.createElement('li');
+      const ts = new Date(n.creado_en||Date.now()).toLocaleString();
+      const liId = 'notif-'+Math.random().toString(36).slice(2);
+      li.id = liId;
+      const sid2 = Number(n.solicitud_id||0);
+      let actionHtml = '';
+      try {
+        const sid = Number(n.solicitud_id||0);
+        const nid = (n && n.id!=null && !Number.isNaN(Number(n.id))) ? Number(n.id) : null;
+        if (sid){
+          if ((n.tipo === 'solicitar_confirmaciones') && role === 'usuario'){
+            let show = true;
+            try {
+              const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+              if (Boolean(sj?.usuario_llegada_ok)) show = false;
+            } catch {}
+            if (show) actionHtml = `<button class=\"btn\" onclick=\"notifAction(${sid}, 'usuario_confirmo_llegada', '${liId}', ${nid!=null?nid:'null'})\">Confirmar llegada</button>`;
+          } else if ((n.tipo === 'solicitar_confirmaciones') && role === 'recolector'){
+            let show = !Boolean(n?.leido);
+            try {
+              const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+              if (Boolean(sj?.recolector_recojo_ok)) show = false;
+              const est2 = String(sj?.estado||'');
+              if (['rumbo_a_empresa','cerca_empresa','completada','rechazada','cancelada','expirada'].includes(est2)) show = false;
+            } catch {}
+            if (show) actionHtml = `<button class=\"btn\" onclick=\"notifAction(${sid}, 'recolector_confirmo_recojo', '${liId}', ${nid!=null?nid:'null'})\">Confirmar recojo</button>`;
+          } else if (n.tipo === 'llego_empresa' && role === 'recolector'){
+            let show = !Boolean(n?.leido);
+            try {
+              const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+              const est3 = String(sj?.estado||'');
+              if (['empresa_confirmo_recepcion','completada','rechazada','cancelada','expirada'].includes(est3)) show = false;
+            } catch {}
+            if (show) actionHtml = `<button class=\"btn\" onclick=\"notifAction(${sid}, 'entregado_empresa', '${liId}', ${nid!=null?nid:'null'})\">Marcar entregado</button>`;
+          } else if (n.tipo === 'entregado' && role === 'empresa'){
+            let show = true;
+            if (Boolean(n?.leido)) show = false;
+            try {
+              const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+              const est = String(sj?.estado||'');
+              if (['empresa_confirmo_recepcion','completada','rechazada','cancelada'].includes(est)) show = false;
+            } catch {}
+            if (show) actionHtml = `<button class=\"btn\" onclick=\"notifAction(${sid}, 'empresa_confirmo_recepcion', '${liId}', ${nid!=null?nid:'null'})\">Confirmar recepción</button>`;
+          }
+        }
+      } catch {}
+      li.innerHTML = `<div class="row jc-between"><div><div><strong>${n.tipo}</strong> ${sid2>0?`<span class=\"badge\">Solicitud #${sid2}</span>`:''}</div><div class="muted">${n.mensaje}</div></div><div class="right"><span class="muted">${ts}</span> ${actionHtml}</div></div>`;
+      ul.appendChild(li);
+    }
+    async function notifAction(sid, etapa, liId, nid){
+      try {
+        console.log('notif_action_in', { sid, etapa, role, actor_id: user.id });
+        try { if (role==='recolector') await fetch(`/api/viajes/${sid}/pausar`, { method:'POST', headers: authHeaders() }); } catch {}
+        let actor = role;
+        let actor_id = user.id;
+        const r = await fetch(`/api/solicitudes/${sid}/etapas`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ etapa, actor, actor_id }) });
+        const j = await r.json();
+        if (j?.error){ alert('No se pudo confirmar: '+j.error); return; }
+        const li = document.getElementById(liId);
+        if (li) li.querySelectorAll('button').forEach(b=> b.disabled = true);
+        console.log('notif_action_ok', { sid, etapa });
+        try { if (nid!=null) await fetch(`/api/solicitudes/notificaciones/${nid}/leido`, { method:'POST', headers: authHeaders() }); } catch {}
+        try { const li2 = document.getElementById(liId); if (li2) li2.remove(); } catch {}
+        try { updateNotifCount(document.querySelectorAll('#notif-list li')); } catch {}
+        try {
+          const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+          const ok1 = Boolean(sj?.usuario_llegada_ok);
+          const ok2 = Boolean(sj?.recolector_recojo_ok);
+          const est = String(sj?.estado||'');
+          if ((ok1 && ok2) || est==='rumbo_a_empresa'){
+            await fetch(`/api/viajes/${sid}/reanudar`, { method:'POST', headers: authHeaders() });
+          }
+        } catch {}
+      } catch {}
+    }
+    function updateNotifCount(list){
+      const badge = document.getElementById('notif-count');
+      if (badge) badge.textContent = String(list?.length||0);
+    }
     function logout(){ localStorage.clear(); window.location.href='/login.html'; }
     function authHeaders(){ return { 'Content-Type':'application/json', 'Authorization': 'Bearer '+token }; }
-    function displayEstadoSolicitud(estado){ return estado === 'aceptada' ? 'completada' : estado; }
+    function displayEstadoSolicitud(estado){ return estado; }
 
     let empresaSeleccionada = null;
     let materialesSeleccionados = [];
@@ -756,6 +1036,12 @@
       const ul = document.getElementById('reco-feed');
       if (!ul) return;
       ul.innerHTML = '';
+      if (!Array.isArray(list) || list.length===0){
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row jc-between ai-center"><div><strong>No hay solicitudes publicadas</strong><div class="muted">Espera a que un usuario cree una solicitud delivery.</div></div><div class="right"><button class="btn" onclick="loadRecolectorFeed()">Actualizar</button></div></div>`;
+        ul.appendChild(li);
+        return;
+      }
       list.forEach(s=>{
         const li = document.createElement('li');
         li.innerHTML = `<div class="row" style="justify-content:space-between;">
@@ -766,7 +1052,8 @@
           <div class="right">
             <button class="btn" onclick="recolectorAceptar(${s.id})">Aceptar</button>
             <button class="btn" onclick="verPrevisualizacion(${s.id})">Previsualización</button>
-            <button class="btn" onclick="iniciarRecoPreview()">Iniciar simulación</button>
+            <button class="btn" onclick="verDetalleSolicitud(${s.id})">Detalles</button>
+            
           </div>
         </div>`;
         ul.appendChild(li);
@@ -820,7 +1107,7 @@
           if (ubBtn) ubBtn.disabled = false;
           recoSimSid = Number(cur[0].id);
           const li = document.createElement('li');
-          li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${cur[0].id}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn secondary" onclick="recolectorFinalizarRuta(${cur[0].id})">Finalizar ruta</button></div></div>`;
+          li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${cur[0].id}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${cur[0].id})">Ver viaje</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${cur[0].id})">Finalizar ruta</button></div></div>`;
           ul.insertBefore(li, ul.firstChild);
         } else {
           if (curWrap) curWrap.style.display='none';
@@ -842,6 +1129,7 @@
     if (recoSimMarker) { recoSimMarker.remove(); recoSimMarker = null; }
     if (recoSimTimer) { clearInterval(recoSimTimer); recoSimTimer = null; }
     if (recoEventSource) { try { recoEventSource.close(); } catch {} recoEventSource = null; }
+    try { localStorage.removeItem('last_reco_sid'); } catch {}
   }
 
     async function waitRecoRouteReady(maxMs){
@@ -853,7 +1141,7 @@
         }, 150);
       });
     }
-    async function verPrevisualizacion(sid){
+  async function verPrevisualizacion(sid){
       const panel = document.getElementById('reco-preview');
       if (panel && panel.style.display !== 'none' && recoPrevSid === sid) { clearRecoPreview(); return; }
       panel.style.display = 'block';
@@ -918,6 +1206,7 @@
         });
       }
       recoPrevSid = sid;
+      try { localStorage.setItem('last_reco_sid', String(sid)); } catch {}
     }
 
     function simularRecoViaje(){
@@ -1128,7 +1417,17 @@
       const j = await r.json();
       clearRecoPreview();
       alert('Solicitud aceptada: #'+j.id);
-      loadRecolectorFeed();
+      try {
+        const ul = document.getElementById('reco-feed');
+        if (ul){
+          Array.from(ul.children).forEach((li)=>{
+            const txt = String(li.textContent||'');
+            if (txt.includes('Solicitud #'+sid)){
+              li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${sid})">Ver viaje</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
+            }
+          });
+        }
+      } catch {}
       try {
         let coords = [];
         try {
@@ -1179,15 +1478,55 @@
         await usuarioVerViaje(sid);
         try {
           const ul = document.getElementById('reco-feed');
-          if (ul){
-            Array.from(ul.children).forEach((li)=>{
-              const txt = String(li.textContent||'');
-              if (txt.includes('Solicitud #'+sid)){
-                li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${sid})">Ubicación</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
-              }
-            });
+          const mark = ul ? ul.querySelector('.muted[data-sid="'+sid+'"]') : null;
+          const li = mark ? mark.closest('li') : null;
+          if (li){
+            li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${sid})">Ver viaje</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
           }
         } catch {}
+      } catch {}
+    }
+
+    async function loadProgreso(){
+      const ul = document.getElementById('progreso-list');
+      if (!ul) return;
+      ul.innerHTML = '';
+      try {
+        const rc = await fetch(`/api/recolector/${user.id}/en_curso`, { headers: authHeaders() });
+        const cur = await rc.json();
+        if (!Array.isArray(cur) || cur.length===0){
+          const li = document.createElement('li');
+          li.innerHTML = `<div class=\"row jc-between ai-center\"><div><strong>No tienes trabajo en progreso</strong><div class=\"muted\">Acepta una solicitud para comenzar.</div></div><div class=\"right\"><button class=\"btn\" onclick=\"loadProgreso()\">Actualizar</button></div></div>`;
+          ul.appendChild(li);
+          return;
+        }
+        cur.forEach(s=>{
+          const li = document.createElement('li');
+          li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\"><div><div><strong>Solicitud #${s.id}</strong></div><div class=\"muted\">En curso</div></div><div class=\"right\"><button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button> <button class=\"btn secondary\" onclick=\"recolectorFinalizarRuta(${s.id})\">Finalizar ruta</button></div></div>`;
+          ul.appendChild(li);
+        });
+      } catch {}
+    }
+
+    async function verDetalleSolicitud(sid){
+      try {
+        const body = document.getElementById('reco-detalle-body');
+        const wrap = document.getElementById('reco-detalle');
+        if (!body || !wrap) return;
+        let kgTotal = 0;
+        try {
+          const s = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+          const items = Array.isArray(s?.items_json) ? s.items_json : (s?.items_json ? JSON.parse(s.items_json) : []);
+          kgTotal = items.reduce((a, it)=> a + Number(it?.kg||0), 0);
+        } catch {}
+        let usuarioNombre = '', empresaNombre = '';
+        try {
+          const prev = await (await fetch(`/api/recolector/previsualizacion/${sid}?viewer_id=${user.id}`, { headers: authHeaders() })).json();
+          usuarioNombre = String(prev?.usuario_nombre||'Usuario');
+          empresaNombre = String(prev?.empresa_nombre||'Empresa');
+        } catch {}
+        body.innerHTML = `Peso total estimado: <strong>${kgTotal.toFixed(2)} kg</strong><br/>Usuario: <strong>${usuarioNombre}</strong><br/>Empresa: <strong>${empresaNombre}</strong>`;
+        wrap.style.display = '';
       } catch {}
     }
 
@@ -1396,6 +1735,16 @@
   let viaEventSource = null;
   let viaPoly = null;
   let viaStartMarker = null;
+  let viaPausedAtUser = false;
+  let viaUserLat = null;
+  let viaUserLon = null;
+  let viaEmpLat = null;
+  let viaEmpLon = null;
+  let viaResumePoll = null;
+  let viaSpeedMult = 1;
+  let viaProgIdx = 0;
+  let viaLastSentIdx = -1;
+  let viaLastPt = null;
   let rutaMap = null;
   let rutaRouteCtrl = null;
   let rutaLayer = null;
@@ -1815,18 +2164,32 @@
   }
 
   async function usuarioVerViaje(sid){
+    console.log('usr_ver_viaje_in', { sid });
     const modal = document.getElementById('viaje-modal');
     if (modal && !modal.hidden && usrSid === sid) { closeViaje(); return; }
     if (modal) modal.hidden = false;
     try { const mapDiv = document.getElementById('usr-map-viaje'); if (mapDiv) mapDiv.style.minHeight = '300px'; } catch {}
     const r = await fetch(`/api/recolector/previsualizacion/${sid}?viewer_id=${user.id}`, { headers: authHeaders() });
     const j = await r.json();
+    console.log('usr_ver_viaje_previsualizacion', { sid, recolector: j?.recolector, usuario: j?.usuario, empresa: j?.empresa, distRU: j?.dist_recolector_usuario_km, distUE: j?.dist_usuario_empresa_km });
     const rLat = j?.recolector?.lat ?? null;
     const rLon = j?.recolector?.lon ?? null;
     const uLat = j?.usuario?.lat ?? null;
     const uLon = j?.usuario?.lon ?? null;
     const eLat = j?.empresa?.lat ?? null;
     const eLon = j?.empresa?.lon ?? null;
+    viaEmpLat = eLat!=null?Number(eLat):null;
+    viaEmpLon = eLon!=null?Number(eLon):null;
+    let recoId = 0;
+    let sjCache = null;
+    try { sjCache = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json(); recoId = Number(sjCache?.recolector_id||0); } catch {}
+    viaUserLat = uLat;
+    viaUserLon = uLon;
+    try {
+      const needConfirm = String(sjCache?.estado||'')==='cerca_usuario' && !(Boolean(sjCache?.usuario_llegada_ok) && Boolean(sjCache?.recolector_recojo_ok));
+      viaPausedAtUser = Boolean(needConfirm);
+    } catch { viaPausedAtUser = false; }
+    if (viaResumePoll) { try{ clearInterval(viaResumePoll); }catch{} viaResumePoll = null; }
     const meta = document.getElementById('usr-route-meta-viaje');
     const mapDiv = document.getElementById('usr-map-viaje');
     let viaCum = null;
@@ -1897,6 +2260,7 @@
     try {
       const rr = await fetch(`/api/viajes/${sid}/coords`, { headers: authHeaders() });
       const jj = await rr.json();
+      console.log('viajes_coords_get', { sid, points: Array.isArray(jj?.points)?jj.points.length:0 });
       const pts = Array.isArray(jj?.points) ? jj.points.map(p=> L.latLng(Number(p.lat), Number(p.lon))) : [];
       if (pts.length >= 2) {
         viaPrevCoords = pts;
@@ -1904,6 +2268,17 @@
         try { if (!viaStartMarker && viaPrevCoords[0]) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
         try { viaMap.fitBounds(viaPoly.getBounds()); } catch {}
         buildMetrics(viaPrevCoords);
+        try {
+          if (viaPausedAtUser){
+            const hold = (rLat!=null && rLon!=null) ? snapToRoute(Number(rLat), Number(rLon)) : (Array.isArray(viaPrevCoords) && viaPrevCoords.length>0 ? [viaPrevCoords[0].lat, viaPrevCoords[0].lng] : null);
+            if (hold){
+              placeSimMarker(hold);
+              const doneKm2 = computeDoneKmFromPt(hold);
+              const leftKm2 = Math.max(viaTotalKm - doneKm2, 0);
+              if (meta) meta.innerHTML = `Detenido en usuario: <strong>Esperando confirmaciones</strong> · Recorrido: <strong>${doneKm2.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm2.toFixed(2)} km</strong>`;
+            }
+          }
+        } catch {}
         if (rLat!=null && rLon!=null && uLat!=null && uLon!=null && eLat!=null && eLon!=null) {
           if (viaRouteCtrl) { try { viaRouteCtrl.remove(); } catch {} viaRouteCtrl = null; }
           viaRouteCtrl = L.Routing.control({
@@ -1936,13 +2311,14 @@
             lineOptions: { styles: [{ color: '#22c55e', weight: 4 }] }
           }).addTo(viaMap);
           viaRouteCtrl.on('routesfound', (e)=>{
-            const sum = e?.routes?.[0]?.summary;
-            if (sum) {
-              const km = (sum.totalDistance/1000).toFixed(2);
-              const min = Math.round(sum.totalTime/60);
-              meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
-            }
-            const coords = e?.routes?.[0]?.coordinates || [];
+          const sum = e?.routes?.[0]?.summary;
+          if (sum) {
+            const km = (sum.totalDistance/1000).toFixed(2);
+            const min = Math.round(sum.totalTime/60);
+            meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Distancia: <strong>${km} km</strong> · Tiempo: <strong>${min} min</strong>`;
+            console.log('viaje_route_summary', { sid, km: Number(km), min });
+          }
+          const coords = e?.routes?.[0]?.coordinates || [];
             const pts2 = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : [];
             viaPrevCoords = pts2;
             try {
@@ -2020,27 +2396,73 @@
       const bp = viaPrevCoords[best];
       return [bp.lat, bp.lng];
     }
-    viaEventSource = new EventSource(`/api/viajes/${sid}/stream`);
-    viaEventSource.onmessage = (ev)=>{
+    function placeSimMarker(pt){
+      try {
+        if (!pt) return;
+        if (!viaSimMarker) { viaSimMarker = L.marker(pt, { icon: recolectorIcon, zIndexOffset: 1000 }).addTo(viaMap); }
+        else { viaSimMarker.setLatLng(pt); }
+      } catch {}
+    }
+    function computeDoneKmFromPt(pt){
+      try {
+        if (!pt || !Array.isArray(viaPrevCoords) || !Array.isArray(viaCum)) return 0;
+        let best = 0, bd = Infinity;
+        for (let k=0; k<viaPrevCoords.length; k++){
+          const p2 = viaPrevCoords[k];
+          const dd = (p2.lat-pt[0])*(p2.lat-pt[0])+(p2.lng-pt[1])*(p2.lng-pt[1]);
+          if (dd<bd){ bd=dd; best=k; }
+        }
+        const idx = Math.min(best, viaCum.length-1);
+        return (viaCum[idx]||0)/1000;
+      } catch { return 0; }
+    }
+    function onViaMessage(ev){
       try {
         const d = JSON.parse(ev.data||'{}');
+        console.log('viajes_stream_msg', { sid, d });
         const lat = Number(d.lat);
         const lon = Number(d.lon);
         const idx = Number(d.i);
         if (!isNaN(lat) && !isNaN(lon)){
+          if (viaPausedAtUser) return;
           let pt = [lat, lon];
+          let progressIdx = null;
           if (!isNaN(idx) && Array.isArray(viaPrevCoords) && viaPrevCoords[idx]){
-            const p = viaPrevCoords[idx];
+            const baseIdx = idx;
+            viaProgIdx = Math.max(viaProgIdx, baseIdx);
+            viaProgIdx = Math.min(viaProgIdx + (viaSpeedMult - 1), viaPrevCoords.length - 1);
+            const p = viaPrevCoords[viaProgIdx];
             pt = [p.lat, p.lng];
+            progressIdx = viaProgIdx;
           } else {
             pt = snapToRoute(lat, lon);
+            if (Array.isArray(viaPrevCoords)){
+              let best = 0, bd = Infinity;
+              for (let k=0; k<viaPrevCoords.length; k++){
+                const p2 = viaPrevCoords[k];
+                const dd = (p2.lat-pt[0])*(p2.lat-pt[0])+(p2.lng-pt[1])*(p2.lng-pt[1]);
+                if (dd<bd){ bd=dd; best=k; }
+              }
+              viaProgIdx = Math.max(viaProgIdx, best);
+              viaProgIdx = Math.min(viaProgIdx + (viaSpeedMult - 1), viaPrevCoords.length - 1);
+              const p3 = viaPrevCoords[viaProgIdx];
+              pt = [p3.lat, p3.lng];
+              progressIdx = viaProgIdx;
+            }
           }
-          if (!viaSimMarker) { viaSimMarker = L.marker(pt, { icon: recolectorIcon }).addTo(viaMap); }
-          else { viaSimMarker.setLatLng(pt); }
+          viaLastPt = pt;
+          try {
+            if (recoId && progressIdx!=null && (progressIdx - viaLastSentIdx >= 1)){
+              viaLastSentIdx = progressIdx;
+              console.log('reco_ubic_send', { recoId, lat: pt[0], lon: pt[1], progressIdx });
+              fetch(`/api/recolector/${recoId}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat: pt[0], lon: pt[1] }) });
+            }
+          } catch {}
+          placeSimMarker(pt);
           try {
             let doneKm = 0;
-            if (!isNaN(idx) && Array.isArray(viaCum) && viaCum[idx]!=null){
-              doneKm = viaCum[idx]/1000;
+            if (progressIdx!=null && Array.isArray(viaCum) && viaCum[progressIdx]!=null){
+              doneKm = viaCum[progressIdx]/1000;
             } else if (Array.isArray(viaPrevCoords) && Array.isArray(viaCum)){
               let best = 0, bd = Infinity;
               for (let k=0; k<viaPrevCoords.length; k++){
@@ -2052,10 +2474,61 @@
             }
             const leftKm = Math.max(viaTotalKm - doneKm, 0);
             if (meta) meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Recorrido: <strong>${doneKm.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm.toFixed(2)} km</strong>`;
+            console.log('viaje_progress', { sid, doneKm, leftKm });
+          } catch {}
+          try {
+            if (viaUserLat!=null && viaUserLon!=null){
+              const dUserM = distanciaMetros(pt[0], pt[1], Number(viaUserLat), Number(viaUserLon));
+              const dKm = dUserM/1000;
+              console.log('viaje_dist_usuario', { sid, dKm });
+              if (dKm <= 0.8){
+                viaPausedAtUser = true;
+                console.log('viaje_paused_at_usuario', { sid });
+                if (meta) {
+                  const doneKm = computeDoneKmFromPt(viaLastPt || pt);
+                  const leftKm = Math.max(viaTotalKm - doneKm, 0);
+                  meta.innerHTML = `Detenido en usuario: <strong>Esperando confirmaciones</strong> · Recorrido: <strong>${doneKm.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm.toFixed(2)} km</strong>`;
+                }
+                placeSimMarker(viaLastPt || pt);
+                if (viaResumePoll) { try{ clearInterval(viaResumePoll); }catch{} }
+                viaResumePoll = setInterval(async ()=>{
+                  try {
+                    const rs = await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() });
+                    const sj = await rs.json();
+                    const ok1 = Boolean(sj?.usuario_llegada_ok);
+                    const ok2 = Boolean(sj?.recolector_recojo_ok);
+                    const est = String(sj?.estado||'');
+                    if ((ok1 && ok2) || est==='rumbo_a_empresa'){
+                      clearInterval(viaResumePoll); viaResumePoll = null;
+                      viaPausedAtUser = false;
+                      placeSimMarker(viaLastPt || pt);
+                      console.log('viaje_resume', { sid });
+                      if (meta) meta.innerHTML = `En camino a empresa: <strong>Confirmaciones recibidas</strong>`;
+                    }
+                  } catch {}
+                }, 1500);
+              }
+            }
+          } catch {}
+          try {
+            if (viaEmpLat!=null && viaEmpLon!=null){
+              const dEmpM = distanciaMetros(pt[0], pt[1], Number(viaEmpLat), Number(viaEmpLon));
+              const dEmpKm = dEmpM/1000;
+              if (dEmpKm <= 0.05){
+                const doneKmE = computeDoneKmFromPt(viaLastPt || pt);
+                const leftKmE = Math.max(viaTotalKm - doneKmE, 0);
+                if (meta) meta.innerHTML = `Llegó a empresa: <strong>Esperando confirmaciones</strong> · Recorrido: <strong>${doneKmE.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKmE.toFixed(2)} km</strong>`;
+              }
+            }
           } catch {}
         }
       } catch {}
-    };
+    }
+    viaEventSource = new EventSource(`/api/viajes/${sid}/stream`);
+    console.log('viajes_stream_subscribe_front', { sid });
+    viaEventSource.onmessage = onViaMessage;
+    const speedBtn = document.getElementById('viaje-speed-toggle');
+    if (speedBtn) speedBtn.onclick = ()=>{ viaSpeedMult = 2; };
     instrHidden = false;
     const tbtnV = document.getElementById('viaje-instr-toggle');
     if (tbtnV) {
@@ -2351,16 +2824,19 @@
       document.getElementById('m-resenas').style.display = '';
       document.getElementById('m-rewards').style.display = 'none';
       setView('empresa_solicitudes');
+      try { initNotificaciones(); } catch {}
     } else if (role === 'recolector') {
       document.getElementById('m-empresas').style.display = 'none';
       document.getElementById('m-resenas').style.display = 'none';
       document.getElementById('m-rewards').style.display = 'none';
       document.getElementById('m-solicitudes').textContent = 'Solicitudes Disponibles';
       setView('solicitudes');
+      try { initNotificaciones(); } catch {}
     } else {
       document.getElementById('m-resenas').style.display = 'none';
       document.getElementById('m-rewards').style.display = '';
       setView('empresas');
+      try { initNotificaciones(); } catch {}
     }
   </script>
 </body>
@@ -2881,3 +3357,7 @@
     updateDistritoBadge();
   }
 </script>
+    viaUserLat = uLat;
+    viaUserLon = uLon;
+    viaPausedAtUser = false;
+    if (viaResumePoll) { try{ clearInterval(viaResumePoll); }catch{} viaResumePoll = null; }
