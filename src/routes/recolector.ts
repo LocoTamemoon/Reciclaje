@@ -153,6 +153,29 @@ recolectorRouter.get("/:id/vehiculos", asyncHandler(async (req: Request, res: Re
   res.json(r.rows);
 }));
 
+recolectorRouter.get("/:id/perfil", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  console.log("reco_perfil_in", { id });
+  const r = await pool.query("SELECT id, email, lat, lon, id_distrito FROM recolectores WHERE id=$1", [id]);
+  if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+  res.json(r.rows[0]);
+}));
+
+recolectorRouter.get("/distritos", asyncHandler(async (_req: Request, res: Response) => {
+  const r = await pool.query("SELECT id_distrito, nombre FROM distritos ORDER BY nombre");
+  res.json(r.rows);
+}));
+
+recolectorRouter.patch("/:id/distrito", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const distrito_id = Number(req.body?.distrito_id);
+  if (!id || Number.isNaN(id) || Number.isNaN(distrito_id)) { res.status(400).json({ error: "invalid_body" }); return; }
+  const exists = await pool.query("SELECT 1 FROM distritos WHERE id_distrito=$1", [distrito_id]);
+  if (!exists.rows[0]) { res.status(422).json({ error: "distrito_invalido" }); return; }
+  const r = await pool.query("UPDATE recolectores SET id_distrito=$2 WHERE id=$1 RETURNING id, id_distrito", [id, distrito_id]);
+  res.json(r.rows[0] || null);
+}));
+
 recolectorRouter.patch("/vehiculos/:vid", asyncHandler(async (req: Request, res: Response) => {
   const vid = Number(req.params.vid);
   const { recolector_id, capacidad_kg, activo, tipo, tipo_id } = req.body;

@@ -179,6 +179,35 @@ exports.recolectorRouter.get("/:id/vehiculos", (0, asyncHandler_1.asyncHandler)(
     console.log("vehiculos_list_out", { id, count: r.rows.length });
     res.json(r.rows);
 }));
+exports.recolectorRouter.get("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    console.log("reco_perfil_in", { id });
+    const r = await pool_1.pool.query("SELECT id, email, lat, lon, id_distrito FROM recolectores WHERE id=$1", [id]);
+    if (!r.rows[0]) {
+        res.status(404).json({ error: "not_found" });
+        return;
+    }
+    res.json(r.rows[0]);
+}));
+exports.recolectorRouter.get("/distritos", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    const r = await pool_1.pool.query("SELECT id_distrito, nombre FROM distritos ORDER BY nombre");
+    res.json(r.rows);
+}));
+exports.recolectorRouter.patch("/:id/distrito", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const distrito_id = Number(req.body?.distrito_id);
+    if (!id || Number.isNaN(id) || Number.isNaN(distrito_id)) {
+        res.status(400).json({ error: "invalid_body" });
+        return;
+    }
+    const exists = await pool_1.pool.query("SELECT 1 FROM distritos WHERE id_distrito=$1", [distrito_id]);
+    if (!exists.rows[0]) {
+        res.status(422).json({ error: "distrito_invalido" });
+        return;
+    }
+    const r = await pool_1.pool.query("UPDATE recolectores SET id_distrito=$2 WHERE id=$1 RETURNING id, id_distrito", [id, distrito_id]);
+    res.json(r.rows[0] || null);
+}));
 exports.recolectorRouter.patch("/vehiculos/:vid", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const vid = Number(req.params.vid);
     const { recolector_id, capacidad_kg, activo, tipo, tipo_id } = req.body;

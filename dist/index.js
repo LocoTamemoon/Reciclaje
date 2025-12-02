@@ -17,6 +17,33 @@ const materiales_1 = require("./routes/materiales");
 const recolector_1 = require("./routes/recolector");
 const pool_1 = require("./db/pool");
 const solicitudesService_1 = require("./services/solicitudesService");
+async function ensureDistritosSchema() {
+    try {
+        await pool_1.pool.query("CREATE TABLE IF NOT EXISTS distritos (id_distrito SERIAL PRIMARY KEY, nombre TEXT NOT NULL UNIQUE)");
+        await pool_1.pool.query("ALTER TABLE recolectores ADD COLUMN IF NOT EXISTS id_distrito INTEGER");
+        try {
+            const c = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='recolectores' AND constraint_name='recolectores_id_distrito_fkey' LIMIT 1");
+            if (!c.rows[0]) {
+                await pool_1.pool.query("ALTER TABLE recolectores ADD CONSTRAINT recolectores_id_distrito_fkey FOREIGN KEY (id_distrito) REFERENCES distritos(id_distrito)");
+            }
+        }
+        catch { }
+        try {
+            const r = await pool_1.pool.query("SELECT COUNT(*)::int AS c FROM distritos");
+            const c = Number((r.rows[0] || {}).c || 0);
+            if (c === 0) {
+                const names = [
+                    'Ate', 'Barranco', 'Breña', 'Carabayllo', 'Chorrillos', 'Comas', 'El Agustino', 'Independencia', 'Jesús María', 'La Molina', 'La Victoria', 'Lima', 'Lince', 'Los Olivos', 'Magdalena del Mar', 'Miraflores', 'Pachacámac', 'Pueblo Libre', 'Puente Piedra', 'Rímac', 'San Borja', 'San Isidro', 'San Juan de Lurigancho', 'San Juan de Miraflores', 'San Luis', 'San Martín de Porres', 'San Miguel', 'Santa Anita', 'Santiago de Surco', 'Surquillo', 'Villa El Salvador', 'Villa María del Triunfo', 'Callao', 'Bellavista', 'Carmen de la Legua-Reynoso', 'La Perla', 'La Punta'
+                ];
+                for (const n of names) {
+                    await pool_1.pool.query("INSERT INTO distritos(nombre) VALUES($1) ON CONFLICT(nombre) DO NOTHING", [n]);
+                }
+            }
+        }
+        catch { }
+    }
+    catch { }
+}
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 app.use(express_1.default.static("public"));
@@ -31,6 +58,7 @@ app.use("/api/auth", auth_1.authRouter);
 app.use("/api/transacciones", transacciones_1.transaccionesRouter);
 app.use("/api/materiales", materiales_1.materialesRouter);
 app.use("/api/recolector", recolector_1.recolectorRouter);
+ensureDistritosSchema();
 const viajeStreams = new Map();
 const viajeSimTimers = new Map();
 const viajeSimProgress = new Map();

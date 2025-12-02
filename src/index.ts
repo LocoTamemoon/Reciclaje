@@ -13,6 +13,31 @@ import { recolectorRouter } from "./routes/recolector";
 import { pool } from "./db/pool";
 import { updateDeliveryProximityAndState } from "./services/solicitudesService";
 
+async function ensureDistritosSchema() {
+  try {
+    await pool.query("CREATE TABLE IF NOT EXISTS distritos (id_distrito SERIAL PRIMARY KEY, nombre TEXT NOT NULL UNIQUE)");
+    await pool.query("ALTER TABLE recolectores ADD COLUMN IF NOT EXISTS id_distrito INTEGER");
+    try {
+      const c = await pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='recolectores' AND constraint_name='recolectores_id_distrito_fkey' LIMIT 1");
+      if (!c.rows[0]) {
+        await pool.query("ALTER TABLE recolectores ADD CONSTRAINT recolectores_id_distrito_fkey FOREIGN KEY (id_distrito) REFERENCES distritos(id_distrito)");
+      }
+    } catch {}
+    try {
+      const r = await pool.query("SELECT COUNT(*)::int AS c FROM distritos");
+      const c = Number((r.rows[0] || {}).c || 0);
+      if (c === 0) {
+        const names = [
+          'Ate','Barranco','Breña','Carabayllo','Chorrillos','Comas','El Agustino','Independencia','Jesús María','La Molina','La Victoria','Lima','Lince','Los Olivos','Magdalena del Mar','Miraflores','Pachacámac','Pueblo Libre','Puente Piedra','Rímac','San Borja','San Isidro','San Juan de Lurigancho','San Juan de Miraflores','San Luis','San Martín de Porres','San Miguel','Santa Anita','Santiago de Surco','Surquillo','Villa El Salvador','Villa María del Triunfo','Callao','Bellavista','Carmen de la Legua-Reynoso','La Perla','La Punta'
+        ];
+        for (const n of names) {
+          await pool.query("INSERT INTO distritos(nombre) VALUES($1) ON CONFLICT(nombre) DO NOTHING", [n]);
+        }
+      }
+    } catch {}
+  } catch {}
+}
+
 const app = express();
 app.use(express.json());
 app.use(express.static("public"));
@@ -29,6 +54,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/transacciones", transaccionesRouter);
 app.use("/api/materiales", materialesRouter);
 app.use("/api/recolector", recolectorRouter);
+
+ensureDistritosSchema();
 
 const viajeStreams: Map<number, Set<any>> = new Map();
 const viajeSimTimers: Map<number, any> = new Map();
