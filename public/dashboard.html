@@ -2550,7 +2550,7 @@
         const oldBtn = document.getElementById('btn-handoff-old'); if (oldBtn) oldBtn.remove();
         const newBtn = document.getElementById('btn-handoff-new'); if (newBtn) newBtn.remove();
         const st = String(sjCache?.handoff_state||'');
-        if (st==='en_intercambio'){
+        if (st==='en_intercambio' && String(role)==='recolector'){
           if (Number(sjCache?.recolector_id) === Number(user.id)){
             const b = document.createElement('button'); b.className='btn'; b.id='btn-handoff-old'; b.textContent='Confirmar entrega'; b.onclick=()=>confirmarHandoffOld(sid); actions.insertBefore(b, actions.firstChild);
           }
