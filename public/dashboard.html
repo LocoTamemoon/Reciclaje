@@ -1224,7 +1224,7 @@
         const r = await fetch(`/api/recolector/${sid}/handoff/confirm_old`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ recolector_id: user.id }) });
         const btn = document.getElementById('btn-handoff-old');
         if (!r.ok) { if (btn) btn.disabled = true; const tx = await r.text(); alert(tx||'No se pudo confirmar entrega'); return; }
-        if (btn) btn.disabled = true;
+        if (btn) { btn.disabled = true; try{ btn.remove(); }catch{} }
         try {
           const data = await r.json();
           if (String(data?.handoff_state||'') === 'completado'){
@@ -1248,7 +1248,7 @@
         if (!r.ok) { if (btn) btn.disabled = true; const tx = await r.text(); alert(tx||'No se pudo confirmar recepción'); return; }
         const data = await r.json();
         if (String(data?.handoff_state||'') === 'completado'){
-          if (btn) btn.disabled = true;
+          if (btn) { btn.disabled = true; try{ btn.remove(); }catch{} }
           alert('Handoff completado, ahora eres responsable del pedido');
           try { if (viaHandoffPublishTimer) { clearInterval(viaHandoffPublishTimer); } } catch {}
           try { viaHandoffPublished = false; viaHandoffInExchange = false; viaPausedAtUser = false; } catch {}
@@ -1256,7 +1256,7 @@
           try { const meta = document.getElementById('usr-route-meta-viaje'); if (meta) meta.innerHTML = 'En camino a empresa: <strong>Handoff completado</strong>'; } catch {}
           loadRecolectorCur();
         } else {
-          if (btn) btn.disabled = true;
+          if (btn) { btn.disabled = true; try{ btn.remove(); }catch{} }
           alert('Confirmaste la recepción, esperando confirmación del otro recolector');
         }
       } catch { alert('Error al confirmar recepción'); }
@@ -2550,11 +2550,13 @@
         const oldBtn = document.getElementById('btn-handoff-old'); if (oldBtn) oldBtn.remove();
         const newBtn = document.getElementById('btn-handoff-new'); if (newBtn) newBtn.remove();
         const st = String(sjCache?.handoff_state||'');
+        const oldOk = Boolean(sjCache?.handoff_old_ok);
+        const newOk = Boolean(sjCache?.handoff_new_ok);
         if (st==='en_intercambio' && String(role)==='recolector'){
-          if (Number(sjCache?.recolector_id) === Number(user.id)){
+          if (!oldOk && Number(sjCache?.recolector_id) === Number(user.id)){
             const b = document.createElement('button'); b.className='btn'; b.id='btn-handoff-old'; b.textContent='Confirmar entrega'; b.onclick=()=>confirmarHandoffOld(sid); actions.insertBefore(b, actions.firstChild);
           }
-          if (Number(sjCache?.handoff_recolector_id) === Number(user.id)){
+          if (!newOk && Number(sjCache?.handoff_recolector_id) === Number(user.id)){
             const b2 = document.createElement('button'); b2.className='btn'; b2.id='btn-handoff-new'; b2.textContent='Confirmar recepción'; b2.disabled = true; b2.onclick=()=>confirmarHandoffNew(sid); actions.insertBefore(b2, actions.firstChild);
             try { startHandoffPublish(sid); } catch {}
           }
