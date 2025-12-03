@@ -6,6 +6,8 @@ import { obtenerTransaccionPorSolicitud, obtenerPesajesTransaccion } from "../re
 import { obtenerUsuario } from "../repositories/usuariosRepo";
 import { obtenerEmpresa } from "../repositories/empresasRepo";
 import { pool } from "../db/pool";
+import fs from "fs";
+import path from "path";
 
 export const recolectorRouter = Router();
 
@@ -158,9 +160,42 @@ recolectorRouter.get("/:id/vehiculos", asyncHandler(async (req: Request, res: Re
 recolectorRouter.get("/:id/perfil", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   console.log("reco_perfil_in", { id });
-  const r = await pool.query("SELECT id, email, lat, lon, id_distrito FROM recolectores WHERE id=$1", [id]);
+  const r = await pool.query("SELECT id, email, lat, lon, id_distrito, nombre, apellidos, dni, estado, foto_perfil, foto_documento, foto_vehiculo FROM recolectores WHERE id=$1", [id]);
   if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }
   res.json(r.rows[0]);
+}));
+
+recolectorRouter.patch("/:id/perfil", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const fotoPerfilBase64 = req.body?.foto_perfil_base64 != null ? String(req.body.foto_perfil_base64) : null;
+  const fotoDocBase64 = req.body?.foto_documento_base64 != null ? String(req.body.foto_documento_base64) : null;
+  const fotoVehBase64 = req.body?.foto_vehiculo_base64 != null ? String(req.body.foto_vehiculo_base64) : null;
+  const dir = path.resolve("public", "img");
+  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  function saveImg(b64: string | null, suffix: string): string | null {
+    if (!b64) return null;
+    try {
+      const code = Date.now().toString(36);
+      const filename = `${id}_reco_${suffix}_${code}.png`;
+      const full = path.join(dir, filename);
+      const data = /^data:image\/(png|jpeg);base64,/i.test(b64) ? b64.replace(/^data:image\/(png|jpeg);base64,/i, "") : b64;
+      const buf = Buffer.from(data, "base64");
+      fs.writeFileSync(full, buf);
+      return `/img/${filename}`;
+    } catch { return null; }
+  }
+  const perfilPath = saveImg(fotoPerfilBase64, "perfil");
+  const docPath = saveImg(fotoDocBase64, "doc");
+  const vehPath = saveImg(fotoVehBase64, "veh");
+  const fields: string[] = [];
+  const vals: any[] = [];
+  if (perfilPath) { fields.push("foto_perfil=$" + (vals.length + 2)); vals.push(perfilPath); }
+  if (docPath) { fields.push("foto_documento=$" + (vals.length + 2)); vals.push(docPath); }
+  if (vehPath) { fields.push("foto_vehiculo=$" + (vals.length + 2)); vals.push(vehPath); }
+  if (fields.length === 0) { const r = await pool.query("SELECT id, email, lat, lon, id_distrito, nombre, apellidos, dni, estado, foto_perfil, foto_documento, foto_vehiculo FROM recolectores WHERE id=$1", [id]); res.json(r.rows[0] || null); return; }
+  const sql = `UPDATE recolectores SET ${fields.join(", ")} WHERE id=$1 RETURNING id, email, lat, lon, id_distrito, nombre, apellidos, dni, estado, foto_perfil, foto_documento, foto_vehiculo`;
+  const r = await pool.query(sql, [id, ...vals]);
+  res.json(r.rows[0] || null);
 }));
 
 recolectorRouter.get("/distritos", asyncHandler(async (_req: Request, res: Response) => {

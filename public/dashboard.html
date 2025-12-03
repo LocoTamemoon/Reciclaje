@@ -3387,6 +3387,94 @@
         const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
         perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg), condiciones: String(m.condiciones||'') }));
         renderPerfilMateriales();
+      } else if (role === 'recolector') {
+        const pj = await (await fetch(`/api/recolector/${user.id}/perfil`, { headers: authHeaders() })).json();
+        const distritos = await (await fetch('/api/recolector/distritos', { headers: authHeaders() })).json();
+        const distName = (Array.isArray(distritos)?distritos:[]).find((d)=> Number(d.id_distrito) === Number(pj?.id_distrito))?.nombre || 'Distrito N/A';
+        const vehs = await (await fetch(`/api/recolector/${user.id}/vehiculos`, { headers: authHeaders() })).json();
+        const curVeh = (Array.isArray(vehs)?vehs:[]).find((v)=> Boolean(v.activo)) || (Array.isArray(vehs)?vehs[0]:null);
+        const placa = curVeh?.placa ? String(curVeh.placa) : 'No asignado';
+        const tipoNombre = (curVeh?.tipo || curVeh?.tipo_id!=null ? null : null); // nombre puede venir como 'tipo' si existe
+        const tipoText = (curVeh && (curVeh.tipo!=null)) ? String(curVeh.tipo) : 'vehículo';
+        const capKg = curVeh?.capacidad_kg!=null ? Number(curVeh.capacidad_kg) : 0;
+        const hist = await (await fetch(`/api/recolector/${user.id}/historial`, { headers: authHeaders() })).json();
+        const trabajos = Array.isArray(hist) ? hist.length : 0;
+        const nombre = String(pj?.nombre||user.nombre||user.email||'Recolector');
+        const apellidos = String(pj?.apellidos||'').trim();
+        const dni = String(pj?.dni||'').trim();
+        const initials = (nombre||apellidos) ? (nombre.slice(0,1).toUpperCase()) : 'R';
+        const fallbackImg = '/img/nodisponible.png';
+        const perf = String(pj?.foto_perfil||'');
+        const doc = String(pj?.foto_documento||'');
+        const veh = String(pj?.foto_vehiculo||'');
+        const avatar = perf ? `<img id="reco-perfil-img" src="${perf}" alt="perfil" style="width:64px; height:64px; border-radius:999px; object-fit:cover; border:1px solid #dbeafe; cursor:pointer;" onerror="this.src='${fallbackImg}'" />` : `<div id="reco-perfil-fallback" style="width:64px; height:64px; border-radius:999px; background:#e2f7ea; color:#10b981; display:flex; align-items:center; justify-content:center; font-weight:700; cursor:pointer;">${initials}</div>`;
+        document.getElementById('perfil').innerHTML = `
+          <div class="card">
+            <div class="row jc-between ai-center">
+              <div class="row ai-center gap-12">
+                <label id="reco-perfil-wrap" for="reco-perfil-file" style="cursor:pointer;">${avatar}</label>
+                <input id="reco-perfil-file" type="file" accept="image/png,image/jpeg" style="position:absolute; left:-10000px; width:1px; height:1px;" />
+                <div>
+                  <div><strong>${nombre}${apellidos? (' '+apellidos):''}</strong></div>
+                  <div class="muted">${dni? ('DNI '+dni) : ''}</div>
+                  <div class="muted">ID ${user.id} • ${distName}</div>
+                </div>
+              </div>
+            </div>
+            <div class="stats-grid" style="margin-top:12px;">
+              <div class="stat-card"><div class="stat-title">Trabajos</div><div class="stat-value">${trabajos}</div></div>
+              <div class="stat-card"><div class="stat-title">Placa actual</div><div class="stat-value">${placa}</div></div>
+              <div class="stat-card"><div class="stat-title">Vehículo - Capacidad de Carga</div><div class="stat-value">${tipoText} - ${capKg} Kg</div></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <div class="row jc-between ai-center">
+              <div class="row ai-center" style="gap:8px;">
+                <div class="muted">Documentos del recolector</div>
+              </div>
+            </div>
+            <div class="row" style="gap:16px; margin-top:8px;">
+              <div class="thumb-wrap">
+                <img id="reco-doc-img" class="thumb" src="${doc||fallbackImg}" alt="documento" onerror="this.src='${fallbackImg}'" />
+                <button id="reco-doc-edit" class="edit-badge">✎</button>
+                <input id="reco-doc-file" type="file" accept="image/png,image/jpeg" />
+              </div>
+              <div class="thumb-wrap">
+                <img id="reco-veh-img" class="thumb" src="${veh||fallbackImg}" alt="vehiculo" onerror="this.src='${fallbackImg}'" />
+                <button id="reco-veh-edit" class="edit-badge">✎</button>
+                <input id="reco-veh-file" type="file" accept="image/png,image/jpeg" />
+              </div>
+            </div>
+          </div>
+        `;
+        const extra = document.getElementById('perfil-usuario-extra');
+        if (extra) extra.hidden = true;
+        document.getElementById('perfil-materiales').hidden = true;
+        const perfImgEl = document.getElementById('reco-perfil-img');
+        const perfFileEl = document.getElementById('reco-perfil-file');
+        const perfFallbackEl = document.getElementById('reco-perfil-fallback');
+        if ((perfImgEl || perfFallbackEl) && perfFileEl){
+          const trigger = ()=> perfFileEl.click();
+          if (perfImgEl) perfImgEl.onclick = trigger;
+          if (perfFallbackEl) perfFallbackEl.onclick = trigger;
+          perfFileEl.onchange = async ()=>{
+            const f = perfFileEl.files?.[0]||null;
+            if (!f) return;
+            const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(f); });
+            if (perfImgEl) perfImgEl.src = String(b64);
+            const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' });
+            await fetch(`/api/recolector/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_perfil_base64: b64 }) });
+          };
+        }
+        const dEdit = document.getElementById('reco-doc-edit');
+        const dFile = document.getElementById('reco-doc-file');
+        const vEdit = document.getElementById('reco-veh-edit');
+        const vFile = document.getElementById('reco-veh-file');
+        if (dEdit && dFile) dEdit.onclick = ()=> dFile.click();
+        if (vEdit && vFile) vEdit.onclick = ()=> vFile.click();
+        if (dFile) dFile.onchange = async ()=>{ const g = dFile.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('reco-doc-img'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/recolector/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_documento_base64: b64 }) }); };
+        if (vFile) vFile.onchange = async ()=>{ const g = vFile.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('reco-veh-img'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/recolector/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_vehiculo_base64: b64 }) }); };
+        return;
       } else {
         const pj = await (await fetch(`/api/usuarios/${user.id}/perfil`, { headers: authHeaders() })).json();
         const u = pj?.usuario||{};
