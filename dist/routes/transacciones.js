@@ -34,5 +34,12 @@ exports.transaccionesRouter.get("/:id", (0, asyncHandler_1.asyncHandler)(async (
     const usuario_neto = total - delivery_fee;
     const ya_resena_usuario = await (0, resenasRepo_1.existeResenaUsuario)(Number(tx.usuario_id), Number(tx.empresa_id), id);
     const ya_resena_empresa = await (0, resenasRepo_1.existeResenaEmpresa)(Number(tx.empresa_id), Number(tx.usuario_id), id);
-    res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa });
+    const recoFinalId = solicitud?.recolector_id != null ? Number(solicitud.recolector_id) : null;
+    let ya_resena_recolector_empresa = false;
+    let ya_resena_recolector_usuario = false;
+    if (recoFinalId && !Number.isNaN(recoFinalId) && recoFinalId > 0) {
+        ya_resena_recolector_empresa = await (0, resenasRepo_1.existeResenaRecolector)(recoFinalId, 'empresa', Number(tx.empresa_id), id);
+        ya_resena_recolector_usuario = await (0, resenasRepo_1.existeResenaRecolector)(recoFinalId, 'usuario', Number(tx.usuario_id), id);
+    }
+    res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa, ya_resena_recolector_empresa, ya_resena_recolector_usuario, recolector_final_id: recoFinalId, es_delivery: esDelivery });
 }));

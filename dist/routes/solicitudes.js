@@ -68,7 +68,8 @@ exports.solicitudesRouter.post("/:sid/etapas", (0, asyncHandler_1.asyncHandler)(
     }
     if (e === 'recolector_confirmo_recojo' && act === 'recolector' && aid === Number(s.recolector_id)) {
         nextEstado = 'recolector_confirmo_recojo';
-        await pool_1.pool.query("UPDATE solicitudes SET recolector_recojo_ok=true WHERE id=$1", [sid]);
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS pickup_recolector_id INTEGER");
+        await pool_1.pool.query("UPDATE solicitudes SET recolector_recojo_ok=true, pickup_recolector_id=$2 WHERE id=$1", [sid, Number(s.recolector_id)]);
     }
     if (e === 'entregado_empresa' && act === 'recolector' && aid === Number(s.recolector_id))
         nextEstado = 'entregado_empresa';

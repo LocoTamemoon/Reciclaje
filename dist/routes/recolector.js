@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.recolectorRouter = void 0;
 const express_1 = require("express");
@@ -9,6 +12,8 @@ const transaccionesRepo_1 = require("../repositories/transaccionesRepo");
 const usuariosRepo_1 = require("../repositories/usuariosRepo");
 const empresasRepo_1 = require("../repositories/empresasRepo");
 const pool_1 = require("../db/pool");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 exports.recolectorRouter = (0, express_1.Router)();
 exports.recolectorRouter.get("/feed", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     console.log("reco_feed");
@@ -184,12 +189,64 @@ exports.recolectorRouter.get("/:id/vehiculos", (0, asyncHandler_1.asyncHandler)(
 exports.recolectorRouter.get("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
     console.log("reco_perfil_in", { id });
-    const r = await pool_1.pool.query("SELECT id, email, lat, lon, id_distrito FROM recolectores WHERE id=$1", [id]);
+    const r = await pool_1.pool.query("SELECT id, email, lat, lon, id_distrito, nombre, apellidos, dni, estado, reputacion_promedio, resenas_recibidas_count, trabajos_completados, foto_perfil, foto_documento, foto_vehiculo FROM recolectores WHERE id=$1", [id]);
     if (!r.rows[0]) {
         res.status(404).json({ error: "not_found" });
         return;
     }
     res.json(r.rows[0]);
+}));
+exports.recolectorRouter.patch("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const fotoPerfilBase64 = req.body?.foto_perfil_base64 != null ? String(req.body.foto_perfil_base64) : null;
+    const fotoDocBase64 = req.body?.foto_documento_base64 != null ? String(req.body.foto_documento_base64) : null;
+    const fotoVehBase64 = req.body?.foto_vehiculo_base64 != null ? String(req.body.foto_vehiculo_base64) : null;
+    const dir = path_1.default.resolve("public", "img");
+    try {
+        fs_1.default.mkdirSync(dir, { recursive: true });
+    }
+    catch { }
+    function saveImg(b64, suffix) {
+        if (!b64)
+            return null;
+        try {
+            const code = Date.now().toString(36);
+            const filename = `${id}_reco_${suffix}_${code}.png`;
+            const full = path_1.default.join(dir, filename);
+            const data = /^data:image\/(png|jpeg);base64,/i.test(b64) ? b64.replace(/^data:image\/(png|jpeg);base64,/i, "") : b64;
+            const buf = Buffer.from(data, "base64");
+            fs_1.default.writeFileSync(full, buf);
+            return `/img/${filename}`;
+        }
+        catch {
+            return null;
+        }
+    }
+    const perfilPath = saveImg(fotoPerfilBase64, "perfil");
+    const docPath = saveImg(fotoDocBase64, "doc");
+    const vehPath = saveImg(fotoVehBase64, "veh");
+    const fields = [];
+    const vals = [];
+    if (perfilPath) {
+        fields.push("foto_perfil=$" + (vals.length + 2));
+        vals.push(perfilPath);
+    }
+    if (docPath) {
+        fields.push("foto_documento=$" + (vals.length + 2));
+        vals.push(docPath);
+    }
+    if (vehPath) {
+        fields.push("foto_vehiculo=$" + (vals.length + 2));
+        vals.push(vehPath);
+    }
+    if (fields.length === 0) {
+        const r = await pool_1.pool.query("SELECT id, email, lat, lon, id_distrito, nombre, apellidos, dni, estado, reputacion_promedio, resenas_recibidas_count, trabajos_completados, foto_perfil, foto_documento, foto_vehiculo FROM recolectores WHERE id=$1", [id]);
+        res.json(r.rows[0] || null);
+        return;
+    }
+    const sql = `UPDATE recolectores SET ${fields.join(", ")} WHERE id=$1 RETURNING id, email, lat, lon, id_distrito, nombre, apellidos, dni, estado, reputacion_promedio, resenas_recibidas_count, trabajos_completados, foto_perfil, foto_documento, foto_vehiculo`;
+    const r = await pool_1.pool.query(sql, [id, ...vals]);
+    res.json(r.rows[0] || null);
 }));
 exports.recolectorRouter.get("/distritos", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
     const r = await pool_1.pool.query("SELECT id_distrito, nombre FROM distritos ORDER BY nombre");
@@ -682,13 +739,52 @@ exports.recolectorRouter.get("/trabajos/:sid/detalle", (0, asyncHandler_1.asyncH
     const distRU = (!isNaN(rLat) && !isNaN(rLon) && !isNaN(uPickLat2) && !isNaN(uPickLon2)) ? (0, solicitudesService_1.haversineKm)(rLat, rLon, uPickLat2, uPickLon2) : null;
     const distUE = (!isNaN(uPickLat2) && !isNaN(uPickLon2) && !isNaN(eLat) && !isNaN(eLon)) ? (0, solicitudesService_1.haversineKm)(uPickLat2, uPickLon2, eLat, eLon) : null;
     console.log("reco_trabajo_detalle_out", { sid, totalKg, distRU, distUE });
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId = viewerIdRaw != null ? Number(viewerIdRaw) : null;
+    const pickRecoIdRes = await pool_1.pool.query("SELECT handoff_recolector_id FROM solicitudes WHERE id=$1", [sid]);
+    const handRecoId = pickRecoIdRes.rows[0]?.handoff_recolector_id != null ? Number(pickRecoIdRes.rows[0].handoff_recolector_id) : null;
+    const currentRecoId = Number(s.recolector_id);
+    const hadHandoff = handRecoId != null && !Number.isNaN(handRecoId);
+    let puedeUsuario = false;
+    let puedeEmpresa = false;
+    if (viewerId != null && !Number.isNaN(viewerId)) {
+        if (hadHandoff) {
+            // Solo el segundo recolector (actual) puede calificar a la empresa
+            puedeEmpresa = viewerId === currentRecoId;
+            // El primero (no actual) solo puede calificar al usuario
+            puedeUsuario = viewerId !== currentRecoId;
+        }
+        else {
+            // Sin handoff: único recolector puede calificar a ambos
+            puedeEmpresa = viewerId === currentRecoId;
+            puedeUsuario = viewerId === currentRecoId;
+        }
+    }
+    let ya_emp_por_reco = false;
+    let ya_usr_por_reco = false;
+    try {
+        if (viewerId != null && !Number.isNaN(viewerId)) {
+            const chkE = await pool_1.pool.query("SELECT 1 FROM resenas_empresas_por_recolector WHERE empresa_id=$1 AND recolector_id=$2 AND transaccion_id=$3 LIMIT 1", [Number(s.empresa_id), viewerId, Number(tx.id)]);
+            ya_emp_por_reco = (chkE.rowCount || 0) > 0;
+            const chkU = await pool_1.pool.query("SELECT 1 FROM resenas_usuarios_por_recolector WHERE usuario_id=$1 AND recolector_id=$2 AND transaccion_id=$3 LIMIT 1", [Number(s.usuario_id), viewerId, Number(tx.id)]);
+            ya_usr_por_reco = (chkU.rowCount || 0) > 0;
+        }
+    }
+    catch { }
     res.json({
         solicitud_id: sid,
         materiales: pesajes,
         total_kg: totalKg,
         clasificacion: s.clasificacion_distancia,
         dist_recolector_usuario_km: distRU,
-        dist_usuario_empresa_km: distUE
+        dist_usuario_empresa_km: distUE,
+        usuario_id: Number(s.usuario_id),
+        empresa_id: Number(s.empresa_id),
+        transaccion_id: Number(tx.id),
+        puede_calificar_usuario: puedeUsuario,
+        puede_calificar_empresa: puedeEmpresa,
+        ya_resena_usuario_por_recolector: ya_usr_por_reco,
+        ya_resena_empresa_por_recolector: ya_emp_por_reco
     });
 }));
 exports.recolectorRouter.post("/stats/recompute_all", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {

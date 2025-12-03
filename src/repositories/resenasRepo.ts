@@ -59,3 +59,79 @@ export async function listarResenasUsuario(usuarioId: number) {
   );
   return res.rows;
 }
+
+export async function crearResenaRecolector(
+  recolectorId: number,
+  evaluadorRol: string,
+  evaluadorId: number,
+  transaccionId: number,
+  solicitudId: number,
+  puntaje: number,
+  mensaje: string | null
+) {
+  const res = await pool.query(
+    "INSERT INTO resenas_recolectores(recolector_id, evaluador_rol, evaluador_id, transaccion_id, solicitud_id, puntaje, mensaje) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+    [recolectorId, evaluadorRol, evaluadorId, transaccionId, solicitudId, puntaje, mensaje]
+  );
+  return res.rows[0];
+}
+
+export async function existeResenaRecolector(recolectorId: number, evaluadorRol: string, evaluadorId: number, transaccionId: number) {
+  const res = await pool.query(
+    "SELECT 1 FROM resenas_recolectores WHERE recolector_id=$1 AND evaluador_rol=$2 AND evaluador_id=$3 AND transaccion_id=$4 LIMIT 1",
+    [recolectorId, evaluadorRol, evaluadorId, transaccionId]
+  );
+  return (res.rowCount || 0) > 0;
+}
+
+export async function listarResenasRecolector(recolectorId: number) {
+  const res = await pool.query(
+    "SELECT rr.id, rr.puntaje, rr.mensaje, rr.creado_en, rr.transaccion_id, rr.solicitud_id, rr.evaluador_rol, rr.evaluador_id FROM resenas_recolectores rr WHERE rr.recolector_id=$1 ORDER BY rr.creado_en DESC",
+    [recolectorId]
+  );
+  return res.rows;
+}
+
+export async function crearResenaEmpresaPorRecolector(
+  empresaId: number,
+  recolectorId: number,
+  transaccionId: number,
+  puntaje: number,
+  mensaje: string | null
+) {
+  const res = await pool.query(
+    "INSERT INTO resenas_empresas_por_recolector(empresa_id, recolector_id, transaccion_id, puntaje, mensaje) VALUES($1,$2,$3,$4,$5) RETURNING *",
+    [empresaId, recolectorId, transaccionId, puntaje, mensaje]
+  );
+  return res.rows[0];
+}
+
+export async function existeResenaEmpresaPorRecolector(empresaId: number, recolectorId: number, transaccionId: number) {
+  const res = await pool.query(
+    "SELECT 1 FROM resenas_empresas_por_recolector WHERE empresa_id=$1 AND recolector_id=$2 AND transaccion_id=$3 LIMIT 1",
+    [empresaId, recolectorId, transaccionId]
+  );
+  return (res.rowCount || 0) > 0;
+}
+
+export async function crearResenaUsuarioPorRecolector(
+  usuarioId: number,
+  recolectorId: number,
+  transaccionId: number,
+  puntaje: number,
+  mensaje: string | null
+) {
+  const res = await pool.query(
+    "INSERT INTO resenas_usuarios_por_recolector(usuario_id, recolector_id, transaccion_id, puntaje, mensaje) VALUES($1,$2,$3,$4,$5) RETURNING *",
+    [usuarioId, recolectorId, transaccionId, puntaje, mensaje]
+  );
+  return res.rows[0];
+}
+
+export async function existeResenaUsuarioPorRecolector(usuarioId: number, recolectorId: number, transaccionId: number) {
+  const res = await pool.query(
+    "SELECT 1 FROM resenas_usuarios_por_recolector WHERE usuario_id=$1 AND recolector_id=$2 AND transaccion_id=$3 LIMIT 1",
+    [usuarioId, recolectorId, transaccionId]
+  );
+  return (res.rowCount || 0) > 0;
+}

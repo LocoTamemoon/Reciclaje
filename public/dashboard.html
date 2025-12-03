@@ -82,8 +82,8 @@
         </div>
         <button id="m-historial" onclick="setView('historial')">Historial</button>
         <div id="hist-submenu" style="margin-left:12px; margin-top:6px;" hidden>
-          <button id="hist-nav-trans">Transacciones Con Empresas</button>
-          <button id="hist-nav-puntos">Historial de Puntos</button>
+          <button id="hist-nav-direct">Viaje Directo</button>
+          <button id="hist-nav-handoff">Viaje Handoff</button>
         </div>
         <button id="m-perfil" onclick="setView('perfil')">Perfil</button>
         <button id="m-resenas" onclick="setView('resenas')">Reseñas</button>
@@ -276,7 +276,18 @@
           <input id="hist-search" type="text" placeholder="Buscar transacción..." style="flex:1;" />
         </div>
 
+        <div id="hist-reco-tabs" class="row gap-8" style="display:none;">
+          <button id="hist-reco-tab-direct" class="btn">Viaje Directo</button>
+          <button id="hist-reco-tab-handoff" class="btn secondary">Viaje Handoff</button>
+        </div>
+
         <ul id="hist-list" class="list"></ul>
+        <div id="hist-reco-groups" style="display:none;" class="mt-8">
+          <h3>Viaje Directo</h3>
+          <ul id="hist-list-direct" class="list"></ul>
+          <h3 class="mt-12">Viaje Handoff</h3>
+          <ul id="hist-list-handoff" class="list"></ul>
+        </div>
         <div id="hist-detalle" class="panel mt-12" style="display:none;"></div>
       </section>
       <section id="view-empresa-solicitudes" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
@@ -576,10 +587,10 @@
       const btnSol = document.getElementById('m-solicitudes');
       if (btnSol) btnSol.textContent = 'Solicitudes Disponibles';
     }
-    const navTrans = document.getElementById('hist-nav-trans');
-    const navPuntos = document.getElementById('hist-nav-puntos');
-    if (navTrans) navTrans.onclick = ()=>{ histGastosMode=false; setView('historial'); };
-    if (navPuntos) navPuntos.onclick = ()=>{ histGastosMode=true; setView('historial'); };
+    const navDirect = document.getElementById('hist-nav-direct');
+    const navHandoff = document.getElementById('hist-nav-handoff');
+    if (navDirect) navDirect.onclick = ()=>{ setView('historial'); setRecoHistTab('direct'); };
+    if (navHandoff) navHandoff.onclick = ()=>{ setView('historial'); setRecoHistTab('handoff'); };
     const solNavPend = document.getElementById('sol-nav-pend');
     const solNavAnt = document.getElementById('sol-nav-ant');
     if (solNavPend) solNavPend.onclick = ()=>{ solTab='pendientes'; setView('solicitudes'); };
@@ -591,7 +602,7 @@
         document.getElementById('m-'+id).classList.toggle('active', id===v);
       }
       const sub = document.getElementById('hist-submenu');
-      if (sub) sub.hidden = !(role==='usuario' && v==='historial');
+      if (sub) sub.hidden = !(role==='recolector' && v==='historial');
       const solSub = document.getElementById('sol-submenu');
       if (solSub) solSub.hidden = (v!=='solicitudes');
       const solNavPend2 = document.getElementById('sol-nav-pend');
@@ -606,12 +617,7 @@
         solCardPend.hidden = !(v==='solicitudes' && solTab==='pendientes');
         solCardAnt.hidden = !(v==='solicitudes' && solTab==='anteriores');
       }
-      const navTrans2 = document.getElementById('hist-nav-trans');
-      const navPuntos2 = document.getElementById('hist-nav-puntos');
-      if (navTrans2 && navPuntos2){
-        navTrans2.classList.toggle('active', !histGastosMode && v==='historial');
-        navPuntos2.classList.toggle('active', histGastosMode && v==='historial');
-      }
+      // Limpieza: submenu de historial solo para recolector; sin opciones de usuario
       document.getElementById('view-empresa').hidden = (v!=='empresa');
       document.getElementById('view-empresa-solicitudes').hidden = (v!=='empresa_solicitudes');
       document.getElementById('view-pesaje').hidden = (v!=='pesaje');
@@ -2198,7 +2204,10 @@
       const toShow = sorted.slice(start, start + PAGE_SIZE);
       toShow.forEach(t=>{
         const li = document.createElement('li');
-        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Transacción #${t.id}</strong> con ${t.empresa_nombre||t.empresa_id}</div><div class=\"muted\">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div></div><div class=\"right\"><span class=\"badge\">${new Date(t.fecha).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTx(${t.id})\">Ver detalle</button> ${role==='usuario' ? `<button class=\\\"btn secondary\\\" id=\\\"rate-emp-${t.id}\\\" onclick=\\\"openRating('empresa', ${t.id}, ${t.empresa_id}, null)\\\">Calificar empresa</button>` : ''}</div></div>`;
+        const userBtns = (String(role)==='usuario')
+          ? ('<button class="btn secondary" id="rate-emp-'+t.id+'" onclick="openRating(\'empresa\','+t.id+','+t.empresa_id+', null)">Calificar empresa</button>')
+          : '';
+        li.innerHTML = `<div class="row jc-between"><div><div><strong>Transacción #${t.id}</strong> con ${t.empresa_nombre||t.empresa_id}</div><div class="muted">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div></div><div class="right"><span class="badge">${new Date(t.fecha).toLocaleString()}</span> <button class="btn" onclick="verDetalleTx(${t.id})">Ver detalle</button> ${userBtns}</div></div>`;
         ul.appendChild(li);
         setTimeout(()=>updateRatingButtonsForTx(t.id),0);
       });
@@ -2210,6 +2219,24 @@
         const pages = Array.from({length: totalPages2}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; renderHistTransacciones(); })()'>${i}</button>`).join('');
         li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${histPage}/${totalPages2}</span>${pages}${next}</div>`;
         ul.appendChild(li);
+      }
+      if (role==='usuario'){
+        try {
+          const rights = ul.querySelectorAll('.right');
+          rights.forEach((right, idx)=>{
+            const cur = toShow[idx];
+            if (!cur) return;
+            if (!right.querySelector(`#rate-reco-${cur.id}`)){
+              const b = document.createElement('button');
+              b.className = 'btn secondary';
+              b.id = 'rate-reco-' + String(cur.id);
+              b.textContent = 'Calificar recolector';
+              b.onclick = ()=> openRating('recolector', Number(cur.id), null, null);
+              right.appendChild(b);
+              setTimeout(()=>updateRatingButtonsForTx(Number(cur.id)),0);
+            }
+          });
+        } catch {}
       }
       document.getElementById('hist-detalle').style.display = 'none';
     }
@@ -2299,7 +2326,11 @@
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
       if (titleEl) titleEl.textContent = `Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}`;
-      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Precio/kg</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
+      let acciones = '';
+      if (String(role)==='empresa' && Boolean(j?.es_delivery) && j?.recolector_final_id!=null && !Boolean(j?.ya_resena_recolector_empresa)) {
+        acciones = `<div class=\"right mt-10\"><button class=\"btn secondary\" id=\"rate-reco-det-${id}\" onclick=\"openRating('recolector', ${id}, null, null)\">Calificar recolector</button></div>`;
+      }
+      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Precio/kg</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}${acciones}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
       if (modal) modal.hidden = false;
       histDetalleId = id;
     }
@@ -2307,37 +2338,95 @@
       const r = await fetch(`/api/recolector/${user.id}/historial`, { headers: authHeaders() });
       histRecoData = await r.json();
       const ul = document.getElementById('hist-list');
-      ul.innerHTML = '';
-      const total = histRecoData.reduce((a, s)=> a + Number(s.delivery_fee||0), 0);
+      const dirUl = document.getElementById('hist-list-direct');
+      const handUl = document.getElementById('hist-list-handoff');
+      const tabs = document.getElementById('hist-reco-tabs');
+      if (ul) ul.innerHTML = '';
+      if (dirUl) dirUl.innerHTML = '';
+      if (handUl) handUl.innerHTML = '';
+      const groups = document.getElementById('hist-reco-groups');
+      if (groups) groups.style.display = '';
+      if (tabs) tabs.style.display = '';
+      if (ul) ul.style.display = 'none';
+      const total = histRecoData.reduce((a, s)=> a + (Number(s.recolector_id)===Number(user.id) ? Number(s.delivery_fee||0) : 0), 0);
       const he = document.getElementById('hist-earnings');
       if (he) he.textContent = 'Ganancia total: S/ ' + total.toFixed(2);
       const sorted = histRecoData.slice().sort((a,b)=> new Date(b.creado_en||0).getTime() - new Date(a.creado_en||0).getTime());
-      const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-      if (histPage < 1) histPage = 1; if (histPage > totalPages) histPage = totalPages;
-      const start = (histPage-1) * PAGE_SIZE;
-      const toShow = sorted.slice(start, start + PAGE_SIZE);
-      toShow.forEach(s=>{
-        const li = document.createElement('li');
-        const banda = String(s.clasificacion_distancia||'').toLowerCase();
-        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Trabajo #${s.id}</strong> · Gana: <strong>S/ ${Number(s.delivery_fee||0).toFixed(2)}</strong></div><div class=\"muted\">Usuario #${s.usuario_id} · Empresa ${s.empresa_nombre||s.empresa_id} · Viaje: ${banda||'—'}</div></div><div class=\"right\"><span class=\"badge\">${new Date(s.creado_en).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTrabajo(${s.id})\">Detalles</button></div></div>`;
-        ul.appendChild(li);
-      });
-      if (sorted.length > PAGE_SIZE){
-        const li = document.createElement('li');
-        const prev = `<button ${histPage<=1?'disabled':''} onclick='(function(){ if (histPage>1){ histPage--; loadHistorialRecolector(); } })()'>Anterior</button>`;
-        const next = `<button ${histPage>=totalPages?'disabled':''} onclick='(function(){ if (histPage<${totalPages}){ histPage++; loadHistorialRecolector(); } })()'>Siguiente</button>`;
-        const pages = Array.from({length: totalPages}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; loadHistorialRecolector(); })()'>${i}</button>`).join('');
-        li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${histPage}/${totalPages}</span>${pages}${next}</div>`;
-        ul.appendChild(li);
-      }
+      const direct = sorted.filter(s=> !(s.handoff_recolector_id!=null && Number(s.handoff_recolector_id)>0) && !(s.pickup_recolector_id!=null && Number(s.pickup_recolector_id)>0 && Number(s.pickup_recolector_id)!==Number(s.recolector_id)) );
+      const hand = sorted.filter(s=> (s.handoff_recolector_id!=null && Number(s.handoff_recolector_id)>0) || (s.pickup_recolector_id!=null && Number(s.pickup_recolector_id)>0 && Number(s.pickup_recolector_id)!==Number(s.recolector_id)) );
+      const renderList = (arr, targetUl)=>{
+        const totalPages = Math.max(1, Math.ceil(arr.length / PAGE_SIZE));
+        if (histPage < 1) histPage = 1; if (histPage > totalPages) histPage = totalPages;
+        const start = (histPage-1) * PAGE_SIZE;
+        const toShow = arr.slice(start, start + PAGE_SIZE);
+        toShow.forEach(s=>{
+          const li = document.createElement('li');
+          const banda = String(s.clasificacion_distancia||'').toLowerCase();
+          const win = (Number(s.recolector_id)===Number(user.id)) ? Number(s.delivery_fee||0) : 0;
+          li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Trabajo #${s.id}</strong> · Gana: <strong>S/ ${win.toFixed(2)}</strong></div><div class=\"muted\">Usuario #${s.usuario_id} · Empresa ${s.empresa_nombre||s.empresa_id} · Viaje: ${banda||'—'}</div></div><div class=\"right\"><span class=\"badge\">${new Date(s.creado_en).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTrabajo(${s.id})\">Detalles</button></div></div>`;
+          targetUl.appendChild(li);
+          (async ()=>{
+            try {
+              const r2 = await fetch(`/api/recolector/trabajos/${s.id}/detalle?viewer_id=${user.id}`, { headers: authHeaders() });
+              const j2 = await r2.json();
+              const right = li.querySelector('.right');
+              if (!right) return;
+              if (Boolean(j2?.puede_calificar_usuario) && !Boolean(j2?.ya_resena_usuario_por_recolector)){
+                const bU = document.createElement('button');
+                bU.className = 'btn secondary';
+                bU.id = 'rate-usr-reco-' + String(s.id);
+                bU.textContent = 'Calificar usuario';
+                bU.onclick = ()=> openRating('usuario_reco', Number(j2.transaccion_id), null, Number(j2.usuario_id), Number(s.id));
+                right.appendChild(bU);
+              }
+              if (Boolean(j2?.puede_calificar_empresa) && !Boolean(j2?.ya_resena_empresa_por_recolector)){
+                const bE = document.createElement('button');
+                bE.className = 'btn secondary';
+                bE.id = 'rate-emp-reco-' + String(s.id);
+                bE.textContent = 'Calificar empresa';
+                bE.onclick = ()=> openRating('empresa_reco', Number(j2.transaccion_id), Number(j2.empresa_id), null, Number(s.id));
+                right.appendChild(bE);
+              }
+            } catch {}
+          })();
+        });
+        if (arr.length > PAGE_SIZE){
+          const li = document.createElement('li');
+          const prev = `<button ${histPage<=1?'disabled':''} onclick='(function(){ if (histPage>1){ histPage--; loadHistorialRecolector(); } })()'>Anterior</button>`;
+          const next = `<button ${histPage>=totalPages?'disabled':''} onclick='(function(){ if (histPage<${totalPages}){ histPage++; loadHistorialRecolector(); } })()'>Siguiente</button>`;
+          const pages = Array.from({length: totalPages}, (_,i)=> i+1).map(i=> `<button class='${i===histPage? 'active':''}' onclick='(function(){ histPage=${i}; loadHistorialRecolector(); })()'>${i}</button>`).join('');
+          li.innerHTML = `<div class=\"pager\">${prev}<span class=\"badge\">Página ${histPage}/${totalPages}</span>${pages}${next}</div>`;
+          targetUl.appendChild(li);
+        }
+      };
+      if (dirUl) renderList(direct, dirUl);
+      if (handUl) renderList(hand, handUl);
+      const bDir = document.getElementById('hist-reco-tab-direct');
+      const bHand = document.getElementById('hist-reco-tab-handoff');
+      if (bDir) bDir.onclick = ()=>{ setRecoHistTab('direct'); };
+      if (bHand) bHand.onclick = ()=>{ setRecoHistTab('handoff'); };
+      setRecoHistTab(histRecoTab || 'direct');
       const panel = document.getElementById('hist-detalle');
       if (panel) panel.style.display = 'none';
+    }
+
+    let histRecoTab = 'direct';
+    function setRecoHistTab(tab){
+      histRecoTab = tab;
+      const dirUl = document.getElementById('hist-list-direct');
+      const handUl = document.getElementById('hist-list-handoff');
+      const bDir = document.getElementById('hist-reco-tab-direct');
+      const bHand = document.getElementById('hist-reco-tab-handoff');
+      if (dirUl) dirUl.style.display = (tab==='direct') ? '' : 'none';
+      if (handUl) handUl.style.display = (tab==='handoff') ? '' : 'none';
+      if (bDir) bDir.className = (tab==='direct') ? 'btn' : 'btn secondary';
+      if (bHand) bHand.className = (tab==='handoff') ? 'btn' : 'btn secondary';
     }
     async function verDetalleTrabajo(sid){
       if (document.getElementById('view-historial').hidden) setView('historial');
       const modal = document.getElementById('historial-modal');
       if (modal && !modal.hidden && histDetalleId === sid){ modal.hidden = true; histDetalleId = null; return; }
-      const r = await fetch(`/api/recolector/trabajos/${sid}/detalle`, { headers: authHeaders() });
+      const r = await fetch(`/api/recolector/trabajos/${sid}/detalle?viewer_id=${user.id}`, { headers: authHeaders() });
       const j = await r.json();
       const filas = (j.materiales||[]).map(d=> `<tr><td>${d.nombre}</td><td class=\"ta-right\">${Number(d.kg_finales).toFixed(2)}</td></tr>`).join('');
       const distRU = (j.dist_recolector_usuario_km!=null) ? `${Number(j.dist_recolector_usuario_km).toFixed(2)} km` : '—';
@@ -2345,7 +2434,12 @@
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
       if (titleEl) titleEl.textContent = `Detalle Trabajo #${sid}`;
-      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right mt-10\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right mt-8\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>`;
+      let acciones = '';
+      const puedeU = Boolean(j?.puede_calificar_usuario) && !Boolean(j?.ya_resena_usuario_por_recolector);
+      const puedeE = Boolean(j?.puede_calificar_empresa) && !Boolean(j?.ya_resena_empresa_por_recolector);
+      if (puedeU) acciones += `<button class=\"btn secondary\" id=\"rate-usr-reco-${sid}\" onclick=\"openRating('usuario_reco', ${Number(j.transaccion_id)}, null, ${Number(j.usuario_id)})\">Calificar usuario</button>`;
+      if (puedeE) acciones += ` <button class=\"btn secondary\" id=\"rate-emp-reco-${sid}\" onclick=\"openRating('empresa_reco', ${Number(j.transaccion_id)}, ${Number(j.empresa_id)}, null)\">Calificar empresa</button>`;
+      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right mt-10\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right mt-8\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>${(acciones? `<div class=\\\"right mt-10\\\">${acciones}</div>` : '')}`;
       if (modal) modal.hidden = false;
       histDetalleId = sid;
     }
@@ -2355,10 +2449,10 @@
       if (modal) modal.hidden = true;
       histDetalleId = null;
     }
-    let ratingCtx = { tipo:null, txId:null, empresaId:null, usuarioId:null };
-    function openRating(tipo, txId, empresaId, usuarioId){
-      ratingCtx = { tipo, txId, empresaId, usuarioId };
-      document.getElementById('rating-title').textContent = tipo==='empresa' ? 'Calificar empresa' : 'Calificar usuario';
+    let ratingCtx = { tipo:null, txId:null, empresaId:null, usuarioId:null, sid:null };
+    function openRating(tipo, txId, empresaId, usuarioId, sid){
+      ratingCtx = { tipo, txId, empresaId, usuarioId, sid };
+      document.getElementById('rating-title').textContent = (tipo==='empresa' ? 'Calificar empresa' : (tipo==='usuario' ? 'Calificar usuario' : (tipo==='recolector' ? 'Calificar recolector' : (tipo==='usuario_reco' ? 'Calificar usuario' : 'Calificar empresa'))));
       document.getElementById('rating-score').value = '5';
       document.getElementById('rating-msg').value = '';
       document.getElementById('rating-modal').hidden = false;
@@ -2368,10 +2462,18 @@
       const det = await (await fetch(`/api/transacciones/${txId}`, { headers: authHeaders() })).json();
       const yaEmp = det?.ya_resena_empresa;
       const yaUsr = det?.ya_resena_usuario;
+      const yaRecoE = det?.ya_resena_recolector_empresa;
+      const yaRecoU = det?.ya_resena_recolector_usuario;
+      const esDelivery = Boolean(det?.es_delivery);
+      const hasRecoFinal = det?.recolector_final_id != null;
       const b1 = document.getElementById('rate-emp-'+txId);
       const b2 = document.getElementById('rate-usr-'+txId);
+      const b3 = document.getElementById('rate-reco-'+txId);
       if (b1 && yaEmp) b1.style.display = 'none';
       if (b2 && yaUsr) b2.style.display = 'none';
+      if (b3 && yaRecoE) b3.style.display = 'none';
+      if (b3 && String(role)!=='empresa' && yaRecoU) b3.style.display = 'none';
+      if (b3 && (!hasRecoFinal || !esDelivery)) b3.style.display = 'none';
     }
     async function submitRating(){
       const puntaje = Number(document.getElementById('rating-score').value);
@@ -2383,7 +2485,7 @@
         alert('Reseña enviada');
         const btn = document.getElementById('rate-emp-'+ratingCtx.txId);
         if (btn) btn.style.display = 'none';
-      } else {
+      } else if (ratingCtx.tipo === 'usuario'){
         let usuarioId = ratingCtx.usuarioId;
         if (!usuarioId){
           const det = await (await fetch(`/api/transacciones/${ratingCtx.txId}`, { headers: authHeaders() })).json();
@@ -2394,6 +2496,24 @@
         await r.json();
         alert('Reseña enviada');
         const btn = document.getElementById('rate-usr-'+ratingCtx.txId);
+        if (btn) btn.style.display = 'none';
+      } else if (ratingCtx.tipo === 'recolector'){
+        const r = await fetch('/api/resenas/recolector', { method:'POST', headers: authHeaders(), body: JSON.stringify({ evaluador_rol: (String(role)==='empresa' ? 'empresa' : 'usuario'), evaluador_id: user.id, transaccion_id: ratingCtx.txId, puntaje, mensaje }) });
+        await r.json();
+        alert('Reseña enviada');
+        const btn = document.getElementById('rate-reco-'+ratingCtx.txId);
+        if (btn) btn.style.display = 'none';
+      } else if (ratingCtx.tipo === 'usuario_reco'){
+        const r = await fetch('/api/resenas/recolector/usuario', { method:'POST', headers: authHeaders(), body: JSON.stringify({ usuario_id: ratingCtx.usuarioId, recolector_id: user.id, transaccion_id: ratingCtx.txId, puntaje, mensaje }) });
+        await r.json();
+        alert('Reseña enviada');
+        const btn = document.getElementById('rate-usr-reco-'+String((ratingCtx.sid!=null? ratingCtx.sid : (histDetalleId||''))));
+        if (btn) btn.style.display = 'none';
+      } else if (ratingCtx.tipo === 'empresa_reco'){
+        const r = await fetch('/api/resenas/recolector/empresa', { method:'POST', headers: authHeaders(), body: JSON.stringify({ empresa_id: ratingCtx.empresaId, recolector_id: user.id, transaccion_id: ratingCtx.txId, puntaje, mensaje }) });
+        await r.json();
+        alert('Reseña enviada');
+        const btn = document.getElementById('rate-emp-reco-'+String((ratingCtx.sid!=null? ratingCtx.sid : (histDetalleId||''))));
         if (btn) btn.style.display = 'none';
       }
       closeRating();
@@ -2410,7 +2530,7 @@
       const toShow = sorted.slice(start, start + PAGE_SIZE);
       toShow.forEach(t=>{
         const li = document.createElement('li');
-        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Transacción #${t.id}</strong></div><div class=\"muted\">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div></div><div class=\"right\"><span class=\"badge\">${new Date(t.fecha).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTx(${t.id})\">Ver detalle</button> <button class=\"btn secondary\" id=\"rate-usr-${t.id}\" onclick=\"openRating('usuario', ${t.id}, null, ${t.usuario_id})\">Calificar usuario</button></div></div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>Transacción #${t.id}</strong></div><div class=\"muted\">Monto: S/${Number(t.monto_pagado).toFixed(2)} · Puntos: ${t.puntos_obtenidos} · Estado: ${t.estado}</div></div><div class=\"right\"><span class=\"badge\">${new Date(t.fecha).toLocaleString()}</span> <button class=\"btn\" onclick=\"verDetalleTx(${t.id})\">Ver detalle</button> <button class=\"btn secondary\" id=\"rate-usr-${t.id}\" onclick=\"openRating('usuario', ${t.id}, null, ${t.usuario_id})\">Calificar usuario</button> <button class=\"btn secondary\" id=\"rate-reco-${t.id}\" onclick=\"openRating('recolector', ${t.id}, null, null)\">Calificar recolector</button></div></div>`;
         ul.appendChild(li);
         setTimeout(()=>updateRatingButtonsForTx(t.id),0);
       });
@@ -3403,6 +3523,8 @@
         const apellidos = String(pj?.apellidos||'').trim();
         const dni = String(pj?.dni||'').trim();
         const initials = (nombre||apellidos) ? (nombre.slice(0,1).toUpperCase()) : 'R';
+        const repProm = pj?.reputacion_promedio!=null ? Number(pj.reputacion_promedio) : 0;
+        const repCount = pj?.resenas_recibidas_count!=null ? Number(pj.resenas_recibidas_count) : 0;
         const fallbackImg = '/img/nodisponible.png';
         const perf = String(pj?.foto_perfil||'');
         const doc = String(pj?.foto_documento||'');
@@ -3425,6 +3547,7 @@
               <div class="stat-card"><div class="stat-title">Trabajos</div><div class="stat-value">${trabajos}</div></div>
               <div class="stat-card"><div class="stat-title">Placa actual</div><div class="stat-value">${placa}</div></div>
               <div class="stat-card"><div class="stat-title">Vehículo - Capacidad de Carga</div><div class="stat-value">${tipoText} - ${capKg} Kg</div></div>
+              <div class="stat-card"><div class="stat-title">Reputación</div><div class="stat-value">${repProm.toFixed(2)} <span class="muted">(${repCount} reseñas)</span></div></div>
             </div>
           </div>
           <div class="card" style="margin-top:12px;">
@@ -3445,6 +3568,13 @@
                 <input id="reco-veh-file" type="file" accept="image/png,image/jpeg" />
               </div>
             </div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <div class="row jc-between ai-center">
+              <h3>Reseñas</h3>
+              <button id="perfil-reco-resenas-refresh" class="btn secondary">Actualizar</button>
+            </div>
+            <ul id="perfil-reco-resenas-list" class="mono list"></ul>
           </div>
         `;
         const extra = document.getElementById('perfil-usuario-extra');
@@ -3474,6 +3604,11 @@
         if (vEdit && vFile) vEdit.onclick = ()=> vFile.click();
         if (dFile) dFile.onchange = async ()=>{ const g = dFile.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('reco-doc-img'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/recolector/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_documento_base64: b64 }) }); };
         if (vFile) vFile.onchange = async ()=>{ const g = vFile.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('reco-veh-img'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/recolector/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_vehiculo_base64: b64 }) }); };
+        const recoResList = document.getElementById('perfil-reco-resenas-list');
+        const recoResRefresh = document.getElementById('perfil-reco-resenas-refresh');
+        async function loadRecoResenas(){ try{ const r = await fetch(`/api/resenas/recolector/${user.id}`, { headers: authHeaders() }); const list = await r.json(); if (recoResList){ recoResList.innerHTML=''; const arr = Array.isArray(list)?list:[]; arr.forEach(re=>{ const li=document.createElement('li'); const ts = new Date(re.creado_en||Date.now()).toLocaleString(); const stars = '★★★★★'.slice(0, Math.max(0, Math.min(5, Number(re.puntaje||0)))); const quien = String(re.evaluador_rol)==='empresa' ? (`Empresa #${re.evaluador_id}`) : (`Usuario #${re.evaluador_id}`); const msg = re.mensaje ? re.mensaje : '*****'; li.innerHTML = `<div class="row jc-between"><div><div><strong>${quien}</strong> <span class="muted">(${re.evaluador_rol})</span></div><div class="muted">${msg}</div></div><div class="right"><div class="muted">${ts}</div><div style="margin-top:4px;"><span class="badge">${stars}</span></div></div></div>`; recoResList.appendChild(li); }); if (arr.length===0){ const li=document.createElement('li'); li.className='muted'; li.textContent='Sin reseñas aún'; recoResList.appendChild(li); } } }catch{} }
+        if (recoResRefresh) recoResRefresh.onclick = ()=> loadRecoResenas();
+        await loadRecoResenas();
         return;
       } else {
         const pj = await (await fetch(`/api/usuarios/${user.id}/perfil`, { headers: authHeaders() })).json();
@@ -4175,3 +4310,14 @@
     updateDistritoBadge();
   }
 </script>
+<script>/* stray cleanup
+      const navDirect2 = document.getElementById('hist-nav-direct');
+      const navHandoff2 = document.getElementById('hist-nav-handoff');
+      if (navDirect2 && navHandoff2){
+        const showReco = (role==='recolector' && v==='historial');
+        navDirect2.style.display = showReco ? '' : 'none';
+        navHandoff2.style.display = showReco ? '' : 'none';
+        navDirect2.classList.toggle('active', showReco && histRecoTab==='direct');
+        navHandoff2.classList.toggle('active', showReco && histRecoTab==='handoff');
+      }
+*/</script>

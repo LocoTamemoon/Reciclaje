@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { obtenerTransaccion, obtenerPesajesTransaccion } from "../repositories/transaccionesRepo";
 import { obtenerSolicitud } from "../repositories/solicitudesRepo";
-import { existeResenaEmpresa, existeResenaUsuario } from "../repositories/resenasRepo";
+import { existeResenaEmpresa, existeResenaUsuario, existeResenaRecolector } from "../repositories/resenasRepo";
 import { materialesDeEmpresa } from "../repositories/empresasRepo";
 
 export const transaccionesRouter = Router();
@@ -29,5 +29,12 @@ transaccionesRouter.get("/:id", asyncHandler(async (req: Request, res: Response)
   const usuario_neto = total - delivery_fee;
   const ya_resena_usuario = await existeResenaUsuario(Number(tx.usuario_id), Number(tx.empresa_id), id);
   const ya_resena_empresa = await existeResenaEmpresa(Number(tx.empresa_id), Number(tx.usuario_id), id);
-  res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa });
+  const recoFinalId = (solicitud as any)?.recolector_id != null ? Number((solicitud as any).recolector_id) : null;
+  let ya_resena_recolector_empresa = false;
+  let ya_resena_recolector_usuario = false;
+  if (recoFinalId && !Number.isNaN(recoFinalId) && recoFinalId > 0) {
+    ya_resena_recolector_empresa = await existeResenaRecolector(recoFinalId, 'empresa', Number(tx.empresa_id), id);
+    ya_resena_recolector_usuario = await existeResenaRecolector(recoFinalId, 'usuario', Number(tx.usuario_id), id);
+  }
+  res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa, ya_resena_recolector_empresa, ya_resena_recolector_usuario, recolector_final_id: recoFinalId, es_delivery: esDelivery });
 }));
