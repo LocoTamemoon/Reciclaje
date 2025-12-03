@@ -44,6 +44,25 @@ async function ensureDistritosSchema() {
     }
     catch { }
 }
+async function ensureHandoffSchema() {
+    try {
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lat NUMERIC(9,6)");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lon NUMERIC(9,6)");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_expires_at TIMESTAMPTZ");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_old_ok BOOLEAN DEFAULT false");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_new_ok BOOLEAN DEFAULT false");
+        try {
+            const c = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='solicitudes' AND constraint_name='solicitudes_handoff_recolector_id_fkey' LIMIT 1");
+            if (!c.rows[0]) {
+                await pool_1.pool.query("ALTER TABLE solicitudes ADD CONSTRAINT solicitudes_handoff_recolector_id_fkey FOREIGN KEY (handoff_recolector_id) REFERENCES recolectores(id)");
+            }
+        }
+        catch { }
+    }
+    catch { }
+}
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 app.use(express_1.default.static("public"));
@@ -59,10 +78,61 @@ app.use("/api/transacciones", transacciones_1.transaccionesRouter);
 app.use("/api/materiales", materiales_1.materialesRouter);
 app.use("/api/recolector", recolector_1.recolectorRouter);
 ensureDistritosSchema();
+ensureHandoffSchema();
 const viajeStreams = new Map();
 const viajeSimTimers = new Map();
 const viajeSimProgress = new Map();
 const viajeSimPoints = new Map();
+global.__viajeSimHooks = {
+    iniciar: async (sid) => {
+        let pts = viajeSimPoints.get(sid);
+        if (!pts || pts.length < 2) {
+            pts = await obtenerPuntosSimulacion(sid);
+            viajeSimPoints.set(sid, pts);
+        }
+        const prevTimer = viajeSimTimers.get(sid);
+        if (prevTimer)
+            return;
+        let i = 0;
+        viajeSimProgress.set(sid, 0);
+        const timer = setInterval(() => {
+            const arr = viajeSimPoints.get(sid) || [];
+            if (i >= arr.length) {
+                clearInterval(timer);
+                viajeSimTimers.delete(sid);
+                return;
+            }
+            const p = arr[i];
+            emitirSSE(sid, p.lat, p.lon, i);
+            i++;
+            viajeSimProgress.set(sid, i);
+        }, 400);
+        viajeSimTimers.set(sid, timer);
+    },
+    reanudar: async (sid) => {
+        const arr = viajeSimPoints.get(sid) || [];
+        if (!arr || arr.length < 2) {
+            await global.__viajeSimHooks.iniciar(sid);
+            return;
+        }
+        if (viajeSimTimers.get(sid))
+            return;
+        let i = viajeSimProgress.get(sid) || 0;
+        const timer = setInterval(() => {
+            const pts = viajeSimPoints.get(sid) || [];
+            if (i >= pts.length) {
+                clearInterval(timer);
+                viajeSimTimers.delete(sid);
+                return;
+            }
+            const p = pts[i];
+            emitirSSE(sid, p.lat, p.lon, i);
+            i++;
+            viajeSimProgress.set(sid, i);
+        }, 400);
+        viajeSimTimers.set(sid, timer);
+    }
+};
 app.get("/api/viajes/:sid/stream", (req, res) => {
     const sid = Number(req.params.sid);
     console.log("viajes_stream_subscribe", { sid });
@@ -91,7 +161,9 @@ app.post("/api/viajes/:sid/posicion", (req, res) => {
         if (!Number.isNaN(latNum) && !Number.isNaN(lonNum)) {
             (async () => {
                 const r = await (0, solicitudesService_1.updateDeliveryProximityAndState)(sid, latNum, lonNum);
-                const shouldPause = Boolean(r.pauseAtUser);
+                const pauseUser = Boolean(r.pauseAtUser);
+                const pauseHandoff = Boolean(r.pauseAtHandoff);
+                const shouldPause = pauseUser || pauseHandoff;
                 if (shouldPause) {
                     const t = viajeSimTimers.get(sid);
                     if (t) {
@@ -109,10 +181,10 @@ app.post("/api/viajes/:sid/posicion", (req, res) => {
                         rr.write(`data: ${payload}\n\n`);
                     }
                     catch { } });
-                    console.log("viajes_posicion_emit", { sid, listeners: set?.size || 0, pauseAtUser: shouldPause });
+                    console.log("viajes_posicion_emit", { sid, listeners: set?.size || 0, pauseAtUser: pauseUser, pauseAtHandoff: pauseHandoff });
                 }
                 else {
-                    console.log("viajes_posicion_block", { sid, pauseAtUser: shouldPause });
+                    console.log("viajes_posicion_block", { sid, pauseAtUser: pauseUser, pauseAtHandoff: pauseHandoff });
                 }
                 res.json({ ok: true });
             })().catch((e) => { console.error("viajes_posicion_dist_fail", { sid, error: String(e) }); res.json({ ok: true }); });
@@ -136,6 +208,35 @@ app.get("/api/viajes/:sid/coords", (req, res) => {
     const sid = Number(req.params.sid);
     const pts = viajeSimPoints.get(sid) || [];
     res.json({ points: pts });
+});
+app.post("/api/viajes/:sid/handoff/posicion", async (req, res) => {
+    const sid = Number(req.params.sid);
+    const { lat, lon } = req.body || {};
+    const latNum = lat != null ? Number(lat) : NaN;
+    const lonNum = lon != null ? Number(lon) : NaN;
+    const set = viajeStreams.get(sid);
+    console.log("viajes_handoff_posicion_in", { sid, lat, lon });
+    try {
+        const sRes = await pool_1.pool.query("SELECT handoff_state, handoff_pick_lat, handoff_pick_lon FROM solicitudes WHERE id=$1", [sid]);
+        const s = sRes.rows[0] || null;
+        if (!s || String(s.handoff_state || '') !== 'en_intercambio') {
+            res.status(422).json({ error: "no_handoff" });
+            return;
+        }
+        if (!Number.isNaN(latNum) && !Number.isNaN(lonNum) && set) {
+            const payload = JSON.stringify({ sid, hand_lat: latNum, hand_lon: lonNum, hand_pick_lat: s.handoff_pick_lat != null ? Number(s.handoff_pick_lat) : null, hand_pick_lon: s.handoff_pick_lon != null ? Number(s.handoff_pick_lon) : null, ts: Date.now() });
+            set.forEach((rr) => { try {
+                rr.write(`data: ${payload}\n\n`);
+            }
+            catch { } });
+            console.log("viajes_handoff_posicion_emit", { sid, listeners: set?.size || 0 });
+        }
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("viajes_handoff_posicion_fail", { sid, error: String(e) });
+        res.status(500).json({ error: "handoff_pos_failed" });
+    }
 });
 async function obtenerPuntosSimulacion(sid) {
     const sRes = await pool_1.pool.query("SELECT * FROM solicitudes WHERE id=$1", [sid]);
@@ -182,7 +283,9 @@ function emitirSSE(sid, lat, lon, i) {
     const set = viajeStreams.get(sid);
     (async () => {
         const r = await (0, solicitudesService_1.updateDeliveryProximityAndState)(sid, Number(lat), Number(lon));
-        const shouldPause = Boolean(r.pauseAtUser);
+        const pauseUser = Boolean(r.pauseAtUser);
+        const pauseHandoff = Boolean(r.pauseAtHandoff);
+        const shouldPause = pauseUser || pauseHandoff;
         if (shouldPause) {
             const t = viajeSimTimers.get(sid);
             if (t) {
@@ -200,10 +303,10 @@ function emitirSSE(sid, lat, lon, i) {
                 rr.write(`data: ${payload}\n\n`);
             }
             catch { } });
-            console.log("emitirSSE_emit", { sid, i, pauseAtUser: shouldPause });
+            console.log("emitirSSE_emit", { sid, i, pauseAtUser: pauseUser, pauseAtHandoff: pauseHandoff });
         }
         else {
-            console.log("emitirSSE_block", { sid, i, pauseAtUser: shouldPause });
+            console.log("emitirSSE_block", { sid, i, pauseAtUser: pauseUser, pauseAtHandoff: pauseHandoff });
         }
     })().catch((e) => { console.error("emitirSSE_dist_fail", { sid, error: String(e) }); });
 }

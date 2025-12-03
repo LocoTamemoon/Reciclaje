@@ -28,10 +28,11 @@ exports.AT_USER_KM = 0.1;
 exports.NEAR_EMP_KM = 0.8;
 exports.ARRIVE_EMP_KM = 0.1;
 async function updateDeliveryProximityAndState(sid, lat, lon) {
-    const sRes = await pool_1.pool.query("SELECT id, usuario_id, empresa_id, recolector_id, usuario_pick_actual, estado FROM solicitudes WHERE id=$1", [sid]);
+    await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
+    const sRes = await pool_1.pool.query("SELECT id, usuario_id, empresa_id, recolector_id, usuario_pick_actual, estado, handoff_state FROM solicitudes WHERE id=$1", [sid]);
     const s = sRes.rows[0] || null;
     if (!s)
-        return { dUserKm: null, dEmpKm: null, pauseAtUser: false };
+        return { dUserKm: null, dEmpKm: null, pauseAtUser: false, pauseAtHandoff: false };
     const uRes = await pool_1.pool.query("SELECT home_lat, home_lon, current_lat, current_lon FROM usuarios WHERE id=$1", [Number(s.usuario_id)]);
     const usuario = uRes.rows[0] || null;
     const eRes = await pool_1.pool.query("SELECT lat, lon FROM empresas WHERE id=$1", [Number(s.empresa_id)]);
@@ -100,7 +101,9 @@ async function updateDeliveryProximityAndState(sid, lat, lon) {
     const isCercaUsuario = String(s?.estado || '') === 'cerca_usuario';
     const bothOk = Boolean(flags.usuario_llegada_ok) && Boolean(flags.recolector_recojo_ok);
     const pauseAtUser = isCercaUsuario && !bothOk && atUsuario;
-    return { dUserKm, dEmpKm, pauseAtUser };
+    const hs = String(s?.handoff_state || '');
+    const pauseAtHandoff = (hs === 'en_intercambio' || hs === 'publicado');
+    return { dUserKm, dEmpKm, pauseAtUser, pauseAtHandoff };
 }
 function clasificarDistanciaPorKm(km) {
     if (km <= 2)

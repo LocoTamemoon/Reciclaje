@@ -123,6 +123,10 @@
           </div>
         </div>
         <ul id="reco-feed" class="list"></ul>
+        <div class="panel mt-12">
+          <div class="row jc-between ai-center"><h3>Handoffs disponibles</h3><button class="btn secondary" onclick="loadHandoffFeed()">Actualizar</button></div>
+          <ul id="handoff-feed" class="list"></ul>
+        </div>
         <div id="reco-preview" class="panel mt-12" style="display:none;">
           <div id="reco-map" class="map-box"></div>
           <div id="reco-route-meta" class="muted mt-8"></div>
@@ -564,7 +568,7 @@
         const solSub2 = document.getElementById('sol-submenu');
         if (solSub2) solSub2.hidden = true;
         try { loadVehiculosRecolector(); } catch {}
-        try { iniciarUbicacionRecolector(); setTimeout(()=> loadRecolectorFeed(), 400); } catch { loadRecolectorFeed(); }
+        try { iniciarUbicacionRecolector(); setTimeout(()=> { try{ loadRecolectorFeed(); }catch{} try{ loadHandoffFeed(); }catch{} }, 400); } catch { loadRecolectorFeed(); try{ loadHandoffFeed(); }catch{} }
         try { const last = localStorage.getItem('last_reco_sid'); if (last && !isNaN(Number(last))) { setTimeout(()=>{ try{ recoVerUbicacion(Number(last)); }catch{} }, 500); } } catch {}
         return;
       } else {
@@ -1140,13 +1144,241 @@
           const ubBtn = document.getElementById('reco-ubic-btn');
           if (ubBtn) ubBtn.disabled = false;
           recoSimSid = Number(cur[0].id);
+          const s0 = cur[0];
+          const hstate = String(s0?.handoff_state||'');
+          const isHandoffMine = Number(s0?.handoff_recolector_id||0) === Number(user.id);
+          const metaTxt = hstate==='en_intercambio' ? 'Handoff en intercambio' : 'En curso';
+          const rightBtns = hstate==='en_intercambio' && isHandoffMine
+            ? `<button class=\"btn\" onclick=\"usuarioVerViaje(${s0.id})\">Ver viaje</button>`
+            : `<button class=\"btn\" onclick=\"usuarioVerViaje(${s0.id})\">Ver viaje</button> <button class=\"btn\" onclick=\"solicitarHandoff(${s0.id})\">Solicitar handoff</button> <button class=\"btn secondary\" onclick=\"recolectorFinalizarRuta(${s0.id})\">Finalizar ruta</button>`;
           const li = document.createElement('li');
-          li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${cur[0].id}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${cur[0].id})">Ver viaje</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${cur[0].id})">Finalizar ruta</button></div></div>`;
+          li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\"><div><div><strong>Solicitud #${s0.id}</strong></div><div class=\"muted\">${metaTxt}</div></div><div class=\"right\">${rightBtns}</div></div>`;
           ul.insertBefore(li, ul.firstChild);
         } else {
           if (curWrap) curWrap.style.display='none';
         }
       }catch{}
+    }
+
+    async function loadHandoffFeed(){
+      const ul = document.getElementById('handoff-feed');
+      if (!ul) return;
+      ul.innerHTML = '';
+      try {
+        const r = await fetch(`/api/recolector/handoff/publicados?viewer_id=${user.id}`, { headers: authHeaders() });
+        if (!r.ok) return;
+        const list = await r.json();
+        if (!Array.isArray(list) || list.length===0){
+          const li = document.createElement('li');
+          li.className = 'muted';
+          li.textContent = 'Sin handoffs publicados';
+          ul.appendChild(li);
+          return;
+        }
+        list.forEach(s=>{
+          const li = document.createElement('li');
+          const pick = (s.handoff_pick_lat!=null && s.handoff_pick_lon!=null) ? `${Number(s.handoff_pick_lat).toFixed(5)}, ${Number(s.handoff_pick_lon).toFixed(5)}` : '—';
+          li.innerHTML = `<div class="row jc-between ai-center"><div><strong>Solicitud #${s.id}</strong><div class="muted">Punto de encuentro: ${pick}</div></div><div><button class="btn" onclick="usuarioVerViaje(${s.id})">Ver mapa</button> <button class="btn primary" onclick="aceptarHandoff(${s.id})">Aceptar handoff</button></div></div>`;
+          ul.appendChild(li);
+        });
+      } catch {}
+    }
+
+    async function solicitarHandoff(sid){
+      try {
+        const r = await fetch(`/api/recolector/${sid}/handoff/request`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ recolector_id: user.id }) });
+        if (!r.ok) { alert('No se pudo solicitar handoff'); return; }
+        alert('Handoff publicado');
+        loadHandoffFeed();
+      } catch { alert('Error solicitando handoff'); }
+    }
+
+    function startHandoffPublish(sid){
+      try { if (viaHandoffPublishTimer) { clearInterval(viaHandoffPublishTimer); } } catch {}
+      viaHandoffPublishTimer = setInterval(()=>{
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(async (pos)=>{
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            try { await fetch(`/api/viajes/${sid}/handoff/posicion`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) }); } catch {}
+          });
+        }
+      }, 1500);
+    }
+
+    async function aceptarHandoff(sid){
+      try {
+        const r = await fetch(`/api/recolector/${sid}/handoff/accept`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ recolector_id: user.id }) });
+        if (!r.ok) { alert('No se pudo aceptar handoff'); return; }
+        alert('Handoff aceptado, dirígete al punto y mantén el mapa abierto');
+        try{ await loadRecolectorFeed(); }catch{}
+        try{ await loadHandoffFeed(); }catch{}
+        viaHandoffServerDriven = true;
+        usuarioVerViaje(sid);
+        setTimeout(()=>{ try { ensureHandoffRouteAndSim(sid); } catch {} }, 800);
+      } catch { alert('Error al aceptar handoff'); }
+    }
+
+    async function confirmarHandoffOld(sid){
+      try {
+        const r = await fetch(`/api/recolector/${sid}/handoff/confirm_old`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ recolector_id: user.id }) });
+        const btn = document.getElementById('btn-handoff-old');
+        if (!r.ok) { if (btn) btn.disabled = true; const tx = await r.text(); alert(tx||'No se pudo confirmar entrega'); return; }
+        if (btn) btn.disabled = true;
+        try {
+          const data = await r.json();
+          if (String(data?.handoff_state||'') === 'completado'){
+            alert('Handoff completado, ahora el nuevo recolector continúa');
+            try { if (viaHandoffPublishTimer) { clearInterval(viaHandoffPublishTimer); } } catch {}
+            try { viaHandoffPublished = false; viaHandoffInExchange = false; viaPausedAtUser = false; } catch {}
+            try { if (viaHandoffMarker) { viaHandoffMarker.remove(); viaHandoffMarker = null; } } catch {}
+            try { const meta = document.getElementById('usr-route-meta-viaje'); if (meta) meta.innerHTML = 'En camino a empresa: <strong>Handoff completado</strong>'; } catch {}
+            loadRecolectorCur();
+            return;
+          }
+        } catch {}
+        alert('Confirmaste la entrega al nuevo recolector');
+      } catch { alert('Error al confirmar entrega'); }
+    }
+
+    async function confirmarHandoffNew(sid){
+      try {
+        const r = await fetch(`/api/recolector/${sid}/handoff/confirm_new`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ recolector_id: user.id }) });
+        const btn = document.getElementById('btn-handoff-new');
+        if (!r.ok) { if (btn) btn.disabled = true; const tx = await r.text(); alert(tx||'No se pudo confirmar recepción'); return; }
+        const data = await r.json();
+        if (String(data?.handoff_state||'') === 'completado'){
+          if (btn) btn.disabled = true;
+          alert('Handoff completado, ahora eres responsable del pedido');
+          try { if (viaHandoffPublishTimer) { clearInterval(viaHandoffPublishTimer); } } catch {}
+          try { viaHandoffPublished = false; viaHandoffInExchange = false; viaPausedAtUser = false; } catch {}
+          try { if (viaHandoffMarker) { viaHandoffMarker.remove(); viaHandoffMarker = null; } } catch {}
+          try { const meta = document.getElementById('usr-route-meta-viaje'); if (meta) meta.innerHTML = 'En camino a empresa: <strong>Handoff completado</strong>'; } catch {}
+          loadRecolectorCur();
+        } else {
+          if (btn) btn.disabled = true;
+          alert('Confirmaste la recepción, esperando confirmación del otro recolector');
+        }
+      } catch { alert('Error al confirmar recepción'); }
+    }
+
+    function ensureHandoffRouteAndSim(sid){
+      try {
+        if (!viaHandoffInExchange) return;
+        if (viaHandoffSimTimer) { clearInterval(viaHandoffSimTimer); viaHandoffSimTimer = null; }
+        let rLat = null, rLon = null;
+        const getRecoPos = async ()=>{
+          try {
+            await new Promise((resolve)=>{
+              if (!navigator.geolocation) return resolve(null);
+              navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:2000 });
+            });
+          } catch {}
+          if (rLat==null || rLon==null){
+            try { const rp = await fetch(`/api/recolector/${user.id}/perfil`, { headers: authHeaders() }); if (rp.ok) { const pj = await rp.json(); rLat = pj?.lat!=null?Number(pj.lat):null; rLon = pj?.lon!=null?Number(pj.lon):null; } } catch {}
+          }
+        };
+        const go = async ()=>{
+          await getRecoPos();
+          if (rLat==null || rLon==null || viaHandoffPickLat==null || viaHandoffPickLon==null) return;
+          if (viaHandoffRouteCtrl) { try { viaHandoffRouteCtrl.remove(); } catch {} viaHandoffRouteCtrl=null; }
+          viaHandoffRouteCtrl = L.Routing.control({
+            language: 'es',
+            waypoints: [ L.latLng(rLat, rLon), L.latLng(Number(viaHandoffPickLat), Number(viaHandoffPickLon)) ],
+            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', language: 'es' }),
+            routeWhileDragging: false,
+            showAlternatives: false,
+            addWaypoints: false,
+            draggableWaypoints: false,
+            createMarker: function() { return null; },
+            fitSelectedRoutes: false,
+            lineOptions: { styles: [{ color: '#06b6d4', weight: 4 }] }
+          }).addTo(viaMap);
+          viaHandoffRouteCtrl.on('routesfound', (e)=>{
+            const coords = e?.routes?.[0]?.coordinates || [];
+            viaHandoffCoords = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : null;
+            if (!viaHandoffCoords || viaHandoffCoords.length<2) return;
+            // Place marker at last known handoff position if available, else at route start
+            try {
+              if (!viaHandoffMarker) {
+                let initLatLng = viaHandoffCoords[0];
+                if (viaHandoffHasPos && viaHandoffLastLat!=null && viaHandoffLastLon!=null) {
+                  // Snap last pos to nearest route point for smoother resume
+                  let best = 0, bd = Infinity;
+                  for (let k=0; k<viaHandoffCoords.length; k++){
+                    const p = viaHandoffCoords[k];
+                    const dd = (p.lat-Number(viaHandoffLastLat))*(p.lat-Number(viaHandoffLastLat)) + (p.lng-Number(viaHandoffLastLon))*(p.lng-Number(viaHandoffLastLon));
+                    if (dd<bd){ bd=dd; best=k; }
+                  }
+                  initLatLng = viaHandoffCoords[Math.max(0, Math.min(best, viaHandoffCoords.length-1))];
+                }
+                viaHandoffMarker = L.marker(initLatLng, { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap);
+              }
+            } catch {}
+            const pts = viaHandoffCoords;
+            const n = pts.length;
+            function distMeters(lat1, lon1, lat2, lon2){
+              const toRad = (x)=> x*Math.PI/180;
+              const R = 6371000;
+              const dLat = toRad(lat2-lat1);
+              const dLon = toRad(lon2-lon1);
+              const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+              const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+              return R*c;
+            }
+            const lens = [];
+            let total = 0;
+            for (let k=1; k<n; k++){
+              const a = pts[k-1];
+              const b = pts[k];
+              const d = distMeters(a.lat, a.lng, b.lat, b.lng);
+              lens.push(d);
+              total += d;
+            }
+            const cum = [0];
+            for (let k=0; k<lens.length; k++) cum.push(cum[cum.length-1] + lens[k]);
+            const speed = 7 * (typeof viaSpeedMult === 'number' ? viaSpeedMult : 1);
+            let lastPub = 0;
+            // Compute resume offset distance if we have a last known handoff position
+            let offsetDist = 0;
+            if (viaHandoffHasPos && viaHandoffLastLat!=null && viaHandoffLastLon!=null) {
+              let best = 0, bd = Infinity;
+              for (let k=0; k<pts.length; k++){
+                const p = pts[k];
+                const dd = (p.lat-Number(viaHandoffLastLat))*(p.lat-Number(viaHandoffLastLat)) + (p.lng-Number(viaHandoffLastLon))*(p.lng-Number(viaHandoffLastLon));
+                if (dd<bd){ bd=dd; best=k; }
+              }
+              offsetDist = cum[Math.max(0, Math.min(best, cum.length-1))] || 0;
+            }
+            const t0 = performance.now() - (offsetDist / speed) * 1000;
+            function step(){
+              const now = performance.now();
+              const dist = Math.min(((now - t0)/1000) * speed, total);
+              let idx = 0;
+              while (idx < lens.length && cum[idx+1] < dist) idx++;
+              const segStart = cum[idx];
+              const segLen = lens[idx] || 0;
+              const u = segLen>0 ? (dist - segStart)/segLen : 0;
+              const a = pts[idx];
+              const b = pts[Math.min(idx+1, n-1)];
+              const lat = a.lat + (b.lat - a.lat) * u;
+              const lon = a.lng + (b.lng - a.lng) * u;
+              try { if (viaHandoffMarker) viaHandoffMarker.setLatLng([lat, lon]); } catch {}
+              // Track last known handoff position
+              viaHandoffHasPos = true; viaHandoffLastLat = lat; viaHandoffLastLon = lon;
+              try { localStorage.setItem('handoff_last_pos_'+sid, JSON.stringify({ lat, lon })); } catch {}
+              if (!viaHandoffServerDriven && (now - lastPub >= 300)){
+                lastPub = now;
+                try { fetch(`/api/viajes/${sid}/handoff/posicion`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) }); } catch {}
+              }
+              const dM = distanciaMetros(lat, lon, Number(viaHandoffPickLat), Number(viaHandoffPickLon));
+              if (dM <= 20) { clearInterval(viaHandoffSimTimer); viaHandoffSimTimer=null; return; }
+            }
+            if (!viaHandoffServerDriven) viaHandoffSimTimer = setInterval(step, 33);
+          });
+        };
+        go();
+      } catch {}
     }
 
   function clearRecoPreview(){
@@ -1538,7 +1770,7 @@
           const mark = ul ? ul.querySelector('.muted[data-sid="'+sid+'"]') : null;
           const li = mark ? mark.closest('li') : null;
           if (li){
-            li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${sid})">Ver viaje</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
+            li.innerHTML = `<div class="row" style="justify-content:space-between;"><div><div><strong>Solicitud #${sid}</strong></div><div class="muted">En curso</div></div><div class="right"><button class="btn" onclick="usuarioVerViaje(${sid})">Ver viaje</button> <button class="btn" onclick="solicitarHandoff(${sid})">Solicitar handoff</button> <button class="btn secondary" onclick="recolectorFinalizarRuta(${sid})">Finalizar ruta</button></div></div>`;
           }
         } catch {}
       } catch {}
@@ -1599,7 +1831,10 @@
         }
         cur.forEach(s=>{
           const li = document.createElement('li');
-          li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\"><div><div><strong>Solicitud #${s.id}</strong></div><div class=\"muted\">En curso</div></div><div class=\"right\"><button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button> <button class=\"btn secondary\" onclick=\"recolectorFinalizarRuta(${s.id})\">Finalizar ruta</button></div></div>`;
+          const estado = String(s?.estado||'');
+          const canHandoff = (estado==='rumbo_a_empresa' || estado==='cerca_empresa');
+          const handBtn = `<button class=\"btn\" ${canHandoff? '' : 'disabled'} onclick=\"solicitarHandoff(${s.id})\">Solicitar handoff</button>`;
+          li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\"><div><div><strong>Solicitud #${s.id}</strong></div><div class=\"muted\">En curso</div></div><div class=\"right\"><button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button> ${handBtn} <button class=\"btn secondary\" onclick=\"recolectorFinalizarRuta(${s.id})\">Finalizar ruta</button></div></div>`;
           ul.appendChild(li);
         });
       } catch {}
@@ -1834,6 +2069,18 @@
   let viaPoly = null;
   let viaStartMarker = null;
   let viaPausedAtUser = false;
+  let viaHandoffMarker = null;
+  let viaHandoffPickLat = null;
+  let viaHandoffPickLon = null;
+  let viaHandoffPublished = false;
+  let viaHandoffInExchange = false;
+  let viaHandoffRouteCtrl = null;
+  let viaHandoffCoords = null;
+  let viaHandoffSimTimer = null;
+  let viaHandoffHasPos = false;
+  let viaHandoffLastLat = null;
+  let viaHandoffServerDriven = false;
+  let viaHandoffLastLon = null;
   let viaUserLat = null;
   let viaUserLon = null;
   let viaEmpLat = null;
@@ -2260,6 +2507,9 @@
     if (viaSimTimer) { clearInterval(viaSimTimer); viaSimTimer = null; }
     if (viaHoldTimer) { try { clearInterval(viaHoldTimer); } catch {} viaHoldTimer = null; }
     if (viaPlaceTick) { try { clearTimeout(viaPlaceTick); } catch {} viaPlaceTick = null; }
+    try { if (viaHandoffRouteCtrl) { viaHandoffRouteCtrl.remove(); viaHandoffRouteCtrl = null; } } catch {}
+    try { if (viaHandoffMarker) { viaHandoffMarker.remove(); viaHandoffMarker = null; } } catch {}
+    try { if (viaHandoffSimTimer) { clearInterval(viaHandoffSimTimer); viaHandoffSimTimer = null; } } catch {}
     if (viaEventSource) { try { viaEventSource.close(); } catch {} viaEventSource = null; }
     if (viaMap) { viaMap.remove(); viaMap = null; }
     usrSid = null;
@@ -2285,11 +2535,37 @@
     let recoId = 0;
     let sjCache = null;
     try { sjCache = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json(); recoId = Number(sjCache?.recolector_id||0); } catch {}
+    try {
+      const st = String(sjCache?.handoff_state||'');
+      viaHandoffPublished = (st==='publicado');
+      viaHandoffInExchange = (st==='en_intercambio');
+      viaHandoffPickLat = sjCache?.handoff_pick_lat!=null ? Number(sjCache.handoff_pick_lat) : null;
+      viaHandoffPickLon = sjCache?.handoff_pick_lon!=null ? Number(sjCache.handoff_pick_lon) : null;
+      try { const cl = sjCache?.handoff_cur_lat!=null ? Number(sjCache.handoff_cur_lat) : null; const co = sjCache?.handoff_cur_lon!=null ? Number(sjCache.handoff_cur_lon) : null; if (cl!=null && co!=null && !Number.isNaN(cl) && !Number.isNaN(co)) { viaHandoffHasPos = true; viaHandoffLastLat = cl; viaHandoffLastLon = co; } } catch {}
+    try { const hp = localStorage.getItem('handoff_last_pos_'+sid); if (hp) { const o = JSON.parse(hp); if (o && typeof o.lat === 'number' && typeof o.lon === 'number') { viaHandoffHasPos = true; viaHandoffLastLat = Number(o.lat); viaHandoffLastLon = Number(o.lon); } } } catch {}
+    } catch { viaHandoffPublished = false; viaHandoffInExchange = false; viaHandoffPickLat = null; viaHandoffPickLon = null; }
+    try {
+      const actions = document.querySelector('#viaje-modal .modal-actions');
+      if (actions) {
+        const oldBtn = document.getElementById('btn-handoff-old'); if (oldBtn) oldBtn.remove();
+        const newBtn = document.getElementById('btn-handoff-new'); if (newBtn) newBtn.remove();
+        const st = String(sjCache?.handoff_state||'');
+        if (st==='en_intercambio'){
+          if (Number(sjCache?.recolector_id) === Number(user.id)){
+            const b = document.createElement('button'); b.className='btn'; b.id='btn-handoff-old'; b.textContent='Confirmar entrega'; b.onclick=()=>confirmarHandoffOld(sid); actions.insertBefore(b, actions.firstChild);
+          }
+          if (Number(sjCache?.handoff_recolector_id) === Number(user.id)){
+            const b2 = document.createElement('button'); b2.className='btn'; b2.id='btn-handoff-new'; b2.textContent='Confirmar recepción'; b2.disabled = true; b2.onclick=()=>confirmarHandoffNew(sid); actions.insertBefore(b2, actions.firstChild);
+            try { startHandoffPublish(sid); } catch {}
+          }
+        }
+      }
+    } catch {}
     viaUserLat = uLat;
     viaUserLon = uLon;
     try {
       const needConfirm = String(sjCache?.estado||'')==='cerca_usuario' && !(Boolean(sjCache?.usuario_llegada_ok) && Boolean(sjCache?.recolector_recojo_ok));
-      viaPausedAtUser = Boolean(needConfirm);
+      viaPausedAtUser = Boolean(needConfirm) || Boolean(viaHandoffPublished) || Boolean(viaHandoffInExchange);
     } catch { viaPausedAtUser = false; }
     if (viaResumePoll) { try{ clearInterval(viaResumePoll); }catch{} viaResumePoll = null; }
     const meta = document.getElementById('usr-route-meta-viaje');
@@ -2352,12 +2628,28 @@
     if (viaPoly) { viaPoly.remove(); viaPoly = null; }
     const partidaIcon = L.icon({ iconUrl: '/img/partida.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
     const recolectorIcon = L.icon({ iconUrl: '/img/recolector.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
+    const recolectorHandIcon = L.icon({ iconUrl: '/img/recohand.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
     const hogarIcon = L.icon({ iconUrl: '/img/hogar.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
     const empresaIcon = L.icon({ iconUrl: '/img/empresa.png', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-28] });
     const layers = [];
     if (uLat!=null && uLon!=null) layers.push(L.marker([uLat, uLon], { icon: hogarIcon }).bindPopup('Tu ubicación'));
     if (eLat!=null && eLon!=null) layers.push(L.marker([eLat, eLon], { icon: empresaIcon }).bindPopup('Empresa'));
+    if (viaHandoffPickLat!=null && viaHandoffPickLon!=null) {
+      const crossIcon = L.divIcon({ className: 'marker-div', html: `<div style="background:#fecaca;color:#7f1d1d;border-radius:8px;padding:2px 6px;border:1px solid #991b1b;box-shadow:0 2px 6px rgba(0,0,0,.25);font-weight:700;font-size:12px;">Handoff</div>`, iconSize: [1,1], iconAnchor: [14,28], popupAnchor: [0,-28] });
+      layers.push(L.marker([viaHandoffPickLat, viaHandoffPickLon], { icon: crossIcon }).bindPopup('Punto de handoff'));
+    }
     viaLayer = L.layerGroup(layers).addTo(viaMap);
+    try {
+      if (viaHandoffInExchange) {
+        if (viaHandoffMarker) { try { viaHandoffMarker.remove(); } catch {} viaHandoffMarker = null; }
+        const initLat = (viaHandoffHasPos && viaHandoffLastLat!=null) ? Number(viaHandoffLastLat) : Number(viaHandoffPickLat);
+        const initLon = (viaHandoffHasPos && viaHandoffLastLon!=null) ? Number(viaHandoffLastLon) : Number(viaHandoffPickLon);
+        if (!isNaN(initLat) && !isNaN(initLon)) {
+          viaHandoffMarker = L.marker([initLat, initLon], { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap);
+        }
+      }
+    } catch {}
+    try { if (viaHandoffInExchange) { ensureHandoffRouteAndSim(sid); } } catch {}
     if (viaRouteCtrl) { viaRouteCtrl.remove(); viaRouteCtrl = null; }
     try {
       const rr = await fetch(`/api/viajes/${sid}/coords`, { headers: authHeaders() });
@@ -2553,6 +2845,43 @@
         console.log('viajes_stream_msg', { sid, d });
         const lat = Number(d.lat);
         const lon = Number(d.lon);
+        const hLat = d.hand_lat!=null ? Number(d.hand_lat) : NaN;
+        const hLon = d.hand_lon!=null ? Number(d.hand_lon) : NaN;
+        const pickLat = d.hand_pick_lat!=null ? Number(d.hand_pick_lat) : (viaHandoffPickLat!=null ? Number(viaHandoffPickLat) : NaN);
+        const pickLon = d.hand_pick_lon!=null ? Number(d.hand_pick_lon) : (viaHandoffPickLon!=null ? Number(viaHandoffPickLon) : NaN);
+        if (!isNaN(pickLat) && !isNaN(pickLon)) { viaHandoffPickLat = pickLat; viaHandoffPickLon = pickLon; }
+        if (!isNaN(hLat) && !isNaN(hLon)){
+          const handPt = [hLat, hLon];
+          try {
+            if (!viaHandoffMarker) viaHandoffMarker = L.marker(handPt, { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap);
+            else viaHandoffMarker.setLatLng(handPt);
+          } catch {}
+          // Track last known handoff position for resume on reopen
+          viaHandoffHasPos = true; viaHandoffLastLat = hLat; viaHandoffLastLon = hLon;
+          try { localStorage.setItem('handoff_last_pos_'+sid, JSON.stringify({ lat: hLat, lon: hLon })); } catch {}
+          try {
+            if (!isNaN(pickLat) && !isNaN(pickLon)){
+              const dRecoPickKm = distanciaMetros(hLat, hLon, pickLat, pickLon) / 1000;
+              let dPickEmpKm = null;
+              if (viaEmpLat!=null && viaEmpLon!=null) dPickEmpKm = distanciaMetros(pickLat, pickLon, Number(viaEmpLat), Number(viaEmpLon)) / 1000;
+              if (meta) {
+                const dp = `Handoff: Recolector2→Punto ${dRecoPickKm.toFixed(2)} km` + (dPickEmpKm!=null ? ` · Punto→Empresa ${dPickEmpKm.toFixed(2)} km` : '');
+                if (viaHandoffInExchange) {
+                  meta.innerHTML = `<span class="muted">${dp}</span>`;
+                } else {
+                  const base = meta.innerHTML||'';
+                  meta.innerHTML = base ? `${base}<br/><span class="muted">${dp}</span>` : `<span class="muted">${dp}</span>`;
+                }
+              }
+              const btnNew = document.getElementById('btn-handoff-new');
+              if (btnNew) btnNew.disabled = !(dRecoPickKm <= 0.05);
+            }
+          } catch {}
+          if (viaHandoffInExchange) {
+            viaHandoffServerDriven = true;
+            if (viaHandoffSimTimer) { try { clearInterval(viaHandoffSimTimer); } catch {} viaHandoffSimTimer = null; }
+          }
+        }
         const idx = Number(d.i);
         if (!isNaN(lat) && !isNaN(lon)){
           if (viaPausedAtUser) return;
@@ -2589,26 +2918,28 @@
               fetch(`/api/recolector/${recoId}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat: pt[0], lon: pt[1] }) });
             }
           } catch {}
-          placeSimMarkerDebounced(pt);
+          if (!(viaHandoffPublished || viaHandoffInExchange)) placeSimMarkerDebounced(pt);
           try {
-            let doneKm = 0;
-            if (progressIdx!=null && Array.isArray(viaCum) && viaCum[progressIdx]!=null){
-              doneKm = viaCum[progressIdx]/1000;
-            } else if (Array.isArray(viaPrevCoords) && Array.isArray(viaCum)){
-              let best = 0, bd = Infinity;
-              for (let k=0; k<viaPrevCoords.length; k++){
-                const p2 = viaPrevCoords[k];
-                const dd = (p2.lat-pt[0])*(p2.lat-pt[0])+(p2.lng-pt[1])*(p2.lng-pt[1]);
-                if (dd<bd){ bd=dd; best=k; }
+            if (!(viaHandoffPublished || viaHandoffInExchange)) {
+              let doneKm = 0;
+              if (progressIdx!=null && Array.isArray(viaCum) && viaCum[progressIdx]!=null){
+                doneKm = viaCum[progressIdx]/1000;
+              } else if (Array.isArray(viaPrevCoords) && Array.isArray(viaCum)){
+                let best = 0, bd = Infinity;
+                for (let k=0; k<viaPrevCoords.length; k++){
+                  const p2 = viaPrevCoords[k];
+                  const dd = (p2.lat-pt[0])*(p2.lat-pt[0])+(p2.lng-pt[1])*(p2.lng-pt[1]);
+                  if (dd<bd){ bd=dd; best=k; }
+                }
+                doneKm = viaCum[Math.min(best, viaCum.length-1)]/1000;
               }
-              doneKm = viaCum[Math.min(best, viaCum.length-1)]/1000;
+              const leftKm = Math.max(viaTotalKm - doneKm, 0);
+              if (meta) meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Recorrido: <strong>${doneKm.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm.toFixed(2)} km</strong>`;
+              console.log('viaje_progress', { sid, doneKm, leftKm });
             }
-            const leftKm = Math.max(viaTotalKm - doneKm, 0);
-            if (meta) meta.innerHTML = `En camino: <strong>Recolector → Usuario → Empresa</strong> · Recorrido: <strong>${doneKm.toFixed(2)} km</strong> · Total: <strong>${viaTotalKm.toFixed(2)} km</strong> · Faltan: <strong>${leftKm.toFixed(2)} km</strong>`;
-            console.log('viaje_progress', { sid, doneKm, leftKm });
           } catch {}
           try {
-            if (viaUserLat!=null && viaUserLon!=null){
+            if (!(viaHandoffPublished || viaHandoffInExchange) && viaUserLat!=null && viaUserLon!=null){
               const dUserM = distanciaMetros(pt[0], pt[1], Number(viaUserLat), Number(viaUserLon));
               const dKm = dUserM/1000;
               console.log('viaje_dist_usuario', { sid, dKm });
@@ -2645,7 +2976,7 @@
             }
           } catch {}
           try {
-            if (viaEmpLat!=null && viaEmpLon!=null){
+            if (!(viaHandoffPublished || viaHandoffInExchange) && viaEmpLat!=null && viaEmpLon!=null){
               const dEmpM = distanciaMetros(pt[0], pt[1], Number(viaEmpLat), Number(viaEmpLon));
               const dEmpKm = dEmpM/1000;
               if (dEmpKm <= 0.1){
@@ -2656,13 +2987,31 @@
             }
           } catch {}
         }
+        if (viaHandoffInExchange && viaHandoffMarker==null && !isNaN(pickLat) && !isNaN(pickLon)){
+          try { viaHandoffMarker = L.marker([pickLat, pickLon], { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap); } catch {}
+        }
       } catch {}
     }
     viaEventSource = new EventSource(`/api/viajes/${sid}/stream`);
     console.log('viajes_stream_subscribe_front', { sid });
     viaEventSource.onmessage = onViaMessage;
     const speedBtn = document.getElementById('viaje-speed-toggle');
-    if (speedBtn) speedBtn.onclick = ()=>{ viaSpeedMult = 2; };
+    if (speedBtn) {
+      const applyState = ()=>{
+        speedBtn.textContent = viaSpeedMult===20 ? 'Velocidad x20' : 'Velocidad 1x';
+        speedBtn.setAttribute('aria-pressed', viaSpeedMult!==1 ? 'true' : 'false');
+      };
+      applyState();
+      speedBtn.onclick = async ()=>{
+        viaSpeedMult = viaSpeedMult!==1 ? 1 : 20;
+        applyState();
+        if (viaHandoffInExchange && viaHandoffServerDriven) {
+          try { await fetch(`/api/viajes/${sid}/handoff/speed`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ mult: viaSpeedMult }) }); } catch {}
+        } else if (viaHandoffInExchange) {
+          try { ensureHandoffRouteAndSim(sid); } catch {}
+        }
+      };
+    }
     instrHidden = false;
     const tbtnV = document.getElementById('viaje-instr-toggle');
     if (tbtnV) {

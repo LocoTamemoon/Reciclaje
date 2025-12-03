@@ -19,10 +19,11 @@ export const AT_USER_KM = 0.1;
 export const NEAR_EMP_KM = 0.8;
 export const ARRIVE_EMP_KM = 0.1;
 
-export async function updateDeliveryProximityAndState(sid: number, lat: number | null, lon: number | null): Promise<{ dUserKm: number | null; dEmpKm: number | null; pauseAtUser: boolean }> {
-  const sRes = await pool.query("SELECT id, usuario_id, empresa_id, recolector_id, usuario_pick_actual, estado FROM solicitudes WHERE id=$1", [sid]);
+export async function updateDeliveryProximityAndState(sid: number, lat: number | null, lon: number | null): Promise<{ dUserKm: number | null; dEmpKm: number | null; pauseAtUser: boolean; pauseAtHandoff: boolean }> {
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
+  const sRes = await pool.query("SELECT id, usuario_id, empresa_id, recolector_id, usuario_pick_actual, estado, handoff_state FROM solicitudes WHERE id=$1", [sid]);
   const s = sRes.rows[0] || null;
-  if (!s) return { dUserKm: null, dEmpKm: null, pauseAtUser: false };
+  if (!s) return { dUserKm: null, dEmpKm: null, pauseAtUser: false, pauseAtHandoff: false };
   const uRes = await pool.query("SELECT home_lat, home_lon, current_lat, current_lon FROM usuarios WHERE id=$1", [Number(s.usuario_id)]);
   const usuario = uRes.rows[0] || null;
   const eRes = await pool.query("SELECT lat, lon FROM empresas WHERE id=$1", [Number(s.empresa_id)]);
@@ -80,7 +81,9 @@ export async function updateDeliveryProximityAndState(sid: number, lat: number |
   const isCercaUsuario = String((s as any)?.estado||'') === 'cerca_usuario';
   const bothOk = Boolean(flags.usuario_llegada_ok) && Boolean(flags.recolector_recojo_ok);
   const pauseAtUser = isCercaUsuario && !bothOk && atUsuario;
-  return { dUserKm, dEmpKm, pauseAtUser };
+  const hs = String((s as any)?.handoff_state||'');
+  const pauseAtHandoff = (hs === 'en_intercambio' || hs === 'publicado');
+  return { dUserKm, dEmpKm, pauseAtUser, pauseAtHandoff };
 }
 
 function clasificarDistanciaPorKm(km: number): "ideal" | "normal" | "larga" {

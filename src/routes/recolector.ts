@@ -19,8 +19,10 @@ recolectorRouter.get("/feed", asyncHandler(async (req: Request, res: Response) =
 recolectorRouter.get("/:id/en_curso", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   console.log("reco_en_curso_in", { id });
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
   const rows = await pool.query(
-    "SELECT * FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada') ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE ((recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada')) OR (handoff_state='en_intercambio' AND handoff_recolector_id=$1)) ORDER BY creado_en DESC",
     [id]
   );
   console.log("reco_en_curso_out", { id, count: rows.rows.length });
@@ -215,6 +217,207 @@ recolectorRouter.post("/:id/ubicacion_actual", asyncHandler(async (req: Request,
     }
   } catch {}
   res.json({ ok: true, recolector: r.rows[0] || null });
+}));
+
+recolectorRouter.get("/handoff/publicados", asyncHandler(async (req: Request, res: Response) => {
+  const viewerId = Number((req.query.viewer_id as any) || NaN);
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_expires_at TIMESTAMPTZ");
+  const r = await pool.query(
+    "SELECT id, usuario_id, empresa_id, recolector_id, handoff_pick_lat, handoff_pick_lon, handoff_expires_at FROM solicitudes WHERE handoff_state='publicado' AND (handoff_expires_at IS NULL OR handoff_expires_at > NOW()) ORDER BY creado_en DESC"
+  );
+  const list = r.rows.filter((row: any)=> Number(row.recolector_id||0) !== (Number.isNaN(viewerId)?0:viewerId));
+  res.json(list);
+}));
+
+recolectorRouter.post("/:sid/handoff/request", asyncHandler(async (req: Request, res: Response) => {
+  const sid = Number(req.params.sid);
+  const recolectorId = Number(req.body?.recolector_id);
+  if (!sid || Number.isNaN(recolectorId)) { res.status(400).json({ error: "invalid_body" }); return; }
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lat NUMERIC(9,6)");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lon NUMERIC(9,6)");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_expires_at TIMESTAMPTZ");
+  const sRes = await pool.query("SELECT estado, recolector_id FROM solicitudes WHERE id=$1", [sid]);
+  const s = sRes.rows[0] || null;
+  if (!s || Number(s.recolector_id) !== recolectorId) { res.status(403).json({ error: "no_owner" }); return; }
+  const est = String(s.estado||'');
+  if (!(est==='rumbo_a_empresa' || est==='cerca_empresa')) { res.status(422).json({ error: "etapa_invalida" }); return; }
+  const rpos = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [recolectorId]);
+  const pos = rpos.rows[0] || null;
+  let curLat = pos?.lat!=null ? Number(pos.lat) : null;
+  let curLon = pos?.lon!=null ? Number(pos.lon) : null;
+  let pickLat: number | null = curLat;
+  let pickLon: number | null = curLon;
+  try { } catch {}
+  await pool.query("UPDATE solicitudes SET handoff_state='publicado', handoff_pick_lat=$2, handoff_pick_lon=$3, handoff_expires_at = NOW() + INTERVAL '15 minutes' WHERE id=$1", [sid, pickLat, pickLon]);
+  const subs: any = (global as any).__notifSubs || ((global as any).__notifSubs = {});
+  const notify = async (destRole: string, destId: number, tipo: string, mensaje: string) => {
+    const safeId = (destId!=null && !Number.isNaN(destId) && destId>0) ? destId : null;
+    if (!safeId) return;
+    const payload = `event: notif\ndata: ${JSON.stringify({ solicitud_id: sid, actor_destino: destRole, destino_id: Number(destId), tipo, mensaje })}\n\n`;
+    try { await pool.query("INSERT INTO notificaciones(solicitud_id, actor_destino, destino_id, tipo, mensaje) VALUES($1,$2,$3,$4,$5)", [sid, destRole, safeId, tipo, mensaje]); } catch {}
+    const k = `${destRole}:${destId}`;
+    const arr = subs[k] || [];
+    for (const r of arr) { try { r.write(payload); } catch {} }
+  };
+  await notify('recolector', recolectorId, 'handoff_publicado', 'Handoff publicado, esperando aceptante');
+  res.json({ ok: true, handoff_state: 'publicado' });
+}));
+
+recolectorRouter.post("/:sid/handoff/accept", asyncHandler(async (req: Request, res: Response) => {
+  const sid = Number(req.params.sid);
+  const newRecoId = Number(req.body?.recolector_id);
+  if (!sid || Number.isNaN(newRecoId)) { res.status(400).json({ error: "invalid_body" }); return; }
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_expires_at TIMESTAMPTZ");
+  const sRes = await pool.query("SELECT estado, recolector_id, handoff_state, handoff_expires_at FROM solicitudes WHERE id=$1", [sid]);
+  const s = sRes.rows[0] || null;
+  if (!s) { res.status(404).json({ error: "not_found" }); return; }
+  if (String(s.handoff_state||'') !== 'publicado') { res.status(422).json({ error: "no_publicado" }); return; }
+  const exp = s.handoff_expires_at ? new Date(s.handoff_expires_at) : null;
+  if (exp && exp.getTime() <= Date.now()) { await pool.query("UPDATE solicitudes SET handoff_state=NULL, handoff_expires_at=NULL WHERE id=$1", [sid]); res.status(422).json({ error: "expirado" }); return; }
+  if (Number(s.recolector_id) === newRecoId) { res.status(422).json({ error: "mismo_recolector" }); return; }
+  await pool.query("UPDATE solicitudes SET handoff_state='en_intercambio', handoff_recolector_id=$2, handoff_old_ok=false, handoff_new_ok=false WHERE id=$1", [sid, newRecoId]);
+  const chk = await pool.query("SELECT id, handoff_state, handoff_recolector_id FROM solicitudes WHERE id=$1", [sid]);
+  console.log("handoff_accept_ok", { sid, newRecoId, row: chk.rows[0]||null });
+  try {
+    const posR2 = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [newRecoId]);
+    const p = posR2.rows[0] || null;
+    if (p && p.lat!=null && p.lon!=null){
+      try { await pool.query("UPDATE solicitudes SET handoff_cur_lat=$2, handoff_cur_lon=$3 WHERE id=$1", [sid, Number(p.lat), Number(p.lon)]); } catch {}
+    }
+  } catch {}
+  try { const hooks: any = (global as any).__handoffSimHooks; if (hooks && typeof hooks.iniciar === 'function') { await hooks.iniciar(sid); } } catch {}
+  const subs: any = (global as any).__notifSubs || ((global as any).__notifSubs = {});
+  const notify = async (destRole: string, destId: number, tipo: string, mensaje: string) => {
+    const safeId = (destId!=null && !Number.isNaN(destId) && destId>0) ? destId : null;
+    if (!safeId) return;
+    const payload = `event: notif\ndata: ${JSON.stringify({ solicitud_id: sid, actor_destino: destRole, destino_id: Number(destId), tipo, mensaje })}\n\n`;
+    try { await pool.query("INSERT INTO notificaciones(solicitud_id, actor_destino, destino_id, tipo, mensaje) VALUES($1,$2,$3,$4,$5)", [sid, destRole, safeId, tipo, mensaje]); } catch {}
+    const k = `${destRole}:${destId}`;
+    const arr = subs[k] || [];
+    for (const r of arr) { try { r.write(payload); } catch {} }
+  };
+  await notify('recolector', Number(s.recolector_id), 'handoff_aceptado', 'Recolector 2 aceptó el handoff');
+  await notify('recolector', newRecoId, 'handoff_aceptado', 'Dirígete al punto de encuentro para el handoff');
+  res.json({ ok: true, handoff_state: 'en_intercambio' });
+}));
+
+recolectorRouter.post("/:sid/handoff/confirm_old", asyncHandler(async (req: Request, res: Response) => {
+  const sid = Number(req.params.sid);
+  const recoId = Number(req.body?.recolector_id);
+  if (!sid || Number.isNaN(recoId)) { res.status(400).json({ error: "invalid_body" }); return; }
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_old_ok BOOLEAN");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_new_ok BOOLEAN");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lat NUMERIC(9,6)");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lon NUMERIC(9,6)");
+  const sRes = await pool.query("SELECT recolector_id, handoff_state, handoff_recolector_id, handoff_new_ok, handoff_pick_lat, handoff_pick_lon FROM solicitudes WHERE id=$1", [sid]);
+  const s = sRes.rows[0] || null;
+  if (!s || Number(s.recolector_id) !== recoId) { res.status(403).json({ error: "no_owner" }); return; }
+  if (String(s.handoff_state||'') !== 'en_intercambio') { res.status(422).json({ error: "no_intercambio" }); return; }
+  await pool.query("UPDATE solicitudes SET handoff_old_ok=true WHERE id=$1", [sid]);
+  const okNew = Boolean(s.handoff_new_ok);
+  const okOld = true;
+  if (okOld && okNew) {
+    const r1 = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
+    const r2 = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id)]);
+    const a = r1.rows[0] || null;
+    const b = r2.rows[0] || null;
+    const aLat = a?.lat!=null ? Number(a.lat) : NaN;
+    const aLon = a?.lon!=null ? Number(a.lon) : NaN;
+    const bLat = b?.lat!=null ? Number(b.lat) : NaN;
+    const bLon = b?.lon!=null ? Number(b.lon) : NaN;
+    const d = (!isNaN(aLat) && !isNaN(aLon) && !isNaN(bLat) && !isNaN(bLon)) ? haversineKm(aLat, aLon, bLat, bLon) : Infinity;
+    if (d <= 0.05) {
+      await pool.query("UPDATE solicitudes SET recolector_id=$2, handoff_state='completado' WHERE id=$1", [sid, Number(s.handoff_recolector_id)]);
+      await pool.query("UPDATE solicitudes SET estado='rumbo_a_empresa' WHERE id=$1", [sid]);
+      try {
+        const hooks: any = (global as any).__viajeSimHooks;
+        if (hooks && typeof hooks.reanudar === 'function') { await hooks.reanudar(sid); }
+      } catch {}
+      try {
+        const hhooks: any = (global as any).__handoffSimHooks;
+        if (hhooks && typeof hhooks.detener === 'function') { await hhooks.detener(sid); }
+      } catch {}
+      const subs: any = (global as any).__notifSubs || ((global as any).__notifSubs = {});
+      const notify = async (destRole: string, destId: number, tipo: string, mensaje: string) => {
+        const safeId = (destId!=null && !Number.isNaN(destId) && destId>0) ? destId : null;
+        if (!safeId) return;
+        const payload = `event: notif\ndata: ${JSON.stringify({ solicitud_id: sid, actor_destino: destRole, destino_id: Number(destId), tipo, mensaje })}\n\n`;
+        try { await pool.query("INSERT INTO notificaciones(solicitud_id, actor_destino, destino_id, tipo, mensaje) VALUES($1,$2,$3,$4,$5)", [sid, destRole, safeId, tipo, mensaje]); } catch {}
+        const k = `${destRole}:${destId}`;
+        const arr = subs[k] || [];
+        for (const r of arr) { try { r.write(payload); } catch {} }
+      };
+      await notify('recolector', Number(s.recolector_id), 'handoff_completado', 'Handoff completado, pedido entregado al nuevo recolector');
+      await notify('recolector', Number(s.handoff_recolector_id), 'handoff_completado', 'Handoff completado, continúa hacia la empresa');
+      res.json({ ok: true, handoff_state: 'completado' });
+      return;
+    }
+    res.status(422).json({ error: "distancia_insuficiente" });
+    return;
+  }
+  res.json({ ok: true, handoff_old_ok: true });
+}));
+
+recolectorRouter.post("/:sid/handoff/confirm_new", asyncHandler(async (req: Request, res: Response) => {
+  const sid = Number(req.params.sid);
+  const recoId = Number(req.body?.recolector_id);
+  if (!sid || Number.isNaN(recoId)) { res.status(400).json({ error: "invalid_body" }); return; }
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_new_ok BOOLEAN");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lat NUMERIC(9,6)");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lon NUMERIC(9,6)");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
+  const sRes = await pool.query("SELECT usuario_id, empresa_id, recolector_id, handoff_state, handoff_recolector_id, handoff_old_ok, handoff_pick_lat, handoff_pick_lon FROM solicitudes WHERE id=$1", [sid]);
+  const s = sRes.rows[0] || null;
+  if (!s || Number(s.handoff_recolector_id) !== recoId) { res.status(403).json({ error: "no_new_owner" }); return; }
+  if (String(s.handoff_state||'') !== 'en_intercambio') { res.status(422).json({ error: "no_intercambio" }); return; }
+  await pool.query("UPDATE solicitudes SET handoff_new_ok=true WHERE id=$1", [sid]);
+  const okOld = Boolean(s.handoff_old_ok);
+  const okNew = true;
+  if (okOld && okNew) {
+    const r1 = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
+    const r2 = await pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id)]);
+    const a = r1.rows[0] || null;
+    const b = r2.rows[0] || null;
+    const aLat = a?.lat!=null ? Number(a.lat) : NaN;
+    const aLon = a?.lon!=null ? Number(a.lon) : NaN;
+    const bLat = b?.lat!=null ? Number(b.lat) : NaN;
+    const bLon = b?.lon!=null ? Number(b.lon) : NaN;
+    const d = (!isNaN(aLat) && !isNaN(aLon) && !isNaN(bLat) && !isNaN(bLon)) ? haversineKm(aLat, aLon, bLat, bLon) : Infinity;
+    if (d <= 0.05) {
+      await pool.query("UPDATE solicitudes SET recolector_id=$2, handoff_state='completado' WHERE id=$1", [sid, Number(s.handoff_recolector_id)]);
+      await pool.query("UPDATE solicitudes SET estado='rumbo_a_empresa' WHERE id=$1", [sid]);
+      try {
+        const hooks: any = (global as any).__viajeSimHooks;
+        if (hooks && typeof hooks.reanudar === 'function') { await hooks.reanudar(sid); }
+      } catch {}
+      try {
+        const hhooks: any = (global as any).__handoffSimHooks;
+        if (hhooks && typeof hhooks.detener === 'function') { await hhooks.detener(sid); }
+      } catch {}
+      const subs: any = (global as any).__notifSubs || ((global as any).__notifSubs = {});
+      const notify = async (destRole: string, destId: number, tipo: string, mensaje: string) => {
+        const safeId = (destId!=null && !Number.isNaN(destId) && destId>0) ? destId : null;
+        if (!safeId) return;
+        const payload = `event: notif\ndata: ${JSON.stringify({ solicitud_id: sid, actor_destino: destRole, destino_id: Number(destId), tipo, mensaje })}\n\n`;
+        try { await pool.query("INSERT INTO notificaciones(solicitud_id, actor_destino, destino_id, tipo, mensaje) VALUES($1,$2,$3,$4,$5)", [sid, destRole, safeId, tipo, mensaje]); } catch {}
+        const k = `${destRole}:${destId}`;
+        const arr = subs[k] || [];
+        for (const r of arr) { try { r.write(payload); } catch {} }
+      };
+      await notify('recolector', Number(s.recolector_id), 'handoff_completado', 'Handoff completado, pedido entregado al nuevo recolector');
+      await notify('recolector', Number(s.handoff_recolector_id), 'handoff_completado', 'Handoff completado, continúa hacia la empresa');
+      res.json({ ok: true, handoff_state: 'completado' });
+      return;
+    }
+    res.status(422).json({ error: "distancia_insuficiente" });
+    return;
+  }
+  res.json({ ok: true, handoff_new_ok: true });
 }));
 
 recolectorRouter.post("/:sid/items", asyncHandler(async (req: Request, res: Response) => {
