@@ -5,6 +5,7 @@ exports.crearResenaUsuario = crearResenaUsuario;
 exports.existeResenaEmpresa = existeResenaEmpresa;
 exports.existeResenaUsuario = existeResenaUsuario;
 exports.listarResenasEmpresa = listarResenasEmpresa;
+exports.listarResenasUsuario = listarResenasUsuario;
 const pool_1 = require("../db/pool");
 async function crearResenaEmpresa(empresaId, usuarioId, transaccionId, puntaje, mensaje) {
     const res = await pool_1.pool.query("INSERT INTO resenas_empresas(empresa_id, usuario_id, transaccion_id, puntaje, mensaje) VALUES($1,$2,$3,$4,$5) RETURNING *", [empresaId, usuarioId, transaccionId, puntaje, mensaje]);
@@ -24,5 +25,9 @@ async function existeResenaUsuario(usuarioId, empresaId, transaccionId) {
 }
 async function listarResenasEmpresa(empresaId) {
     const res = await pool_1.pool.query("SELECT re.id, re.puntaje, re.mensaje, re.creado_en, re.transaccion_id, re.usuario_id, COALESCE(u.email, 'Usuario ' || u.id) AS usuario_email FROM resenas_empresas re JOIN usuarios u ON u.id=re.usuario_id WHERE re.empresa_id=$1 ORDER BY re.creado_en DESC", [empresaId]);
+    return res.rows;
+}
+async function listarResenasUsuario(usuarioId) {
+    const res = await pool_1.pool.query("SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 ORDER BY ru.creado_en DESC", [usuarioId]);
     return res.rows;
 }

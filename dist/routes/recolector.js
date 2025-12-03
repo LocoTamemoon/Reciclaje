@@ -357,6 +357,24 @@ exports.recolectorRouter.post("/:sid/handoff/accept", (0, asyncHandler_1.asyncHa
     await pool_1.pool.query("UPDATE solicitudes SET handoff_state='en_intercambio', handoff_recolector_id=$2, handoff_old_ok=false, handoff_new_ok=false WHERE id=$1", [sid, newRecoId]);
     const chk = await pool_1.pool.query("SELECT id, handoff_state, handoff_recolector_id FROM solicitudes WHERE id=$1", [sid]);
     console.log("handoff_accept_ok", { sid, newRecoId, row: chk.rows[0] || null });
+    try {
+        const posR2 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [newRecoId]);
+        const p = posR2.rows[0] || null;
+        if (p && p.lat != null && p.lon != null) {
+            try {
+                await pool_1.pool.query("UPDATE solicitudes SET handoff_cur_lat=$2, handoff_cur_lon=$3 WHERE id=$1", [sid, Number(p.lat), Number(p.lon)]);
+            }
+            catch { }
+        }
+    }
+    catch { }
+    try {
+        const hooks = global.__handoffSimHooks;
+        if (hooks && typeof hooks.iniciar === 'function') {
+            await hooks.iniciar(sid);
+        }
+    }
+    catch { }
     const subs = global.__notifSubs || (global.__notifSubs = {});
     const notify = async (destRole, destId, tipo, mensaje) => {
         const safeId = (destId != null && !Number.isNaN(destId) && destId > 0) ? destId : null;
@@ -389,7 +407,10 @@ exports.recolectorRouter.post("/:sid/handoff/confirm_old", (0, asyncHandler_1.as
     }
     await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_old_ok BOOLEAN");
     await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
-    const sRes = await pool_1.pool.query("SELECT recolector_id, handoff_state, handoff_recolector_id FROM solicitudes WHERE id=$1", [sid]);
+    await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_new_ok BOOLEAN");
+    await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lat NUMERIC(9,6)");
+    await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_pick_lon NUMERIC(9,6)");
+    const sRes = await pool_1.pool.query("SELECT recolector_id, handoff_state, handoff_recolector_id, handoff_new_ok, handoff_pick_lat, handoff_pick_lon FROM solicitudes WHERE id=$1", [sid]);
     const s = sRes.rows[0] || null;
     if (!s || Number(s.recolector_id) !== recoId) {
         res.status(403).json({ error: "no_owner" });
@@ -400,6 +421,62 @@ exports.recolectorRouter.post("/:sid/handoff/confirm_old", (0, asyncHandler_1.as
         return;
     }
     await pool_1.pool.query("UPDATE solicitudes SET handoff_old_ok=true WHERE id=$1", [sid]);
+    const okNew = Boolean(s.handoff_new_ok);
+    const okOld = true;
+    if (okOld && okNew) {
+        const r1 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
+        const r2 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id)]);
+        const a = r1.rows[0] || null;
+        const b = r2.rows[0] || null;
+        const aLat = a?.lat != null ? Number(a.lat) : NaN;
+        const aLon = a?.lon != null ? Number(a.lon) : NaN;
+        const bLat = b?.lat != null ? Number(b.lat) : NaN;
+        const bLon = b?.lon != null ? Number(b.lon) : NaN;
+        const d = (!isNaN(aLat) && !isNaN(aLon) && !isNaN(bLat) && !isNaN(bLon)) ? (0, solicitudesService_1.haversineKm)(aLat, aLon, bLat, bLon) : Infinity;
+        if (d <= 0.05) {
+            await pool_1.pool.query("UPDATE solicitudes SET recolector_id=$2, handoff_state='completado' WHERE id=$1", [sid, Number(s.handoff_recolector_id)]);
+            await pool_1.pool.query("UPDATE solicitudes SET estado='rumbo_a_empresa' WHERE id=$1", [sid]);
+            try {
+                const hooks = global.__viajeSimHooks;
+                if (hooks && typeof hooks.reanudar === 'function') {
+                    await hooks.reanudar(sid);
+                }
+            }
+            catch { }
+            try {
+                const hhooks = global.__handoffSimHooks;
+                if (hhooks && typeof hhooks.detener === 'function') {
+                    await hhooks.detener(sid);
+                }
+            }
+            catch { }
+            const subs = global.__notifSubs || (global.__notifSubs = {});
+            const notify = async (destRole, destId, tipo, mensaje) => {
+                const safeId = (destId != null && !Number.isNaN(destId) && destId > 0) ? destId : null;
+                if (!safeId)
+                    return;
+                const payload = `event: notif\ndata: ${JSON.stringify({ solicitud_id: sid, actor_destino: destRole, destino_id: Number(destId), tipo, mensaje })}\n\n`;
+                try {
+                    await pool_1.pool.query("INSERT INTO notificaciones(solicitud_id, actor_destino, destino_id, tipo, mensaje) VALUES($1,$2,$3,$4,$5)", [sid, destRole, safeId, tipo, mensaje]);
+                }
+                catch { }
+                const k = `${destRole}:${destId}`;
+                const arr = subs[k] || [];
+                for (const r of arr) {
+                    try {
+                        r.write(payload);
+                    }
+                    catch { }
+                }
+            };
+            await notify('recolector', Number(s.recolector_id), 'handoff_completado', 'Handoff completado, pedido entregado al nuevo recolector');
+            await notify('recolector', Number(s.handoff_recolector_id), 'handoff_completado', 'Handoff completado, continúa hacia la empresa');
+            res.json({ ok: true, handoff_state: 'completado' });
+            return;
+        }
+        res.status(422).json({ error: "distancia_insuficiente" });
+        return;
+    }
     res.json({ ok: true, handoff_old_ok: true });
 }));
 exports.recolectorRouter.post("/:sid/handoff/confirm_new", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -443,6 +520,13 @@ exports.recolectorRouter.post("/:sid/handoff/confirm_new", (0, asyncHandler_1.as
                 const hooks = global.__viajeSimHooks;
                 if (hooks && typeof hooks.reanudar === 'function') {
                     await hooks.reanudar(sid);
+                }
+            }
+            catch { }
+            try {
+                const hhooks = global.__handoffSimHooks;
+                if (hhooks && typeof hhooks.detener === 'function') {
+                    await hhooks.detener(sid);
                 }
             }
             catch { }

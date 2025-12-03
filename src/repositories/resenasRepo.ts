@@ -51,3 +51,11 @@ export async function listarResenasEmpresa(empresaId: number) {
   );
   return res.rows;
 }
+
+export async function listarResenasUsuario(usuarioId: number) {
+  const res = await pool.query(
+    "SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 ORDER BY ru.creado_en DESC",
+    [usuarioId]
+  );
+  return res.rows;
+}

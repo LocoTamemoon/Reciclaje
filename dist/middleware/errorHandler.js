@@ -2,6 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.errorHandler = errorHandler;
 function errorHandler(err, req, res, next) {
+    try {
+        console.error("error_handler", { message: String(err?.message || ""), code: String(err?.code || ""), name: String(err?.name || ""), stack: String(err?.stack || "").slice(0, 200) });
+    }
+    catch { }
     const code = err && err.code ? String(err.code) : "";
     if (code === "ECONNREFUSED") {
         res.status(503).json({ error: "database_unavailable", message: "Base de datos no disponible" });
@@ -14,6 +18,10 @@ function errorHandler(err, req, res, next) {
     if (String(err?.message) === "delivery_cooldown") {
         const retry = Number(err?.retry_after_sec || 60);
         res.status(429).json({ error: "delivery_cooldown", retry_after_sec: retry });
+        return;
+    }
+    if (String(err?.message) === "credenciales_invalidas") {
+        res.status(401).json({ error: "credenciales_invalidas" });
         return;
     }
     res.status(500).json({ error: "internal_error", message: err?.message || "Error" });

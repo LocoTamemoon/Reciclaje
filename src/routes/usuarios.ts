@@ -1,4 +1,6 @@
 import { Router, Request, Response } from "express";
+import fs from "fs";
+import path from "path";
 import { historialUsuario } from "../repositories/transaccionesRepo";
 import { pool } from "../db/pool";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -35,6 +37,55 @@ usuariosRouter.get("/:id/stats", asyncHandler(async (req: Request, res: Response
   );
   const row = total.rows[0] || { monto_total: 0 };
   res.json({ monto_total: Number(row.monto_total) });
+}));
+
+usuariosRouter.get("/:id/perfil", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const userRes = await pool.query(
+    "SELECT id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1",
+    [id]
+  );
+  const u = userRes.rows[0] || null;
+  const matsRes = await pool.query(
+    "SELECT umt.material_id, m.nombre, umt.kg_totales FROM usuario_materiales_totales umt JOIN materiales m ON m.id=umt.material_id WHERE umt.usuario_id=$1 ORDER BY m.nombre",
+    [id]
+  );
+  const resenasRes = await pool.query(
+    "SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 ORDER BY ru.creado_en DESC",
+    [id]
+  );
+  res.json({ usuario: u, materiales: matsRes.rows, resenas: resenasRes.rows });
+}));
+
+usuariosRouter.patch("/:id/perfil", asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const nombre = req.body?.nombre!=null ? String(req.body.nombre) : null;
+  const apellidos = req.body?.apellidos!=null ? String(req.body.apellidos) : null;
+  const fotoBase64 = req.body?.foto_base64!=null ? String(req.body.foto_base64) : null;
+  let fotoPath: string | null = null;
+  if (fotoBase64) {
+    try {
+      const dir = path.resolve("public", "img");
+      try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+      const code = Date.now().toString(36);
+      const filename = `${id}_usuario_${code}.png`;
+      const full = path.join(dir, filename);
+      const data = /^data:image\/(png|jpeg);base64,/i.test(fotoBase64) ? fotoBase64.replace(/^data:image\/(png|jpeg);base64,/i, "") : fotoBase64;
+      const buf = Buffer.from(data, "base64");
+      fs.writeFileSync(full, buf);
+      fotoPath = `/img/${filename}`;
+    } catch {}
+  }
+  const fields: string[] = [];
+  const vals: any[] = [];
+  if (nombre!=null) { fields.push("nombre=$2"); vals.push(nombre); }
+  if (apellidos!=null) { fields.push("apellidos=$"+(vals.length+2)); vals.push(apellidos); }
+  if (fotoPath) { fields.push("foto_perfil_path=$"+(vals.length+2)); vals.push(fotoPath); }
+  if (fields.length===0) { const out = await pool.query("SELECT id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]); res.json(out.rows[0]||null); return; }
+  const setClause = fields.join(", ");
+  const q = `UPDATE usuarios SET ${setClause} WHERE id=$1 RETURNING id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path`;
+  const r = await pool.query(q, [id, ...vals]);
+  res.json(r.rows[0]||null);
 }));
 
 const RECOMPENSAS = [

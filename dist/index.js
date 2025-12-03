@@ -53,6 +53,8 @@ async function ensureHandoffSchema() {
         await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
         await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_old_ok BOOLEAN DEFAULT false");
         await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_new_ok BOOLEAN DEFAULT false");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_cur_lat NUMERIC(9,6)");
+        await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_cur_lon NUMERIC(9,6)");
         try {
             const c = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='solicitudes' AND constraint_name='solicitudes_handoff_recolector_id_fkey' LIMIT 1");
             if (!c.rows[0]) {
@@ -83,6 +85,10 @@ const viajeStreams = new Map();
 const viajeSimTimers = new Map();
 const viajeSimProgress = new Map();
 const viajeSimPoints = new Map();
+const handoffSimTimers = new Map();
+const handoffSimProgress = new Map();
+const handoffSimPoints = new Map();
+const handoffSpeedMult = new Map();
 global.__viajeSimHooks = {
     iniciar: async (sid) => {
         let pts = viajeSimPoints.get(sid);
@@ -93,8 +99,8 @@ global.__viajeSimHooks = {
         const prevTimer = viajeSimTimers.get(sid);
         if (prevTimer)
             return;
-        let i = 0;
-        viajeSimProgress.set(sid, 0);
+        let i = viajeSimProgress.get(sid) || 0;
+        viajeSimProgress.set(sid, i);
         const timer = setInterval(() => {
             const arr = viajeSimPoints.get(sid) || [];
             if (i >= arr.length) {
@@ -143,6 +149,31 @@ app.get("/api/viajes/:sid/stream", (req, res) => {
     if (!viajeStreams.has(sid))
         viajeStreams.set(sid, set);
     set.add(res);
+    (async () => {
+        try {
+            const r = await pool_1.pool.query("SELECT handoff_state, handoff_cur_lat, handoff_cur_lon, handoff_pick_lat, handoff_pick_lon, handoff_recolector_id FROM solicitudes WHERE id=$1", [sid]);
+            const s = r.rows[0] || null;
+            if (s && String(s.handoff_state || '') === 'en_intercambio') {
+                let hLat = s.handoff_cur_lat != null ? Number(s.handoff_cur_lat) : null;
+                let hLon = s.handoff_cur_lon != null ? Number(s.handoff_cur_lon) : null;
+                if (hLat == null || hLon == null) {
+                    try {
+                        const rr = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id || 0)]);
+                        const r2 = rr.rows[0] || null;
+                        hLat = r2?.lat != null ? Number(r2.lat) : null;
+                        hLon = r2?.lon != null ? Number(r2.lon) : null;
+                    }
+                    catch { }
+                }
+                const payload = JSON.stringify({ sid, hand_lat: hLat, hand_lon: hLon, hand_pick_lat: s.handoff_pick_lat != null ? Number(s.handoff_pick_lat) : null, hand_pick_lon: s.handoff_pick_lon != null ? Number(s.handoff_pick_lon) : null, ts: Date.now() });
+                try {
+                    res.write(`data: ${payload}\n\n`);
+                }
+                catch { }
+            }
+        }
+        catch { }
+    })();
     req.on("close", () => {
         console.log("viajes_stream_unsubscribe", { sid });
         const s = viajeStreams.get(sid);
@@ -223,13 +254,19 @@ app.post("/api/viajes/:sid/handoff/posicion", async (req, res) => {
             res.status(422).json({ error: "no_handoff" });
             return;
         }
-        if (!Number.isNaN(latNum) && !Number.isNaN(lonNum) && set) {
-            const payload = JSON.stringify({ sid, hand_lat: latNum, hand_lon: lonNum, hand_pick_lat: s.handoff_pick_lat != null ? Number(s.handoff_pick_lat) : null, hand_pick_lon: s.handoff_pick_lon != null ? Number(s.handoff_pick_lon) : null, ts: Date.now() });
-            set.forEach((rr) => { try {
-                rr.write(`data: ${payload}\n\n`);
+        if (!Number.isNaN(latNum) && !Number.isNaN(lonNum)) {
+            try {
+                await pool_1.pool.query("UPDATE solicitudes SET handoff_cur_lat=$2, handoff_cur_lon=$3 WHERE id=$1", [sid, latNum, lonNum]);
             }
-            catch { } });
-            console.log("viajes_handoff_posicion_emit", { sid, listeners: set?.size || 0 });
+            catch { }
+            if (set) {
+                const payload = JSON.stringify({ sid, hand_lat: latNum, hand_lon: lonNum, hand_pick_lat: s.handoff_pick_lat != null ? Number(s.handoff_pick_lat) : null, hand_pick_lon: s.handoff_pick_lon != null ? Number(s.handoff_pick_lon) : null, ts: Date.now() });
+                set.forEach((rr) => { try {
+                    rr.write(`data: ${payload}\n\n`);
+                }
+                catch { } });
+                console.log("viajes_handoff_posicion_emit", { sid, listeners: set?.size || 0 });
+            }
         }
         res.json({ ok: true });
     }
@@ -279,6 +316,124 @@ async function obtenerPuntosSimulacion(sid) {
         pts.push({ lat: eLat, lon: eLon });
     return pts;
 }
+function distMeters(aLat, aLon, bLat, bLon) {
+    const toRad = (x) => x * Math.PI / 180;
+    const R = 6371000;
+    const dLat = toRad(bLat - aLat);
+    const dLon = toRad(bLon - aLon);
+    const aa = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+    return R * c;
+}
+async function obtenerPuntosHandoff(sid) {
+    const sRes = await pool_1.pool.query("SELECT handoff_pick_lat, handoff_pick_lon, handoff_recolector_id, handoff_cur_lat, handoff_cur_lon FROM solicitudes WHERE id=$1", [sid]);
+    const s = sRes.rows[0] || null;
+    if (!s)
+        return [];
+    const pickLat = s.handoff_pick_lat != null ? Number(s.handoff_pick_lat) : null;
+    const pickLon = s.handoff_pick_lon != null ? Number(s.handoff_pick_lon) : null;
+    let r2Lat = s.handoff_cur_lat != null ? Number(s.handoff_cur_lat) : null;
+    let r2Lon = s.handoff_cur_lon != null ? Number(s.handoff_cur_lon) : null;
+    if (r2Lat == null || r2Lon == null) {
+        const r2 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id || 0)]);
+        const rr = r2.rows[0] || null;
+        r2Lat = rr?.lat != null ? Number(rr.lat) : null;
+        r2Lon = rr?.lon != null ? Number(rr.lon) : null;
+    }
+    if (r2Lat == null || r2Lon == null || pickLat == null || pickLon == null)
+        return [];
+    try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${r2Lon},${r2Lat};${pickLon},${pickLat}?overview=full&geometries=geojson`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+            const data = await resp.json();
+            const coords = data?.routes?.[0]?.geometry?.coordinates || [];
+            const pts = coords.map((c) => ({ lat: Number(c[1]), lon: Number(c[0]) }));
+            if (pts.length >= 2)
+                return pts;
+        }
+    }
+    catch { }
+    const pts = [];
+    const d = distMeters(r2Lat, r2Lon, pickLat, pickLon);
+    const speed = 7;
+    const dt = 0.4;
+    const steps = Math.max(2, Math.ceil(d / (speed * dt)));
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        pts.push({ lat: r2Lat + (pickLat - r2Lat) * t, lon: r2Lon + (pickLon - r2Lon) * t });
+    }
+    return pts;
+}
+async function emitirHandoffSSE(sid, lat, lon) {
+    const set = viajeStreams.get(sid);
+    const r = await pool_1.pool.query("SELECT handoff_pick_lat, handoff_pick_lon FROM solicitudes WHERE id=$1", [sid]);
+    const s = r.rows[0] || null;
+    await pool_1.pool.query("UPDATE solicitudes SET handoff_cur_lat=$2, handoff_cur_lon=$3 WHERE id=$1", [sid, Number(lat), Number(lon)]);
+    if (set) {
+        const payload = JSON.stringify({ sid, hand_lat: Number(lat), hand_lon: Number(lon), hand_pick_lat: s?.handoff_pick_lat != null ? Number(s.handoff_pick_lat) : null, hand_pick_lon: s?.handoff_pick_lon != null ? Number(s.handoff_pick_lon) : null, ts: Date.now() });
+        set.forEach((rr) => { try {
+            rr.write(`data: ${payload}\n\n`);
+        }
+        catch { } });
+    }
+}
+global.__handoffSimHooks = {
+    iniciar: async (sid) => {
+        const tPrev = handoffSimTimers.get(sid);
+        if (tPrev)
+            return;
+        let pts = handoffSimPoints.get(sid);
+        if (!pts || pts.length < 2) {
+            pts = await obtenerPuntosHandoff(sid);
+            handoffSimPoints.set(sid, pts);
+        }
+        if (!pts || pts.length < 2)
+            return;
+        let i = handoffSimProgress.get(sid) || 0;
+        handoffSimProgress.set(sid, i);
+        if (i < pts.length) {
+            const p0 = pts[i];
+            await emitirHandoffSSE(sid, p0.lat, p0.lon);
+        }
+        const timer = setInterval(async () => {
+            const arr = handoffSimPoints.get(sid) || [];
+            const mult = Math.max(1, Math.floor(handoffSpeedMult.get(sid) || 1));
+            for (let step = 0; step < mult; step++) {
+                if (i >= arr.length)
+                    break;
+                const p = arr[i];
+                await emitirHandoffSSE(sid, p.lat, p.lon);
+                i++;
+                handoffSimProgress.set(sid, i);
+            }
+            if (i >= arr.length) {
+                clearInterval(timer);
+                handoffSimTimers.delete(sid);
+                return;
+            }
+        }, 400);
+        handoffSimTimers.set(sid, timer);
+    },
+    detener: async (sid) => {
+        const t = handoffSimTimers.get(sid);
+        if (t) {
+            try {
+                clearInterval(t);
+            }
+            catch { }
+            handoffSimTimers.delete(sid);
+        }
+    }
+};
+app.post("/api/viajes/:sid/handoff/speed", (req, res) => {
+    const sid = Number(req.params.sid);
+    const multRaw = (req.body || {}).mult;
+    const multNum = multRaw != null ? Number(multRaw) : NaN;
+    const m = (!Number.isNaN(multNum) && multNum >= 1 && multNum <= 50) ? multNum : 1;
+    handoffSpeedMult.set(sid, m);
+    res.json({ ok: true, mult: m });
+});
 function emitirSSE(sid, lat, lon, i) {
     const set = viajeStreams.get(sid);
     (async () => {
@@ -323,8 +478,8 @@ app.post("/api/viajes/:sid/iniciar", async (req, res) => {
             res.json({ ok: true, running: true, points: (pts || []).length });
             return;
         }
-        let i = 0;
-        viajeSimProgress.set(sid, 0);
+        let i = viajeSimProgress.get(sid) || 0;
+        viajeSimProgress.set(sid, i);
         const timer = setInterval(() => {
             const arr = viajeSimPoints.get(sid) || [];
             if (i >= arr.length) {
@@ -430,5 +585,5 @@ app.use((req, res) => {
 });
 app.use(errorHandler_1.errorHandler);
 app.listen(env_1.env.port, () => {
-    console.log(`Servidor en puerto ${env_1.env.port}`);
+    console.log(`Servidor iniciado en puerto ${env_1.env.port}`);
 });

@@ -40,6 +40,9 @@
     .stat-title{ color:var(--muted); font-size:12px; }
     .stat-value{ font-weight:700; }
     .mono{ font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+    .perfil-mat-table{ font-family: ui-sans-serif, system-ui, Segoe UI, Arial; }
+    .perfil-mat-table th{ font-size:12px; }
+    .perfil-mat-table td{ font-size:12px; }
     input, select{ background:#ffffff; color:var(--text); border:1px solid var(--border); border-radius:0px; padding:8px 10px; outline:none; transition:border-color .14s ease, box-shadow .14s ease; }
     input:focus, select:focus, textarea:focus{ border-color:#3ac27f; box-shadow:0 0 0 3px rgba(58,194,127,0.25); }
     table{ width:100%; border-collapse:separate; border-spacing:0; }
@@ -389,8 +392,35 @@
         </div>
       </section>
       <section id="view-perfil" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
-        <h2>Perfil</h2>
+        <div class="row jc-between ai-center">
+          <h2>Perfil</h2>
+          <button id="perfil-edit-btn" class="btn secondary">✎</button>
+        </div>
         <div id="perfil" class="mono"></div>
+        <div id="perfil-usuario-extra" style="margin-top:12px;" hidden>
+          <div class="card">
+            <div class="row jc-between ai-center">
+              <h3>Materiales reciclados</h3>
+              <button id="perfil-usuario-materiales-refresh" class="btn secondary">Actualizar</button>
+            </div>
+            <table class="table perfil-mat-table">
+              <thead>
+                <tr>
+                  <th class="ta-left">Material</th>
+                  <th class="ta-right">Kg totales</th>
+                </tr>
+              </thead>
+              <tbody id="perfil-usuario-materiales-body"></tbody>
+            </table>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <div class="row jc-between ai-center">
+              <h3>Reseñas</h3>
+              <button id="perfil-usuario-resenas-refresh" class="btn secondary">Actualizar</button>
+            </div>
+            <ul id="perfil-usuario-resenas-list" class="mono list"></ul>
+          </div>
+        </div>
         <div id="perfil-materiales" style="margin-top:12px;" hidden>
           <div class="row jc-between">
             <h3>Materiales y precios</h3>
@@ -501,6 +531,29 @@
       <div id="historial-modal-content"></div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="closeHistorialModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="perfil-edit-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h3>Editar perfil</h3>
+      <div class="row gap-12">
+        <div style="flex:1;">
+          <label>Nombre</label>
+          <input type="text" id="perfil-edit-nombre" />
+        </div>
+        <div style="flex:1;">
+          <label>Apellidos</label>
+          <input type="text" id="perfil-edit-apellidos" />
+        </div>
+      </div>
+      <div class="row ai-center gap-12 mt-10">
+        <input type="file" id="perfil-edit-foto" accept="image/*" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closePerfilEdit()">Cancelar</button>
+        <button class="btn" onclick="savePerfilEdit()">Guardar</button>
       </div>
     </div>
   </div>
@@ -3211,23 +3264,82 @@
         perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg) }));
         renderPerfilMateriales();
       } else {
+        const pj = await (await fetch(`/api/usuarios/${user.id}/perfil`, { headers: authHeaders() })).json();
+        const u = pj?.usuario||{};
+        const mats = Array.isArray(pj?.materiales)? pj.materiales : [];
+        const resenas = Array.isArray(pj?.resenas)? pj.resenas : [];
         const st = await (await fetch(`/api/usuarios/${user.id}/stats`, { headers: authHeaders() })).json();
-        const puntos = Number(user.puntos_acumulados||0);
-        const kg = Number(user.kg_totales||0);
-        const rep = Number(user.reputacion_promedio||0);
-        const resenas = Number(user.resenas_recibidas_count||0);
+        const puntos = Number(u.puntos_acumulados||user.puntos_acumulados||0);
+        const kg = Number(u.kg_totales||user.kg_totales||0);
+        const rep = Number(u.reputacion_promedio||user.reputacion_promedio||0);
+        const resenasCount = Number(u.resenas_recibidas_count||user.resenas_recibidas_count||0);
         const monto = Number(st?.monto_total||0);
+        const nombre = String(u.nombre||user.nombre||'').trim();
+        const apellidos = String(u.apellidos||user.apellidos||'').trim();
+        const foto = String(u.foto_perfil_path||user.foto_perfil_path||'').trim();
+        const initials = (nombre||apellidos) ? (nombre.slice(0,1)+ (apellidos? apellidos.slice(0,1):'')).toUpperCase() : 'U';
+        const avatar = foto ? `<img src="${foto}" alt="avatar" style="width:64px; height:64px; border-radius:999px; object-fit:cover; border:1px solid #dbeafe;" />` : `<div style="width:64px; height:64px; border-radius:999px; background:#e2f7ea; color:#10b981; display:flex; align-items:center; justify-content:center; font-weight:700;">${initials}</div>`;
         document.getElementById('perfil').innerHTML = `
-          <div class="stats-grid">
-            <div class="stat-card"><div class="stat-title">Puntos</div><div class="stat-value">${puntos}</div></div>
-            <div class="stat-card"><div class="stat-title">Kg totales</div><div class="stat-value">${kg.toFixed(2)}</div></div>
-            <div class="stat-card"><div class="stat-title">Monto ganado (S/)</div><div class="stat-value">${monto.toFixed(2)}</div></div>
-            <div class="stat-card"><div class="stat-title">Reputación</div><div class="stat-value">${rep.toFixed(2)}</div></div>
-            <div class="stat-card"><div class="stat-title">Reseñas</div><div class="stat-value">${resenas}</div></div>
+          <div class="card">
+            <div class="row jc-between ai-center">
+              <div class="row ai-center gap-12">
+                ${avatar}
+                <div>
+                  <div><strong>${((nombre||'Usuario') + (apellidos? (' '+apellidos):''))}</strong></div>
+                  <div class="muted">ID ${user.id}</div>
+                </div>
+              </div>
+            </div>
+            <div class="stats-grid" style="margin-top:12px;">
+              <div class="stat-card"><div class="stat-title">Puntos</div><div class="stat-value">${puntos}</div></div>
+              <div class="stat-card"><div class="stat-title">Kg totales</div><div class="stat-value">${kg.toFixed(2)}</div></div>
+              <div class="stat-card"><div class="stat-title">Monto ganado (S/)</div><div class="stat-value">${monto.toFixed(2)}</div></div>
+              <div class="stat-card"><div class="stat-title">Reputación</div><div class="stat-value">${rep.toFixed(2)}</div></div>
+              <div class="stat-card"><div class="stat-title">Reseñas</div><div class="stat-value">${resenasCount}</div></div>
+            </div>
           </div>
         `;
+        const matsBody = document.getElementById('perfil-usuario-materiales-body');
+        const resList = document.getElementById('perfil-usuario-resenas-list');
+        const extra = document.getElementById('perfil-usuario-extra');
+        if (extra) extra.hidden = false;
+        if (matsBody){ matsBody.innerHTML=''; mats.forEach(m=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td class="ta-left">${m.nombre}</td><td class="ta-right">${Number(m.kg_totales||0).toFixed(2)} kg</td>`; matsBody.appendChild(tr); }); }
+        if (resList){ resList.innerHTML=''; resenas.forEach(r=>{ const li=document.createElement('li'); const ts = new Date(r.creado_en||Date.now()).toLocaleString(); const stars = '★★★★★'.slice(0, Math.max(0, Math.min(5, Number(r.puntaje||0)))); const msg = r.mensaje ? r.mensaje : '*****'; li.innerHTML = `<div class="row jc-between"><div><div><strong>${r.empresa_nombre}</strong> <span class="muted">(empresa)</span></div><div class="muted">${msg}</div></div><div class="right"><div class="muted">${ts}</div><div style="margin-top:4px;"><span class="badge">${stars}</span></div></div></div>`; resList.appendChild(li); }); }
         document.getElementById('perfil-materiales').hidden = true;
+        const editBtn = document.getElementById('perfil-edit-btn');
+        if (editBtn){ editBtn.onclick = openPerfilEdit; }
+        const matRefresh = document.getElementById('perfil-usuario-materiales-refresh');
+        const revRefresh = document.getElementById('perfil-usuario-resenas-refresh');
+        if (matRefresh) matRefresh.onclick = ()=> loadPerfil();
+        if (revRefresh) revRefresh.onclick = async ()=>{ try{ const r = await fetch(`/api/resenas/usuario/${user.id}`, { headers: authHeaders() }); const list = await r.json(); const rl = document.getElementById('perfil-usuario-resenas-list'); if (rl){ rl.innerHTML=''; (Array.isArray(list)?list:[]).forEach(r=>{ const li=document.createElement('li'); const ts = new Date(r.creado_en||Date.now()).toLocaleString(); const stars = '★★★★★'.slice(0, Math.max(0, Math.min(5, Number(r.puntaje||0)))); const msg = r.mensaje ? r.mensaje : '*****'; li.innerHTML = `<div class="row jc-between"><div><div><strong>${r.empresa_nombre}</strong> <span class="muted">(empresa)</span></div><div class="muted">${msg}</div></div><div class="right"><div class="muted">${ts}</div><div style="margin-top:4px;"><span class="badge">${stars}</span></div></div></div>`; rl.appendChild(li); }); } }catch{} };
       }
+    }
+
+    function openPerfilEdit(){
+      const m = document.getElementById('perfil-edit-modal');
+      if (!m) return;
+      const nombre = String(user?.nombre||'');
+      const apellidos = String(user?.apellidos||'');
+      const nInp = document.getElementById('perfil-edit-nombre');
+      const aInp = document.getElementById('perfil-edit-apellidos');
+      if (nInp) nInp.value = nombre;
+      if (aInp) aInp.value = apellidos;
+      m.hidden = false;
+    }
+    function closePerfilEdit(){ const m = document.getElementById('perfil-edit-modal'); if (m) m.hidden = true; }
+    async function savePerfilEdit(){
+      const n = document.getElementById('perfil-edit-nombre').value;
+      const a = document.getElementById('perfil-edit-apellidos').value;
+      const f = document.getElementById('perfil-edit-foto').files?.[0]||null;
+      let fotoB64 = null;
+      if (f){ fotoB64 = await new Promise((resolve)=>{ const fr = new FileReader(); fr.onload = ()=> resolve(String(fr.result||'').split(',')[1] ? String(fr.result) : String(fr.result)); fr.readAsDataURL(f); }); }
+      const payload = { nombre: n||null, apellidos: a||null, foto_base64: fotoB64||null };
+      const r = await fetch(`/api/usuarios/${user.id}/perfil`, { method:'PATCH', headers: authHeaders(), body: JSON.stringify(payload) });
+      const j = await r.json();
+      const nu = { ...user, nombre: j?.nombre||n||user.nombre, apellidos: j?.apellidos||a||user.apellidos, foto_perfil_path: j?.foto_perfil_path||user.foto_perfil_path };
+      localStorage.setItem('user', JSON.stringify(nu));
+      closePerfilEdit();
+      setTimeout(()=> loadPerfil(), 200);
     }
 
     function renderPerfilMateriales(){

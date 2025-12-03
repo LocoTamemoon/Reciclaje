@@ -21,3 +21,8 @@ exports.resenasRouter.get("/empresa/:id", (0, asyncHandler_1.asyncHandler)(async
     const list = await (0, resenasRepo_1.listarResenasEmpresa)(id);
     res.json(list);
 }));
+exports.resenasRouter.get("/usuario/:id", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const list = await (0, resenasRepo_1.listarResenasUsuario)(id);
+    res.json(list);
+}));
