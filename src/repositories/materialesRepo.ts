@@ -15,10 +15,10 @@ export async function listarMaterialesCatalogo() {
   return res.rows;
 }
 
-export async function upsertEmpresaMaterialPrecio(empresaId: number, materialId: number, precio: number) {
+export async function upsertEmpresaMaterialPrecio(empresaId: number, materialId: number, precio: number, condiciones?: string | null) {
   const res = await pool.query(
-    "INSERT INTO empresa_materiales_precio(empresa_id, material_id, precio_por_kg) VALUES($1,$2,$3) ON CONFLICT (empresa_id, material_id) DO UPDATE SET precio_por_kg=EXCLUDED.precio_por_kg RETURNING *",
-    [empresaId, materialId, precio]
+    "INSERT INTO empresa_materiales_precio(empresa_id, material_id, precio_por_kg, condiciones) VALUES($1,$2,$3,$4) ON CONFLICT (empresa_id, material_id) DO UPDATE SET precio_por_kg=EXCLUDED.precio_por_kg, condiciones=COALESCE(EXCLUDED.condiciones, empresa_materiales_precio.condiciones) RETURNING *",
+    [empresaId, materialId, precio, condiciones ?? null]
   );
   return res.rows[0];
 }

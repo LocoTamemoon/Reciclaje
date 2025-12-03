@@ -66,7 +66,8 @@ async function ensureHandoffSchema() {
     catch { }
 }
 const app = (0, express_1.default)();
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '10mb' }));
+app.use(express_1.default.urlencoded({ limit: '10mb', extended: true }));
 app.use(express_1.default.static("public"));
 app.get("/", (req, res) => {
     res.json({ name: "reciclaje-backend", status: "ok", endpoints: ["/api/empresas", "/api/solicitudes", "/api/resenas", "/api/usuarios"] });

@@ -43,6 +43,9 @@
     .perfil-mat-table{ font-family: ui-sans-serif, system-ui, Segoe UI, Arial; }
     .perfil-mat-table th{ font-size:12px; }
     .perfil-mat-table td{ font-size:12px; }
+    .thumb-wrap{ position:relative; display:inline-flex; flex-direction:column; gap:4px; }
+    .thumb{ width:120px; height:80px; border-radius:10px; object-fit:cover; border:1px solid #e5e7eb; background:#f8fafc; }
+    .edit-badge{ position:absolute; top:-10px; left:-10px; width:28px; height:28px; border-radius:999px; background:#22c55e; color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 20px rgba(16,185,129,0.35); cursor:pointer; border:2px solid #fff; }
     input, select{ background:#ffffff; color:var(--text); border:1px solid var(--border); border-radius:0px; padding:8px 10px; outline:none; transition:border-color .14s ease, box-shadow .14s ease; }
     input:focus, select:focus, textarea:focus{ border-color:#3ac27f; box-shadow:0 0 0 3px rgba(58,194,127,0.25); }
     table{ width:100%; border-collapse:separate; border-spacing:0; }
@@ -394,7 +397,6 @@
       <section id="view-perfil" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
         <div class="row jc-between ai-center">
           <h2>Perfil</h2>
-          <button id="perfil-edit-btn" class="btn secondary">✎</button>
         </div>
         <div id="perfil" class="mono"></div>
         <div id="perfil-usuario-extra" style="margin-top:12px;" hidden>
@@ -436,6 +438,7 @@
               <tr>
                 <th class="ta-left">Material</th>
                 <th class="ta-right">Precio/kg (S/)</th>
+                <th class="ta-left">Condiciones</th>
                 <th class="ta-right">Acciones</th>
               </tr>
             </thead>
@@ -3249,19 +3252,140 @@
     }
     async function loadPerfil(){
       if (role === 'empresa'){
-        const p = {
-          id: user.id,
-          ruc: user.ruc,
-          nombre: user.nombre,
-          reputacion: user.reputacion_promedio,
-          reseñas: user.resenas_recibidas_count
+        const pj = await (await fetch(`/api/empresas/${user.id}/perfil`, { headers: authHeaders() })).json();
+        const e = pj?.empresa||{};
+        const stats = pj?.stats||{};
+        const nombre = String(e.nombre||user.nombre||'Empresa');
+        const ruc = String(e.ruc||user.ruc||'');
+        const logo = String(e.logo||user.logo||'');
+        const fallbackImg = '/img/nodisponible.png';
+        const initials = (nombre||'').slice(0,2).toUpperCase();
+        const avatar = `<img id="empresa-logo-img" src="${logo||fallbackImg}" alt="logo" onerror="this.src='${fallbackImg}'" style="width:64px; height:64px; border-radius:999px; object-fit:cover; border:1px solid #dbeafe; cursor:pointer;" />`;
+        const img1 = String(e.foto_local_1||fallbackImg);
+        const img2 = String(e.foto_local_2||fallbackImg);
+        const img3 = String(e.foto_local_3||fallbackImg);
+        document.getElementById('perfil').innerHTML = `
+          <div class="card">
+            <div class="row jc-between ai-center">
+              <div class="row ai-center gap-12">
+                <label id="empresa-logo-wrap" for="empresa-logo-file" style="cursor:pointer;">${avatar}</label>
+                <input id="empresa-logo-file" type="file" accept="image/png,image/jpeg" style="position:absolute; left:-10000px; width:1px; height:1px;" />
+                <div>
+                  <div>
+                    <strong id="empresa-main-name-text">${nombre}</strong>
+                    <input id="empresa-main-name-input" type="text" value="${nombre}" style="display:none; width:260px;" />
+                    <button id="empresa-main-save-btn" class="btn" style="display:none; margin-left:8px;">Guardar</button>
+                  </div>
+                  <div class="muted">ID ${user.id} • RUC ${ruc}</div>
+                </div>
+              </div>
+              <button id="empresa-main-edit-btn" class="btn secondary">✎</button>
+            </div>
+            <div class="stats-grid" style="margin-top:12px;">
+              <div class="stat-card"><div class="stat-title">Transacciones</div><div class="stat-value">${Number(stats.transacciones||0)}</div></div>
+              <div class="stat-card"><div class="stat-title">Materiales activos</div><div class="stat-value">${Number(stats.materiales_activos||0)}</div></div>
+              <div class="stat-card"><div class="stat-title">Reputación</div><div class="stat-value">${Number(stats.reputacion||0).toFixed(2)}</div></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <div class="row jc-between ai-center">
+              <div class="row ai-center" style="gap:8px;">
+                <div class="muted">Colección de Empresa</div>
+                <button id="empresa-col-edit-btn" class="btn secondary" style="display:none;">✎</button>
+              </div>
+              <button id="empresa-col-save" class="btn">Guardar</button>
+            </div>
+            <div class="row" style="gap:16px; margin-top:8px;">
+              <div class="thumb-wrap">
+                <img id="empresa-col-img1" class="thumb" src="${img1||fallbackImg}" alt="foto1" onerror="this.src='${fallbackImg}'" />
+                <button id="empresa-col-edit-1" class="edit-badge">✎</button>
+                <input id="empresa-col-file1" type="file" accept="image/png,image/jpeg" />
+              </div>
+              <div class="thumb-wrap">
+                <img id="empresa-col-img2" class="thumb" src="${img2||fallbackImg}" alt="foto2" onerror="this.src='${fallbackImg}'" />
+                <button id="empresa-col-edit-2" class="edit-badge">✎</button>
+                <input id="empresa-col-file2" type="file" accept="image/png,image/jpeg" />
+              </div>
+              <div class="thumb-wrap">
+                <img id="empresa-col-img3" class="thumb" src="${img3||fallbackImg}" alt="foto3" onerror="this.src='${fallbackImg}'" />
+                <button id="empresa-col-edit-3" class="edit-badge">✎</button>
+                <input id="empresa-col-file3" type="file" accept="image/png,image/jpeg" />
+              </div>
+            </div>
+          </div>
+        `;
+        const logoImgEl = document.getElementById('empresa-logo-img');
+        const logoFileEl = document.getElementById('empresa-logo-file');
+        if (logoImgEl && logoFileEl){
+          logoImgEl.onclick = ()=> logoFileEl.click();
+          logoFileEl.onchange = async ()=>{
+            const f = logoFileEl.files?.[0]||null;
+            if (!f) return;
+            const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(f); });
+            logoImgEl.src = String(b64);
+            const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' });
+            await fetch(`/api/empresas/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ logo_base64: b64 }) });
+          };
+        }
+        const mainEdit = document.getElementById('empresa-main-edit-btn');
+        const nameText = document.getElementById('empresa-main-name-text');
+        const nameInput = document.getElementById('empresa-main-name-input');
+        const mainSave = document.getElementById('empresa-main-save-btn');
+        if (mainEdit && nameText && nameInput && mainSave){
+          mainEdit.onclick = ()=>{
+            nameText.style.display = 'none';
+            nameInput.style.display = '';
+            mainSave.style.display = '';
+            nameInput.focus();
+          };
+          mainSave.onclick = async ()=>{
+            const n = nameInput.value || '';
+            const f = document.getElementById('empresa-logo-file')?.files?.[0]||null;
+            let logoB64 = null;
+            if (f){ logoB64 = await new Promise((resolve)=>{ const fr = new FileReader(); fr.onload = ()=> resolve(String(fr.result)); fr.readAsDataURL(f); }); }
+            const payload = { nombre: n||null };
+            if (logoB64) payload.logo_base64 = logoB64;
+            const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' });
+            const r = await fetch(`/api/empresas/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify(payload) });
+            const j = await r.json();
+            const nu = { ...user, nombre: j?.nombre||n||user.nombre, logo: j?.logo||user.logo };
+            localStorage.setItem('user', JSON.stringify(nu));
+            setTimeout(()=> loadPerfil(), 200);
+          };
+        }
+        const colSave = document.getElementById('empresa-col-save');
+        if (colSave) colSave.onclick = async ()=>{
+          const f1 = document.getElementById('empresa-col-file1')?.files?.[0]||null;
+          const f2 = document.getElementById('empresa-col-file2')?.files?.[0]||null;
+          const f3 = document.getElementById('empresa-col-file3')?.files?.[0]||null;
+          async function toB64(f){ return f ? await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(f); }) : null; }
+          const b1 = await toB64(f1); const b2 = await toB64(f2); const b3 = await toB64(f3);
+          const payload = {};
+          if (b1) payload.foto_local_1_base64 = b1;
+          if (b2) payload.foto_local_2_base64 = b2;
+          if (b3) payload.foto_local_3_base64 = b3;
+          const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' });
+          const r = await fetch(`/api/empresas/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify(payload) });
+          await r.json();
+          setTimeout(()=> loadPerfil(), 200);
         };
-        document.getElementById('perfil').textContent = JSON.stringify(p,null,2);
+        const e1 = document.getElementById('empresa-col-edit-1');
+        const e2 = document.getElementById('empresa-col-edit-2');
+        const e3 = document.getElementById('empresa-col-edit-3');
+        const f1 = document.getElementById('empresa-col-file1');
+        const f2 = document.getElementById('empresa-col-file2');
+        const f3 = document.getElementById('empresa-col-file3');
+        if (e1 && f1) e1.onclick = ()=> f1.click();
+        if (e2 && f2) e2.onclick = ()=> f2.click();
+        if (e3 && f3) e3.onclick = ()=> f3.click();
+        if (f1) f1.onchange = async ()=>{ const g = f1.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('empresa-col-img1'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/empresas/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_local_1_base64: b64 }) }); };
+        if (f2) f2.onchange = async ()=>{ const g = f2.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('empresa-col-img2'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/empresas/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_local_2_base64: b64 }) }); };
+        if (f3) f3.onchange = async ()=>{ const g = f3.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('empresa-col-img3'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/empresas/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_local_3_base64: b64 }) }); };
         document.getElementById('perfil-materiales').hidden = false;
         const cat = await (await fetch('/api/materiales', { headers: authHeaders() })).json();
         perfilCatalogo = cat.map((m)=>({ id: Number(m.id||m.material_id||m.id_material||m), nombre: m.nombre||String(m.nombre||m), precio_base_por_kg: Number(m.precio_base_por_kg||0) }));
         const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
-        perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg) }));
+        perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg), condiciones: String(m.condiciones||'') }));
         renderPerfilMateriales();
       } else {
         const pj = await (await fetch(`/api/usuarios/${user.id}/perfil`, { headers: authHeaders() })).json();
@@ -3350,6 +3474,7 @@
         tr.innerHTML = `
           <td style="padding:8px;">${m.nombre}</td>
           <td style="padding:8px; text-align:right;"><input type="number" step="0.01" value="${m.precio_por_kg.toFixed(2)}" style="width:120px;" data-mid="${m.material_id}" /></td>
+          <td style="padding:8px; text-align:left;"><input type="text" value="${(m.condiciones||'').replace(/\"/g,'&quot;')}" style="width:220px;" data-midc="${m.material_id}" /></td>
           <td style="padding:8px; text-align:right;"><button class="btn" onclick="perfilRemoveMaterial(${m.material_id})">Quitar</button></td>
         `;
         tbody.appendChild(tr);
@@ -3360,6 +3485,14 @@
           const val = Number(ev.target.value);
           const idx = perfilMateriales.findIndex(x=>x.material_id===mid);
           if (idx>=0) perfilMateriales[idx].precio_por_kg = isNaN(val) ? 0 : val;
+        });
+      });
+      tbody.querySelectorAll('input[data-midc]').forEach(inp=>{
+        inp.addEventListener('input', (ev)=>{
+          const mid = Number(ev.target.getAttribute('data-midc'));
+          const val = String(ev.target.value||'');
+          const idx = perfilMateriales.findIndex(x=>x.material_id===mid);
+          if (idx>=0) perfilMateriales[idx].condiciones = val;
         });
       });
       const sel = document.getElementById('perfil-add-select');
@@ -3404,13 +3537,13 @@
       renderPerfilMateriales();
     }
 
-    async function perfilSaveMaterials(){
-      const items = perfilMateriales.map(m=>({ material_id: m.material_id, precio_por_kg: m.precio_por_kg }));
+  async function perfilSaveMaterials(){
+      const items = perfilMateriales.map(m=>({ material_id: m.material_id, precio_por_kg: m.precio_por_kg, condiciones: m.condiciones||null }));
       const r = await fetch(`/api/empresas/${user.id}/materiales/upsert`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ items }) });
       await r.json();
       alert('Cambios guardados');
       const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
-      perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg) }));
+      perfilMateriales = mats.map(m=>({ material_id: Number(m.material_id), nombre: m.nombre, precio_por_kg: Number(m.precio_por_kg), condiciones: String(m.condiciones||'') }));
       renderPerfilMateriales();
     }
 
@@ -3954,7 +4087,3 @@
     updateDistritoBadge();
   }
 </script>
-    viaUserLat = uLat;
-    viaUserLon = uLon;
-    viaPausedAtUser = false;
-    if (viaResumePoll) { try{ clearInterval(viaResumePoll); }catch{} viaResumePoll = null; }

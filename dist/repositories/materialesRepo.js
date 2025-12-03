@@ -13,8 +13,8 @@ async function listarMaterialesCatalogo() {
     const res = await pool_1.pool.query("SELECT id, nombre, precio_base_por_kg FROM materiales ORDER BY nombre");
     return res.rows;
 }
-async function upsertEmpresaMaterialPrecio(empresaId, materialId, precio) {
-    const res = await pool_1.pool.query("INSERT INTO empresa_materiales_precio(empresa_id, material_id, precio_por_kg) VALUES($1,$2,$3) ON CONFLICT (empresa_id, material_id) DO UPDATE SET precio_por_kg=EXCLUDED.precio_por_kg RETURNING *", [empresaId, materialId, precio]);
+async function upsertEmpresaMaterialPrecio(empresaId, materialId, precio, condiciones) {
+    const res = await pool_1.pool.query("INSERT INTO empresa_materiales_precio(empresa_id, material_id, precio_por_kg, condiciones) VALUES($1,$2,$3,$4) ON CONFLICT (empresa_id, material_id) DO UPDATE SET precio_por_kg=EXCLUDED.precio_por_kg, condiciones=COALESCE(EXCLUDED.condiciones, empresa_materiales_precio.condiciones) RETURNING *", [empresaId, materialId, precio, condiciones ?? null]);
     return res.rows[0];
 }
 async function eliminarEmpresaMaterial(empresaId, materialId) {
