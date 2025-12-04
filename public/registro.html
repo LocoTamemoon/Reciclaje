@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vida Verde · Registro</title>
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <style>
+    body{background:linear-gradient(180deg,#eefaf3 0%, #e6f7ef 60%, #f6fbf7 100%)}
+    .topbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--color-border);box-shadow:var(--shadow-md)}
+    .topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
+    .brand{display:flex;align-items:center;gap:8px}
+    .brand-mark{width:26px;height:26px;border-radius:999px;background:linear-gradient(180deg,#eafbf3,#d6f5e6);border:1px solid var(--color-border);box-shadow:0 4px 10px var(--shadow-md)}
+    .brand-name{font-weight:700}
+    .page{padding:34px 0}
+    .title{font-size:30px;font-weight:800;margin:0 0 10px;color:#0f172a}
+    .subtitle{color:var(--color-muted);margin:0 0 22px}
+    .cards{max-width:940px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:20px}
+    .role{position:relative;display:flex;gap:18px;align-items:flex-start;background:linear-gradient(180deg,#ffffff,#fbfdfc);border-radius:16px;padding:18px;box-shadow:0 14px 30px rgba(34,197,94,0.14)}
+    .role:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(34,197,94,0.20)}
+    .role::before{content:"";position:absolute;inset:0;padding:2.5px;border-radius:18px;background:linear-gradient(135deg,#9af2c7,#22c55e,#38c1b3,#9af2c7);background-size:200% 200%;-webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:borderFlow 12s linear infinite}
+    @keyframes borderFlow{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+    .emoji{width:72px;height:72px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:38px;background:linear-gradient(180deg,#e8fbf2,#d6f5e6);border:1px solid #cfeeda;box-shadow:0 10px 20px rgba(34,197,94,0.20);flex-shrink:0}
+    .role h3{margin:0;font-size:20px;color:#0f172a}
+    .role p{margin:8px 0 0;color:#365a48;line-height:1.55}
+  </style>
+  <script>
+    function goLogin(){ window.location.href='/login.html'; }
+    function goHome(){ window.location.href='/'; }
+    function openUserModal(){ const m=document.getElementById('user-modal'); if(m) m.hidden=false; }
+    function closeUserModal(){ const m=document.getElementById('user-modal'); if(m) m.hidden=true; }
+    async function useMyLocation(){
+      const latEl = document.getElementById('user-lat');
+      const lonEl = document.getElementById('user-lon');
+      function set(llat,llon){ if(latEl) latEl.value=String(llat||''); if(lonEl) lonEl.value=String(llon||''); }
+      try{
+        if(navigator.geolocation){
+          navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude, p.coords.longitude); }, async ()=>{
+            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude, j?.longitude); }catch{}
+          }, { enableHighAccuracy:true, timeout:3000 });
+          return;
+        }
+      }catch{}
+    }
+    function setToken(t){ localStorage.setItem('token', t); }
+    function setRole(r){ localStorage.setItem('role', r); }
+    function setUser(u){ localStorage.setItem('user', JSON.stringify(u)); }
+    async function submitUserRegister(){
+      const emailEl = document.getElementById('user-email');
+      const passEl = document.getElementById('user-pass');
+      const pass2El = document.getElementById('user-pass2');
+      const latEl = document.getElementById('user-lat');
+      const lonEl = document.getElementById('user-lon');
+      const email = emailEl && emailEl.value ? emailEl.value : '';
+      const password = passEl && passEl.value ? passEl.value : '';
+      const confirm = pass2El && pass2El.value ? pass2El.value : '';
+      const latRaw = latEl && latEl.value ? latEl.value : '';
+      const lonRaw = lonEl && lonEl.value ? lonEl.value : '';
+      const alertEl = document.getElementById('user-alert');
+      function showAlert(msg,type){ if(!alertEl) return; alertEl.textContent=msg; alertEl.className = type==='error' ? 'badge' : 'badge'; alertEl.style.background = type==='error' ? '#ffecec' : '#eafbf3'; alertEl.style.borderColor = type==='error' ? '#fca5a5' : '#cfeeda'; }
+      if(!email || !password){ showAlert('Email y contraseña son requeridos','error'); return; }
+      if(password !== confirm){ showAlert('Las contraseñas no coinciden','error'); return; }
+      let lat = latRaw? Number(latRaw): null; let lon = lonRaw? Number(lonRaw): null;
+      if(lat!=null && Number.isNaN(lat)) lat = null; if(lon!=null && Number.isNaN(lon)) lon = null;
+      try{
+        const r = await fetch('/api/auth/register/usuario', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email, password, lat, lon }) });
+        const j = await r.json();
+        if(j.token){ setToken(j.token); setRole('usuario'); setUser(j.usuario); window.location.href='/dashboard.html'; return; }
+        showAlert('No se pudo registrar. Intenta nuevamente.','error');
+      }catch{
+        showAlert('Error de red al registrar.','error');
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand"><div class="brand-mark"></div><div class="brand-name">Vida Verde</div></div>
+      <div class="row"><button class="btn secondary" onclick="goHome()">Inicio</button><button class="btn" onclick="goLogin()">Iniciar sesión</button></div>
+    </div>
+  </header>
+  <main class="page">
+    <div class="container">
+      <h1 class="title">Elige tu rol</h1>
+      <div class="subtitle">Selecciona el rol que mejor se adapte a tu participación dentro del sistema.</div>
+      <div class="cards">
+        <div class="card role" onclick="window.location.href='/registro_usuario.html'" style="cursor:pointer">
+          <div class="emoji">👤</div>
+          <div>
+            <h3>Usuario</h3>
+            <p>Registra solicitudes de venta de materiales y elige una empresa recicladora. Puedes entregar en local o solicitar recojo a domicilio. Visualiza precios por kg, historial, reseñas y tu reputación. Recibe pagos justos y acumula puntos por cada kilo reciclado.</p>
+          </div>
+        </div>
+        <div class="card role">
+          <div class="emoji">🏢</div>
+          <div>
+            <h3>Empresa recicladora</h3>
+            <p>Publica tu catálogo y precios, acepta solicitudes entrantes y gestiona el pesaje final. Administra tu perfil con fotos, reputación y reseñas. Paga al usuario, coordina entregas y consulta estadísticas de transacciones y materiales activos.</p>
+          </div>
+        </div>
+        <div class="card role">
+          <div class="emoji">🚛</div>
+          <div>
+            <h3>Recolector</h3>
+            <p>Realiza la logística de recojo y entrega. Comparte tu ubicación, confirma llegada al usuario y entrega en empresa. Visualiza rutas, participa en intercambio de recolectores cuando aplica y gestiona tu vehículo y documentos. Recibe calificaciones por tu servicio.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div id="user-modal" class="modal" hidden>
+    <div class="modal-card" style="width:520px">
+      <div class="row jc-between ai-center">
+        <h3>Registro de Usuario</h3>
+        <button class="btn secondary" onclick="closeUserModal()">Cerrar</button>
+      </div>
+      <div id="user-alert" class="badge" style="display:block; margin-top:8px; background:#F2FBF7; border-color:#cfeeda"></div>
+      <div class="mt-12">
+        <label>Email</label>
+        <input id="user-email" type="email" placeholder="correo@ejemplo.com" />
+      </div>
+      <div class="mt-8 row">
+        <div style="flex:1">
+          <label>Password</label>
+          <input id="user-pass" type="password" placeholder="••••" />
+        </div>
+        <div style="flex:1">
+          <label>Confirmar</label>
+          <input id="user-pass2" type="password" placeholder="••••" />
+        </div>
+      </div>
+      <div class="mt-8 row ai-end">
+        <div style="flex:1">
+          <label>Lat</label>
+          <input id="user-lat" type="text" placeholder="opcional" />
+        </div>
+        <div style="flex:1">
+          <label>Lon</label>
+          <input id="user-lon" type="text" placeholder="opcional" />
+        </div>
+        <button class="btn" onclick="useMyLocation()">Usar mi ubicación</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="submitUserRegister()">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

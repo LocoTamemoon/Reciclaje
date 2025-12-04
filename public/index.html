@@ -52,6 +52,7 @@
   </style>
   <script>
     function goLogin(){ window.location.href='/login.html'; }
+    function goRegister(){ window.location.href='/registro.html'; }
     document.addEventListener('DOMContentLoaded', function(){
       var els = document.querySelectorAll('.reveal');
       var io = new IntersectionObserver(function(entries){
@@ -78,7 +79,7 @@
         <a href="#puntos">Puntos</a>
         <a href="#contacto">Contacto</a>
       </nav>
-      <div class="nav-actions"><button class="btn" onclick="goLogin()">Iniciar sesión</button></div>
+      <div class="nav-actions"><button class="btn" onclick="goLogin()">Iniciar sesión</button><button class="btn secondary" onclick="goRegister()">Registrarse</button></div>
     </div>
   </header>
   <main>

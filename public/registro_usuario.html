@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registro de Usuario</title>
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <style>
+    body{background:linear-gradient(180deg,#eefaf3 0%, #e6f7ef 60%, #f6fbf7 100%)}
+    .wrap{max-width:880px;margin:0 auto;padding:24px}
+    .title{font-weight:800;font-size:28px;margin:0 0 8px}
+    .subtitle{color:var(--color-muted);margin:0 0 18px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .full{grid-column:1 / -1}
+    .hint{color:var(--color-muted);font-size:12px}
+    .avatar{width:80px;height:80px;border-radius:999px;background:linear-gradient(180deg,#e8fbf2,#d6f5e6);border:1px solid #cfeeda;box-shadow:0 10px 20px rgba(34,197,94,0.20);display:flex;align-items:center;justify-content:center;font-size:30px}
+  </style>
+  <script>
+    function setToken(t){ localStorage.setItem('token', t); }
+    function setRole(r){ localStorage.setItem('role', r); }
+    function setUser(u){ localStorage.setItem('user', JSON.stringify(u)); }
+    function goHome(){ window.location.href='/'; }
+    async function useLocation(){
+      const homeLat=document.getElementById('home-lat');
+      const homeLon=document.getElementById('home-lon');
+      const curLat=document.getElementById('cur-lat');
+      const curLon=document.getElementById('cur-lon');
+      function set(llat,llon){ if(homeLat) homeLat.value=String(llat||''); if(homeLon) homeLon.value=String(llon||''); if(curLat) curLat.value=String(llat||''); if(curLon) curLon.value=String(llon||''); }
+      try{
+        if(navigator.geolocation){
+          navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude,p.coords.longitude); }, async ()=>{
+            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+          }, { enableHighAccuracy:true, timeout:3000 });
+          return;
+        }
+      }catch{}
+    }
+    function readFileBase64(file){
+      return new Promise((resolve)=>{ try{ const fr=new FileReader(); fr.onload=()=>resolve(fr.result); fr.readAsDataURL(file); }catch{ resolve(null); } });
+    }
+    function showAlert(msg,type){ const el=document.getElementById('alert'); if(!el) return; el.textContent=msg; el.className='badge'; el.style.background= type==='error' ? '#ffecec' : '#F2FBF7'; el.style.borderColor= type==='error' ? '#fca5a5' : '#cfeeda'; }
+    async function submit(){
+      const nombre=(document.getElementById('nombre')||{}).value||'';
+      const apellidos=(document.getElementById('apellidos')||{}).value||'';
+      const dni=(document.getElementById('dni')||{}).value||'';
+      const email=(document.getElementById('email')||{}).value||'';
+      const pass=(document.getElementById('pass')||{}).value||'';
+      const pass2=(document.getElementById('pass2')||{}).value||'';
+      const homeLat=(document.getElementById('home-lat')||{}).value||'';
+      const homeLon=(document.getElementById('home-lon')||{}).value||'';
+      const curLat=(document.getElementById('cur-lat')||{}).value||'';
+      const curLon=(document.getElementById('cur-lon')||{}).value||'';
+      if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
+      if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
+      if(!dni || !/^\d{1,7}$/.test(dni)){ showAlert('DNI debe tener hasta 7 dígitos','error'); return; }
+      let foto=null; const file=(document.getElementById('foto')||{}).files? (document.getElementById('foto').files[0]||null) : null; if(file){ foto = await readFileBase64(file); }
+      try{
+        const body={ email, password:pass, nombre, apellidos, dni, foto_base64: foto, home_lat: homeLat? Number(homeLat): null, home_lon: homeLon? Number(homeLon): null, current_lat: curLat? Number(curLat): null, current_lon: curLon? Number(curLon): null };
+        const r=await fetch('/api/auth/register/usuario', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+        const j=await r.json();
+        if(j.token){ setToken(j.token); setRole('usuario'); setUser(j.usuario); window.location.href='/dashboard.html'; return; }
+        showAlert('No se pudo registrar. Revisa los datos.','error');
+      }catch{ showAlert('Error de red al registrar.','error'); }
+    }
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row jc-between ai-center">
+      <div class="row ai-center gap-12"><div class="avatar">👤</div><div><div class="title">Registro de Usuario</div><div class="subtitle">Completa tu perfil para comenzar a reciclar.</div></div></div>
+      <button class="btn secondary" onclick="goHome()">Inicio</button>
+    </div>
+    <div id="alert" class="badge" style="display:block; margin-top:10px; background:#F2FBF7; border-color:#cfeeda"></div>
+    <div class="panel mt-12">
+      <div class="grid2">
+        <div>
+          <label>Nombre</label>
+          <input id="nombre" type="text" placeholder="Nombre" />
+        </div>
+        <div>
+          <label>Apellidos</label>
+          <input id="apellidos" type="text" placeholder="Apellidos" />
+        </div>
+        <div>
+          <label>DNI</label>
+          <input id="dni" type="text" placeholder="Máx. 7 dígitos" />
+          <div class="hint">Único e inmutable</div>
+        </div>
+        <div>
+          <label>Correo</label>
+          <input id="email" type="email" placeholder="correo@ejemplo.com" />
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="pass" type="password" placeholder="••••" />
+        </div>
+        <div>
+          <label>Confirmar</label>
+          <input id="pass2" type="password" placeholder="••••" />
+        </div>
+        <div class="full">
+          <label>Foto de perfil</label>
+          <input id="foto" type="file" accept="image/png,image/jpeg" />
+          <div class="hint">Se guardará en /public/img</div>
+        </div>
+        <div>
+          <label>Home Lat</label>
+          <input id="home-lat" type="text" placeholder="opcional" />
+        </div>
+        <div>
+          <label>Home Lon</label>
+          <input id="home-lon" type="text" placeholder="opcional" />
+        </div>
+        <div>
+          <label>Current Lat</label>
+          <input id="cur-lat" type="text" placeholder="auto con ubicación" />
+        </div>
+        <div>
+          <label>Current Lon</label>
+          <input id="cur-lon" type="text" placeholder="auto con ubicación" />
+        </div>
+      </div>
+      <div class="row jc-between mt-12">
+        <button class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
+        <button class="btn" onclick="submit()">Crear cuenta</button>
+      </div>
+    </div>
+    <div class="muted mt-12">El ID se asigna automáticamente al crear la cuenta.</div>
+  </div>
+</body>
+</html>

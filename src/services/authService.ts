@@ -8,11 +8,22 @@ function signToken(payload: object) {
   return jwt.sign(payload, secret, { expiresIn: "7d" });
 }
 
-export async function registerUsuario(email: string, password: string, lat: number | null, lon: number | null) {
+export async function registerUsuario(
+  email: string,
+  password: string,
+  nombre: string | null,
+  apellidos: string | null,
+  dni: string | null,
+  foto_perfil_path: string | null,
+  home_lat: number | null,
+  home_lon: number | null,
+  current_lat: number | null,
+  current_lon: number | null
+) {
   const hash = await bcrypt.hash(password, 10);
   const res = await pool.query(
-    "INSERT INTO usuarios(email, password_hash, home_lat, home_lon, current_lat, current_lon) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
-    [email, hash, lat, lon, null, null]
+    "INSERT INTO usuarios(email, password_hash, nombre, apellidos, dni, foto_perfil_path, home_lat, home_lon, current_lat, current_lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
+    [email, hash, nombre, apellidos, dni, foto_perfil_path, home_lat, home_lon, current_lat, current_lon]
   );
   const u = res.rows[0];
   const token = signToken({ tipo: "usuario", id: u.id });
