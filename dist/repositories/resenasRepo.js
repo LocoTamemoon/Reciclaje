@@ -31,7 +31,22 @@ async function existeResenaUsuario(usuarioId, empresaId, transaccionId) {
     return (res.rowCount || 0) > 0;
 }
 async function listarResenasEmpresa(empresaId) {
-    const res = await pool_1.pool.query("SELECT re.id, re.puntaje, re.mensaje, re.creado_en, re.transaccion_id, re.usuario_id, COALESCE(u.email, 'Usuario ' || u.id) AS usuario_email FROM resenas_empresas re JOIN usuarios u ON u.id=re.usuario_id WHERE re.empresa_id=$1 ORDER BY re.creado_en DESC", [empresaId]);
+    const sql = `
+    SELECT re.id, re.puntaje, re.mensaje, re.creado_en, re.transaccion_id,
+           'usuario' AS autor_rol,
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,''))),''), u.email, 'Usuario ' || u.id) AS autor_nombre
+    FROM resenas_empresas re
+    JOIN usuarios u ON u.id = re.usuario_id
+    WHERE re.empresa_id = $1
+    UNION ALL
+    SELECT rr.id, rr.puntaje, rr.mensaje, rr.creado_en, rr.transaccion_id,
+           'recolector' AS autor_rol,
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,''))),''), r.email, 'Recolector ' || r.id) AS autor_nombre
+    FROM resenas_empresas_por_recolector rr
+    JOIN recolectores r ON r.id = rr.recolector_id
+    WHERE rr.empresa_id = $1
+    ORDER BY creado_en DESC`;
+    const res = await pool_1.pool.query(sql, [empresaId]);
     return res.rows;
 }
 async function listarResenasUsuario(usuarioId) {

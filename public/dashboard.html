@@ -58,6 +58,7 @@
     .modal-card textarea{ width:100%; min-height:92px; border-radius:10px; border:1px solid var(--border); background:#ffffff; color:var(--text); padding:10px; }
     #ruta-modal .modal-card{ width:720px; max-width:95vw; }
     #viaje-modal .modal-card{ width:720px; max-width:95vw; }
+    #empresa-img-modal .modal-card{ width:860px; max-width:95vw; }
     .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
     @media (max-width: 880px){ .layout{ grid-template-columns: 1fr; } .sidebar{ position:sticky; top:0; z-index:10; } }
   </style>
@@ -168,12 +169,26 @@
             <div>Estimado total: <strong id="estimado-total">S/ 0.00</strong></div>
           </div>
         </div>
+        <div class="row mt-8 ai-center" style="gap:12px;">
+          <img id="empresa-logo-view" src="/img/nodisponible.png" alt="logo" onerror="this.src='/img/nodisponible.png'" style="width:80px; height:80px; border-radius:999px; object-fit:cover; border:1px solid #dbeafe;" />
+          <div class="row ai-center" style="gap:12px;">
+            <div class="stat-card" style="min-width:160px;">
+              <div class="stat-title">Transacciones</div>
+              <div class="stat-value" id="empresa-metrics-trans" style="font-size:22px;">0</div>
+            </div>
+            <div class="stat-card" style="min-width:160px;">
+              <div class="stat-title">Materiales activos</div>
+              <div class="stat-value" id="empresa-metrics-mats" style="font-size:22px;">0</div>
+            </div>
+          </div>
+        </div>
         <div class="mt-12" style="overflow:auto;">
           <table style="width:100%; border-collapse:collapse;">
             <thead>
               <tr style="border-bottom:1px solid #1f2937;">
                 <th style="text-align:left; padding:8px;">Material</th>
-                <th style="text-align:right; padding:8px;">Precio/kg (S/)</th>
+                <th style="text-align:right; padding:8px; min-width:110px;">Precio/kg (S/)</th>
+                <th style="text-align:left; padding:8px 8px 8px 24px;">Condiciones</th>
                 <th style="text-align:right; padding:8px;">Kg a entregar</th>
                 <th style="text-align:right; padding:8px;">Subtotal (S/)</th>
               </tr>
@@ -193,6 +208,22 @@
             <span>Quiero que el recojo sea en mi ubicación actual (por defecto se usa el domicilio previamente registrado)</span>
           </label>
           <div class="muted mt-8" id="delivery-actual-hint" style="display:none;">Activa tu geolocalización para usar tu ubicación actual</div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div class="row jc-between ai-center">
+            <h3>Colección de Empresa</h3>
+          </div>
+          <div class="row" style="gap:16px; margin-top:8px;">
+            <div class="thumb-wrap">
+              <img id="empresa-view-img1" class="thumb" src="/img/nodisponible.png" alt="foto 1" onerror="this.src='/img/nodisponible.png'" />
+            </div>
+            <div class="thumb-wrap">
+              <img id="empresa-view-img2" class="thumb" src="/img/nodisponible.png" alt="foto 2" onerror="this.src='/img/nodisponible.png'" />
+            </div>
+            <div class="thumb-wrap">
+              <img id="empresa-view-img3" class="thumb" src="/img/nodisponible.png" alt="foto 3" onerror="this.src='/img/nodisponible.png'" />
+            </div>
+          </div>
         </div>
         <div class="mt-21">
           <div class="row jc-between ai-center">
@@ -558,6 +589,18 @@
       <div class="modal-actions">
         <button class="btn secondary" onclick="closePerfilEdit()">Cancelar</button>
         <button class="btn" onclick="savePerfilEdit()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="empresa-img-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="row jc-between ai-center">
+        <h3>Imagen de la empresa</h3>
+        <button class="btn secondary" onclick="closeEmpresaImg()">Cerrar</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <img id="empresa-img-modal-img" src="/img/nodisponible.png" alt="imagen" style="width:100%; max-height:70vh; object-fit:contain; border-radius:12px; border:1px solid var(--border); background:#ffffff;" />
       </div>
     </div>
   </div>
@@ -967,19 +1010,28 @@
       const list = await r.json();
       const container = document.getElementById('empresas');
       container.innerHTML = '';
+      function toStars(n){ const v = Math.max(0, Math.min(5, Number(n||0))); return '★'.repeat(Math.round(v)) + '☆'.repeat(5-Math.round(v)); }
       list.forEach(e=>{
         const div = document.createElement('div');
         div.className = 'card';
-        div.innerHTML = `<div class="row" style="justify-content:space-between;">
-          <div>
-            <div><strong>${e.nombre}</strong> <span class="badge">RUC ${e.ruc}</span></div>
-            <div class="muted">Reputación: ${Number(e.reputacion_promedio).toFixed(2)} (${e.resenas_recibidas_count} reseñas)</div>
-          </div>
-          <div class="right">
-            <button class="btn secondary" onclick="verEmpresa(${e.id}, '${e.nombre}', '${e.ruc}', ${Number(e.reputacion_promedio)})">Ver materiales</button>
-          </div>
-        </div>
-        <div class="muted">Materiales: ${(e.materiales||[]).map(m=>`#${m.material_id} S/${m.precio_por_kg}`).join(', ') || '—'}</div>`;
+        const safeNombre = String(e.nombre||'Empresa');
+        const safeRuc = String(e.ruc||'—');
+        const reputacion = Number(e.reputacion_promedio||0);
+        const logo = e.logo || '/img/nodisponible.png';
+        div.innerHTML = `
+          <div class="row jc-between ai-center">
+            <div>
+              <div style="font-weight:700;">${safeNombre}</div>
+              <div class="row ai-center" style="gap:8px; margin-top:8px;">
+                <img src="${logo}" alt="logo" onerror="this.src='/img/nodisponible.png'" style="width:52px; height:52px; border-radius:999px; object-fit:cover; border:1px solid #dbeafe;" />
+                <div class="muted" style="color:#f59e0b; font-size:18px;">${toStars(reputacion)}</div>
+              </div>
+            </div>
+            <div class="right" style="min-width:160px;">
+              <button class="btn secondary" onclick="verEmpresa(${e.id}, '${safeNombre}', '${safeRuc}', ${reputacion})">Ver materiales</button>
+              <div class="muted" style="margin-top:6px;">RUC ${safeRuc}</div>
+            </div>
+          </div>`;
         container.appendChild(div);
       });
     }
@@ -987,6 +1039,30 @@
       empresaSeleccionada = { id, nombre, ruc, reputacion };
       document.getElementById('empresa-titulo').textContent = nombre;
       document.getElementById('empresa-meta').textContent = `RUC ${ruc} · Reputación ${reputacion.toFixed ? reputacion.toFixed(2) : reputacion}`;
+      try {
+        const pr = await (await fetch(`/api/empresas/${id}/perfil`, { headers: authHeaders() })).json();
+        const emp = pr?.empresa || {};
+        const logoEl = document.getElementById('empresa-logo-view');
+        const img1El = document.getElementById('empresa-view-img1');
+        const img2El = document.getElementById('empresa-view-img2');
+        const img3El = document.getElementById('empresa-view-img3');
+        const transEl = document.getElementById('empresa-metrics-trans');
+        const matsEl = document.getElementById('empresa-metrics-mats');
+        const logo = emp?.logo || '/img/nodisponible.png';
+        const img1 = emp?.foto_local_1 || '/img/nodisponible.png';
+        const img2 = emp?.foto_local_2 || '/img/nodisponible.png';
+        const img3 = emp?.foto_local_3 || '/img/nodisponible.png';
+        const stats = pr?.stats || {};
+        if (logoEl){ logoEl.src = String(logo); logoEl.style.cursor='pointer'; logoEl.onclick = ()=> openEmpresaImg(String(logo)); }
+        if (img1El) img1El.src = String(img1);
+        if (img2El) img2El.src = String(img2);
+        if (img3El) img3El.src = String(img3);
+        if (img1El) img1El.onclick = ()=> openEmpresaImg(String(img1));
+        if (img2El) img2El.onclick = ()=> openEmpresaImg(String(img2));
+        if (img3El) img3El.onclick = ()=> openEmpresaImg(String(img3));
+        if (transEl) transEl.textContent = String(stats.transacciones!=null?Number(stats.transacciones):0);
+        if (matsEl) matsEl.textContent = String(stats.materiales_activos!=null?Number(stats.materiales_activos):0);
+      } catch {}
       const r = await fetch(`/api/empresas/${id}/materiales`, { headers: authHeaders() });
       const mats = await r.json();
       materialesSeleccionados = mats.map(m=>({ material_id: m.material_id, nombre: m.nombre, precio: Number(m.precio_por_kg), kg: 0, condiciones: m.condiciones || '' }));
@@ -994,16 +1070,28 @@
       setView('empresa');
       await loadEmpresaResenas(id);
     }
+    function openEmpresaImg(src){
+      const m = document.getElementById('empresa-img-modal');
+      const im = document.getElementById('empresa-img-modal-img');
+      if (im) im.src = String(src||'/img/nodisponible.png');
+      if (m) m.hidden = false;
+    }
+    function closeEmpresaImg(){
+      const m = document.getElementById('empresa-img-modal');
+      if (m) m.hidden = true;
+    }
     function renderMateriales(){
       const tbody = document.getElementById('materiales-body');
       tbody.innerHTML = '';
       materialesSeleccionados.forEach((m, idx)=>{
         const tr = document.createElement('tr');
+        const cond = String(m.condiciones||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         tr.innerHTML = `
-          <td style="padding:8px;">${m.nombre}</td>
-          <td style="padding:8px; text-align:right;">${m.precio.toFixed(2)}</td>
-          <td style="padding:8px; text-align:right;"><input type="number" min="0" step="0.1" value="${m.kg}" style="width:120px;" data-idx="${idx}" /></td>
-          <td style="padding:8px; text-align:right;" id="sub-${idx}">0.00</td>
+          <td style="padding:8px; vertical-align:middle;">${m.nombre}</td>
+          <td style="padding:8px; text-align:right; min-width:110px; vertical-align:middle;">${m.precio.toFixed(2)}</td>
+          <td style="padding:8px 8px 8px 24px; vertical-align:middle;">${cond}</td>
+          <td style="padding:8px; text-align:right; vertical-align:middle;"><input type="number" min="0" step="0.1" value="${m.kg}" style="width:120px;" data-idx="${idx}" /></td>
+          <td style="padding:8px; text-align:right; vertical-align:middle;" id="sub-${idx}">0.00</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1016,8 +1104,8 @@
         });
       });
       actualizarEstimado();
-      const condText = materialesSeleccionados.map(m=> m.condiciones ? `${m.nombre}: ${m.condiciones}` : '').filter(Boolean).join(' · ');
-      document.getElementById('empresa-cond').textContent = condText ? `Condiciones: ${condText}` : '';
+      const condEl = document.getElementById('empresa-cond');
+      if (condEl) { condEl.textContent = ''; condEl.style.display = 'none'; }
     }
     function actualizarEstimado(){
       let total = 0;
@@ -1052,14 +1140,18 @@
       const list = await r.json();
       const target = document.getElementById('empresa-resenas-list');
       if (!target) return;
+      function renderStars(n){ const s = Math.max(0, Math.min(5, Number(n||0))); return '★'.repeat(s) + '☆'.repeat(5-s); }
       list.forEach(re=>{
         const li = document.createElement('li');
+        const autor = String(re.autor_nombre||'');
+        const rol = String(re.autor_rol||'');
+        const stars = renderStars(Number(re.puntaje));
         li.innerHTML = `<div class="row" style="justify-content:space-between;">
           <div>
-            <div><strong>Puntaje ${Number(re.puntaje)}</strong> · Tx #${re.transaccion_id}</div>
+            <div><strong>${autor}</strong> ${rol?`<span class=\"badge\">${rol}</span>`:''} · Tx #${re.transaccion_id}</div>
             <div class="muted">${re.mensaje || '—'}</div>
           </div>
-          <div class="right"><span class="badge">${new Date(re.creado_en).toLocaleString()}</span></div>
+          <div class="right"><span class="badge">${new Date(re.creado_en).toLocaleString()}</span><div style="margin-top:6px; color:#f59e0b; font-size:18px;">${stars}</div></div>
         </div>`;
         target.appendChild(li);
       });
@@ -3885,11 +3977,12 @@
       const safeRuc = String(e.ruc).replace(/'/g, "\\'");
       const reputacion = Number(e.reputacion_promedio) || 0;
 
+      const toStars = (n)=>{ const v = Math.max(0, Math.min(5, Number(n||0))); return '★'.repeat(Math.round(v)) + '☆'.repeat(5-Math.round(v)); };
       const popupHTML = `
         <strong>${e.nombre}</strong>
-        <div>RUC ${e.ruc}</div>
+        <img src="${e.logo || '/img/nodisponible.png'}" alt="logo" style="width:40px; height:40px; border-radius:999px; object-fit:cover; border:1px solid #dbeafe; margin-top:4px;" />
+        <div style="color:#f59e0b; font-size:16px;">${toStars(reputacion)}</div>
         <div>Distancia ${(d / 1000).toFixed(2)} km</div>
-        <div class="muted">${mat}</div>
         <div style="margin-top:8px; text-align:right;">
           <button class="btn secondary"
             onclick="verEmpresa(${e.id}, '${safeNombre}', '${safeRuc}', ${reputacion})">
