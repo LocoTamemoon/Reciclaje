@@ -55,7 +55,7 @@ usuariosRouter.get("/:id/stats", asyncHandler(async (req: Request, res: Response
 usuariosRouter.get("/:id/perfil", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const userRes = await pool.query(
-    "SELECT id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1",
+    "SELECT id, nombre, apellidos, dni, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1",
     [id]
   );
   const u = userRes.rows[0] || null;
@@ -94,9 +94,9 @@ usuariosRouter.patch("/:id/perfil", asyncHandler(async (req: Request, res: Respo
   if (nombre!=null) { fields.push("nombre=$2"); vals.push(nombre); }
   if (apellidos!=null) { fields.push("apellidos=$"+(vals.length+2)); vals.push(apellidos); }
   if (fotoPath) { fields.push("foto_perfil_path=$"+(vals.length+2)); vals.push(fotoPath); }
-  if (fields.length===0) { const out = await pool.query("SELECT id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]); res.json(out.rows[0]||null); return; }
+  if (fields.length===0) { const out = await pool.query("SELECT id, nombre, apellidos, dni, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]); res.json(out.rows[0]||null); return; }
   const setClause = fields.join(", ");
-  const q = `UPDATE usuarios SET ${setClause} WHERE id=$1 RETURNING id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path`;
+  const q = `UPDATE usuarios SET ${setClause} WHERE id=$1 RETURNING id, nombre, apellidos, dni, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path`;
   const r = await pool.query(q, [id, ...vals]);
   res.json(r.rows[0]||null);
 }));

@@ -82,6 +82,31 @@ app.use("/api/materiales", materiales_1.materialesRouter);
 app.use("/api/recolector", recolector_1.recolectorRouter);
 ensureDistritosSchema();
 ensureHandoffSchema();
+async function ensureUsuariosDniSchema() {
+    try {
+        await pool_1.pool.query("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS dni VARCHAR(7)");
+        try {
+            const c = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='usuarios' AND constraint_name='usuarios_dni_unique' LIMIT 1");
+            if (!c.rows[0]) {
+                await pool_1.pool.query("ALTER TABLE usuarios ADD CONSTRAINT usuarios_dni_unique UNIQUE (dni)");
+            }
+        }
+        catch { }
+        try {
+            const c2 = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='usuarios' AND constraint_name='usuarios_dni_chk' LIMIT 1");
+            if (!c2.rows[0]) {
+                await pool_1.pool.query("ALTER TABLE usuarios ADD CONSTRAINT usuarios_dni_chk CHECK (dni ~ '^[0-9]{1,7}$')");
+            }
+        }
+        catch { }
+        try {
+            await pool_1.pool.query("UPDATE usuarios SET dni=$2 WHERE id=$1", [2, '7654321']);
+        }
+        catch { }
+    }
+    catch { }
+}
+ensureUsuariosDniSchema();
 const viajeStreams = new Map();
 const viajeSimTimers = new Map();
 const viajeSimProgress = new Map();

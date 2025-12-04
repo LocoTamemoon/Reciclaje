@@ -50,7 +50,7 @@ exports.usuariosRouter.get("/:id/stats", (0, asyncHandler_1.asyncHandler)(async 
 }));
 exports.usuariosRouter.get("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
-    const userRes = await pool_1.pool.query("SELECT id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]);
+    const userRes = await pool_1.pool.query("SELECT id, nombre, apellidos, dni, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]);
     const u = userRes.rows[0] || null;
     const matsRes = await pool_1.pool.query("SELECT umt.material_id, m.nombre, umt.kg_totales FROM usuario_materiales_totales umt JOIN materiales m ON m.id=umt.material_id WHERE umt.usuario_id=$1 ORDER BY m.nombre", [id]);
     const resenasRes = await pool_1.pool.query("SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 ORDER BY ru.creado_en DESC", [id]);
@@ -94,12 +94,12 @@ exports.usuariosRouter.patch("/:id/perfil", (0, asyncHandler_1.asyncHandler)(asy
         vals.push(fotoPath);
     }
     if (fields.length === 0) {
-        const out = await pool_1.pool.query("SELECT id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]);
+        const out = await pool_1.pool.query("SELECT id, nombre, apellidos, dni, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]);
         res.json(out.rows[0] || null);
         return;
     }
     const setClause = fields.join(", ");
-    const q = `UPDATE usuarios SET ${setClause} WHERE id=$1 RETURNING id, nombre, apellidos, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path`;
+    const q = `UPDATE usuarios SET ${setClause} WHERE id=$1 RETURNING id, nombre, apellidos, dni, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path`;
     const r = await pool_1.pool.query(q, [id, ...vals]);
     res.json(r.rows[0] || null);
 }));

@@ -95,7 +95,7 @@
           <button id="notif-nav-pend">Pendientes</button>
           <button id="notif-nav-past">Pasadas</button>
         </div>
-        <button id="m-progreso" onclick="setView('progreso')">Trabajo en Progreso ni bien que le doy aceptar</button>
+        <button id="m-progreso" onclick="setView('progreso')">Trabajo en Progreso</button>
       </div>
       <div class="sidebar-footer">
         <button class="btn danger icon" onclick="logout()">
@@ -2787,6 +2787,16 @@
   async function openAceptar(sid, usuarioId){
     aceptarCtx = { sid, usuario_id: usuarioId };
     const sol = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+    let usuarioNombre = '';
+    let usuarioApellidos = '';
+    let usuarioDni = '';
+    try {
+      const pj = await (await fetch(`/api/usuarios/${usuarioId}/perfil`, { headers: authHeaders() })).json();
+      const u = pj?.usuario || {};
+      usuarioNombre = String(u.nombre||'Usuario');
+      usuarioApellidos = String(u.apellidos||'').trim();
+      usuarioDni = String(u.dni||'').trim();
+    } catch {}
     const mats = await (await fetch(`/api/empresas/${user.id}/materiales`, { headers: authHeaders() })).json();
     const precios = new Map(mats.map(m=> [Number(m.material_id), Number(m.precio_por_kg)]));
     const nombres = new Map(mats.map(m=> [Number(m.material_id), String(m.nombre)]));
@@ -2802,7 +2812,8 @@
     const detalle = document.getElementById('aceptar-detalle');
     let warn = '';
     try { const detTx = await (await fetch(`/api/transacciones/por_solicitud/${sid}`, { headers: authHeaders() })).json(); if (Boolean(detTx?.empresa_cambio_valores)) warn = `<div class=\"muted\" style=\"color:#d32f2f; margin-bottom:8px\">La empresa ${detTx.transaccion.empresa_nombre} cambió los valores en el pesaje final</div>`; } catch {}
-    const html = [warn, `<table style=\"width:100%; border-collapse:collapse;\">`,
+    const headerInfo = `<div class=\"row ai-center\" style=\"gap:8px; margin-bottom:8px;\"><div><strong>${usuarioNombre}${usuarioApellidos?(' '+usuarioApellidos):''}</strong></div><div class=\"muted\">${usuarioDni?('DNI '+usuarioDni):''}</div></div>`;
+    const html = [warn, headerInfo, `<table style=\"width:100%; border-collapse:collapse;\">`,
       `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Precio/kg</th><th style='text-align:right'>Kg</th><th style='text-align:right'>Subtotal</th></tr></thead>`,
       `<tbody>`,
       ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.precio.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.sub.toFixed(2)}</td></tr>`),
@@ -3775,6 +3786,7 @@
         const monto = Number(st?.monto_total||0);
         const nombre = String(u.nombre||user.nombre||'').trim();
         const apellidos = String(u.apellidos||user.apellidos||'').trim();
+        const dni = String(u.dni||user.dni||'').trim();
         const foto = String(u.foto_perfil_path||user.foto_perfil_path||'').trim();
         const initials = (nombre||apellidos) ? (nombre.slice(0,1)+ (apellidos? apellidos.slice(0,1):'')).toUpperCase() : 'U';
         const avatar = foto ? `<img src="${foto}" alt="avatar" style="width:64px; height:64px; border-radius:999px; object-fit:cover; border:1px solid #dbeafe;" />` : `<div style="width:64px; height:64px; border-radius:999px; background:#e2f7ea; color:#10b981; display:flex; align-items:center; justify-content:center; font-weight:700;">${initials}</div>`;
@@ -3785,6 +3797,7 @@
                 ${avatar}
                 <div>
                   <div><strong>${((nombre||'Usuario') + (apellidos? (' '+apellidos):''))}</strong></div>
+                  <div class="muted">${dni? ('DNI '+dni) : ''}</div>
                   <div class="muted">ID ${user.id}</div>
                 </div>
               </div>
