@@ -155,6 +155,7 @@ solicitudesRouter.get("/notificaciones/stream", asyncHandler(async (req: Request
 solicitudesRouter.get("/notificaciones", asyncHandler(async (req: Request, res: Response) => {
   const roleRaw = req.query.role as any;
   const idRaw = req.query.id as any;
+  const statusRaw = req.query.status as any;
   const role = roleRaw ? String(roleRaw) : null;
   const idNum = idRaw != null ? Number(idRaw) : null;
   const id = idNum != null && !Number.isNaN(idNum) ? idNum : null;
@@ -162,6 +163,11 @@ solicitudesRouter.get("/notificaciones", asyncHandler(async (req: Request, res: 
   const params: any[] = [];
   if (role) { where.push(`actor_destino=$${params.length+1}`); params.push(role); }
   if (id != null) { where.push(`destino_id=$${params.length+1}`); params.push(id); }
+  if (statusRaw) {
+    const s = String(statusRaw).toLowerCase();
+    if (s === 'pending') { where.push(`leido=false`); }
+    else if (s === 'past') { where.push(`leido=true`); }
+  }
   const sql = `SELECT * FROM notificaciones ${where.length? ('WHERE ' + where.join(' AND ')) : ''} ORDER BY creado_en DESC LIMIT 200`;
   const r = await pool.query(sql, params);
   console.log("notif_list", { role, id, rows: r.rows.length });

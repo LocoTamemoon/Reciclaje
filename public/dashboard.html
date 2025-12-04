@@ -91,6 +91,10 @@
         <button id="m-rewards" onclick="setView('rewards')">Usa Puntos</button>
         <button id="m-mapa" onclick="setView('mapa')">Mapa</button>
         <button id="m-notificaciones" onclick="setView('notificaciones')">Notificaciones <span id="notif-count" class="badge">0</span></button>
+        <div id="notif-submenu" style="margin-left:12px; margin-top:6px;" hidden>
+          <button id="notif-nav-pend">Pendientes</button>
+          <button id="notif-nav-past">Pasadas</button>
+        </div>
         <button id="m-progreso" onclick="setView('progreso')">Trabajo en Progreso ni bien que le doy aceptar</button>
       </div>
       <div class="sidebar-footer">
@@ -385,12 +389,14 @@
       <section id="view-notificaciones" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
         <div class="row jc-between ai-center">
           <h2>Notificaciones</h2>
-          <div class="row gap-8">
+          <div class="row gap-8 ai-center">
             <button class="btn secondary" id="notif-refresh">Actualizar</button>
           </div>
         </div>
-        <ul id="notif-list" class="list"></ul>
-        <div id="notif-pager" class="row jc-end gap-8 mt-10"></div>
+        <div class="card">
+          <ul id="notif-list" class="list"></ul>
+          <div id="notif-pager" class="row jc-end gap-8 mt-10"></div>
+        </div>
       </section>
       <section id="view-pesaje" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
         <div class="row jc-between">
@@ -522,7 +528,7 @@
   </div>
 
   <div id="solicitud-modal" class="modal" hidden>
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 900px;">
       <h3>Detalle de solicitud</h3>
       <div id="solicitud-detalle" class="mono"></div>
       <div class="modal-actions">
@@ -628,6 +634,10 @@
     const solNavAnt = document.getElementById('sol-nav-ant');
     if (solNavPend) solNavPend.onclick = ()=>{ solTab='pendientes'; setView('solicitudes'); };
     if (solNavAnt) solNavAnt.onclick = ()=>{ solTab='anteriores'; setView('solicitudes'); };
+    const notifNavPend = document.getElementById('notif-nav-pend');
+    const notifNavPast = document.getElementById('notif-nav-past');
+    if (notifNavPend) notifNavPend.onclick = ()=>{ notifTab='pendientes'; setView('notificaciones'); };
+    if (notifNavPast) notifNavPast.onclick = ()=>{ notifTab='pasadas'; setView('notificaciones'); };
 
     function setView(v){
       for (const id of ['empresas','solicitudes','historial','perfil','resenas','rewards','mapa','notificaciones','progreso']){
@@ -638,11 +648,19 @@
       if (sub) sub.hidden = !(role==='recolector' && v==='historial');
       const solSub = document.getElementById('sol-submenu');
       if (solSub) solSub.hidden = (v!=='solicitudes');
+      const notifSub = document.getElementById('notif-submenu');
+      if (notifSub) notifSub.hidden = (v!=='notificaciones');
       const solNavPend2 = document.getElementById('sol-nav-pend');
       const solNavAnt2 = document.getElementById('sol-nav-ant');
       if (solNavPend2 && solNavAnt2){
         solNavPend2.classList.toggle('active', solTab==='pendientes' && v==='solicitudes');
         solNavAnt2.classList.toggle('active', solTab==='anteriores' && v==='solicitudes');
+      }
+      const notifNavPend2 = document.getElementById('notif-nav-pend');
+      const notifNavPast2 = document.getElementById('notif-nav-past');
+      if (notifNavPend2 && notifNavPast2){
+        notifNavPend2.classList.toggle('active', notifTab==='pendientes' && v==='notificaciones');
+        notifNavPast2.classList.toggle('active', notifTab==='pasadas' && v==='notificaciones');
       }
       const solCardPend = document.getElementById('sol-card-pend');
       const solCardAnt = document.getElementById('sol-card-ant');
@@ -718,12 +736,16 @@
       if (v==='mapa'){ if (!mapaInit) initMapa(); }
     }
     let notifES = null;
-    let notifCache = [];
-    let notifPage = 1;
+    let notifPend = [];
+    let notifPast = [];
+    let notifPagePend = 1;
+    let notifPagePast = 1;
+    let notifTab = 'pendientes';
     const NOTIF_PAGE_SIZE = 10;
     function initNotificaciones(){
       console.log('notif_init');
-      const ul = document.getElementById('notif-list');
+      const sel = document.getElementById('notif-tab');
+      if (sel){ sel.value = notifTab; sel.onchange = ()=>{ notifTab = sel.value; renderNotificaciones(); }; }
       const btn = document.getElementById('notif-refresh');
       if (btn) btn.onclick = loadNotificaciones;
       loadNotificaciones();
@@ -738,61 +760,63 @@
           const data = JSON.parse(ev.data);
           console.log('notif_stream_event', { data });
           try {
-            if (!Array.isArray(notifCache)) notifCache = [];
+            if (!Array.isArray(notifPend)) notifPend = [];
             const k = String(data?.solicitud_id||'') + '|' + String(data?.tipo||'');
             const ts = new Date(data?.creado_en||Date.now()).getTime();
-            let replaced = false;
-            notifCache = notifCache.filter((n)=>{
+            notifPend = notifPend.filter((n)=>{
               const nk = String(n?.solicitud_id||'') + '|' + String(n?.tipo||'');
               if (nk===k){
-                replaced = true;
                 const nts = new Date(n?.creado_en||Date.now()).getTime();
                 return ts >= nts ? false : true;
               }
               return true;
             });
-            notifCache.unshift(data);
-            updateNotifCount(notifCache);
-            renderNotificaciones();
-          } catch {
-            appendNotif(data);
-          }
+            notifPend.unshift(data);
+            updateNotifCount();
+            if (notifTab==='pendientes') renderNotificaciones();
+          } catch {}
         } catch {}
       });
     }
     async function loadNotificaciones(){
       console.log('notif_list_in');
-      const ul = document.getElementById('notif-list');
-      let list = [];
+      let pend = [];
+      let past = [];
       try {
-        const r = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(user.id)}`, { headers: authHeaders() });
-        list = await r.json();
+        const r = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(user.id)}&status=pending`, { headers: authHeaders() });
+        pend = await r.json();
       } catch {}
-      if (!Array.isArray(list)) list = [];
-      if (list.length === 0){
+      if (!Array.isArray(pend)) pend = [];
+      if (pend.length === 0){
         try {
-          const r2 = await fetch(`/api/solicitudes/notificaciones?id=${encodeURIComponent(user.id)}`, { headers: authHeaders() });
+          const r2 = await fetch(`/api/solicitudes/notificaciones?id=${encodeURIComponent(user.id)}&status=pending`, { headers: authHeaders() });
           const list2 = await r2.json();
-          if (Array.isArray(list2)) list = list2;
+          if (Array.isArray(list2)) pend = list2;
         } catch {}
       }
       try {
-        list = Array.isArray(list) ? list.filter((n)=> !Boolean(n?.leido)) : [];
         const byKey = {};
-        for (const n of list){
+        for (const n of Array.isArray(pend)? pend : []){
           const k = String(n?.solicitud_id||'') + '|' + String(n?.tipo||'');
           const ts = new Date(n?.creado_en||Date.now()).getTime();
           const prev = byKey[k];
           if (!prev || ts > new Date(prev?.creado_en||Date.now()).getTime()) byKey[k] = n;
         }
-        list = Object.values(byKey);
+        pend = Object.values(byKey);
       } catch {}
-      if (!Array.isArray(list)) list = [];
-      notifCache = list;
-      notifPage = 1;
+      if (!Array.isArray(pend)) pend = [];
+      notifPend = pend;
+      notifPagePend = 1;
+      try {
+        const r3 = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(user.id)}&status=past`, { headers: authHeaders() });
+        past = await r3.json();
+      } catch {}
+      if (!Array.isArray(past)) past = [];
+      notifPast = past;
+      notifPagePast = 1;
       renderNotificaciones();
-      updateNotifCount(notifCache);
-      console.log('notif_list_out', { count: notifCache.length });
+      updateNotifCount();
+      console.log('notif_list_out', { count: (notifPend?.length||0) + (notifPast?.length||0) });
     }
     function notifPriority(n){
       const t = String(n?.tipo||'');
@@ -823,69 +847,82 @@
       const pager = document.getElementById('notif-pager');
       if (!ul || !pager) return;
       ul.innerHTML = '';
-      const total = Array.isArray(notifCache) ? notifCache.length : 0;
-      const pages = Math.max(1, Math.ceil(total / NOTIF_PAGE_SIZE));
-      notifPage = Math.min(Math.max(1, notifPage), pages);
-      const bySid = {};
-      for (const n of (Array.isArray(notifCache)? notifCache : [])){
-        const sid = Number(n?.solicitud_id||0);
-        if (!bySid[sid]) bySid[sid] = [];
-        bySid[sid].push(n);
+      if (notifTab==='pendientes'){
+        const total = Array.isArray(notifPend) ? notifPend.length : 0;
+        const pages = Math.max(1, Math.ceil(total / NOTIF_PAGE_SIZE));
+        notifPagePend = Math.min(Math.max(1, notifPagePend), pages);
+        const bySid = {};
+        for (const n of (Array.isArray(notifPend)? notifPend : [])){
+          const sid = Number(n?.solicitud_id||0);
+          if (!bySid[sid]) bySid[sid] = [];
+          bySid[sid].push(n);
+        }
+        const sidsDesc = Object.keys(bySid).map(Number).sort((a,b)=> b-a);
+        const sorted = [];
+        for (const sid of sidsDesc){
+          const arr = bySid[sid].slice().sort((a,b)=>{
+            const isAct = (x)=>{
+              const t = String(x?.tipo||'');
+              if (role==='recolector') return (t==='solicitar_confirmaciones' || t==='cerca_usuario' || t==='cerca_empresa') && !Boolean(x?.leido);
+              if (role==='usuario') return (t==='solicitar_confirmaciones') && !Boolean(x?.leido);
+              if (role==='empresa') return (t==='entregado') && !Boolean(x?.leido);
+              return false;
+            };
+            const aAct = isAct(a);
+            const bAct = isAct(b);
+            if (aAct !== bAct) return aAct ? -1 : 1;
+            const rank = (x)=>{
+              const t = String(x?.tipo||'');
+              if (role==='recolector'){
+                if (t==='solicitar_confirmaciones') return 3;
+                if (t==='cerca_usuario') return 1;
+                if (t==='cerca_empresa') return 1;
+                return 0;
+              }
+              if (role==='usuario'){
+                if (t==='solicitar_confirmaciones') return 2;
+                if (t==='cerca_recolector') return 1;
+                return 0;
+              }
+              if (role==='empresa'){
+                if (t==='entregado') return 1;
+                return 0;
+              }
+              return 0;
+            };
+            const ra = rank(a);
+            const rb = rank(b);
+            if (ra !== rb) return rb - ra;
+            const tb = new Date(b?.creado_en||0).getTime();
+            const ta = new Date(a?.creado_en||0).getTime();
+            return tb - ta;
+          });
+          for (const n of arr) sorted.push(n);
+        }
+        const start = (notifPagePend-1)*NOTIF_PAGE_SIZE;
+        const slice = sorted.slice(start, start+NOTIF_PAGE_SIZE);
+        slice.forEach(n=> appendNotifGroup(n, 'notif-list'));
+        const prevDis = notifPagePend<=1 ? 'disabled' : '';
+        const nextDis = notifPagePend>=pages ? 'disabled' : '';
+        pager.innerHTML = `<button class=\"btn secondary\" ${prevDis} onclick=\"notifPrev()\">Anterior</button><span class=\"muted\">Página ${notifPagePend} / ${pages}</span><button class=\"btn secondary\" ${nextDis} onclick=\"notifNext()\">Siguiente</button>`;
+      } else {
+        const total = Array.isArray(notifPast) ? notifPast.length : 0;
+        const pages = Math.max(1, Math.ceil(total / NOTIF_PAGE_SIZE));
+        notifPagePast = Math.min(Math.max(1, notifPagePast), pages);
+        const sorted = (Array.isArray(notifPast)? notifPast : []).slice().sort((a,b)=> new Date(b?.creado_en||0).getTime() - new Date(a?.creado_en||0).getTime());
+        const start = (notifPagePast-1)*NOTIF_PAGE_SIZE;
+        const slice = sorted.slice(start, start+NOTIF_PAGE_SIZE);
+        slice.forEach(n=> appendNotifGroup(n, 'notif-list'));
+        const prevDis = notifPagePast<=1 ? 'disabled' : '';
+        const nextDis = notifPagePast>=pages ? 'disabled' : '';
+        pager.innerHTML = `<button class=\"btn secondary\" ${prevDis} onclick=\"notifPrev()\">Anterior</button><span class=\"muted\">Página ${notifPagePast} / ${pages}</span><button class=\"btn secondary\" ${nextDis} onclick=\"notifNext()\">Siguiente</button>`;
       }
-      const sidsDesc = Object.keys(bySid).map(Number).sort((a,b)=> b-a);
-      const sorted = [];
-      for (const sid of sidsDesc){
-        const arr = bySid[sid].slice().sort((a,b)=>{
-          const isAct = (x)=>{
-            const t = String(x?.tipo||'');
-            if (role==='recolector') return (t==='solicitar_confirmaciones' || t==='cerca_usuario' || t==='cerca_empresa') && !Boolean(x?.leido);
-            if (role==='usuario') return (t==='solicitar_confirmaciones') && !Boolean(x?.leido);
-            if (role==='empresa') return (t==='entregado') && !Boolean(x?.leido);
-            return false;
-          };
-          const aAct = isAct(a);
-          const bAct = isAct(b);
-          if (aAct !== bAct) return aAct ? -1 : 1;
-          const rank = (x)=>{
-            const t = String(x?.tipo||'');
-            if (role==='recolector'){
-              if (t==='solicitar_confirmaciones') return 3;
-              if (t==='cerca_usuario') return 1;
-              if (t==='cerca_empresa') return 1;
-              return 0;
-            }
-            if (role==='usuario'){
-              if (t==='solicitar_confirmaciones') return 2;
-              if (t==='cerca_recolector') return 1;
-              return 0;
-            }
-            if (role==='empresa'){
-              if (t==='entregado') return 1;
-              return 0;
-            }
-            return 0;
-          };
-          const ra = rank(a);
-          const rb = rank(b);
-          if (ra !== rb) return rb - ra;
-          const tb = new Date(b?.creado_en||0).getTime();
-          const ta = new Date(a?.creado_en||0).getTime();
-          return tb - ta;
-        });
-        for (const n of arr) sorted.push(n);
-      }
-      const start = (notifPage-1)*NOTIF_PAGE_SIZE;
-      const slice = sorted.slice(start, start+NOTIF_PAGE_SIZE);
-      slice.forEach(n=> appendNotif(n));
-      const prevDis = notifPage<=1 ? 'disabled' : '';
-      const nextDis = notifPage>=pages ? 'disabled' : '';
-      pager.innerHTML = `<button class=\"btn secondary\" ${prevDis} onclick=\"notifPrev()\">Anterior</button><span class=\"muted\">Página ${notifPage} / ${pages}</span><button class=\"btn secondary\" ${nextDis} onclick=\"notifNext()\">Siguiente</button>`;
     }
-    function notifPrev(){ notifPage = Math.max(1, notifPage-1); renderNotificaciones(); }
-    function notifNext(){ const pages = Math.max(1, Math.ceil((notifCache?.length||0)/NOTIF_PAGE_SIZE)); notifPage = Math.min(pages, notifPage+1); renderNotificaciones(); }
-    async function appendNotif(n){
+    function notifPrev(){ if (notifTab==='pendientes'){ notifPagePend = Math.max(1, notifPagePend-1); } else { notifPagePast = Math.max(1, notifPagePast-1); } renderNotificaciones(); }
+    function notifNext(){ if (notifTab==='pendientes'){ const pages = Math.max(1, Math.ceil((notifPend?.length||0)/NOTIF_PAGE_SIZE)); notifPagePend = Math.min(pages, notifPagePend+1); } else { const pages = Math.max(1, Math.ceil((notifPast?.length||0)/NOTIF_PAGE_SIZE)); notifPagePast = Math.min(pages, notifPagePast+1); } renderNotificaciones(); }
+    async function appendNotifGroup(n, containerId){
       console.log('notif_append', { tipo: n.tipo, solicitud_id: Number(n.solicitud_id||0) });
-      const ul = document.getElementById('notif-list');
+      const ul = document.getElementById(containerId);
       const li = document.createElement('li');
       const ts = new Date(n.creado_en||Date.now()).toLocaleString();
       const liId = 'notif-'+Math.random().toString(36).slice(2);
@@ -942,7 +979,7 @@
         console.log('notif_action_ok', { sid, etapa });
         try { if (nid!=null) await fetch(`/api/solicitudes/notificaciones/${nid}/leido`, { method:'POST', headers: authHeaders() }); } catch {}
         try { const li2 = document.getElementById(liId); if (li2) li2.remove(); } catch {}
-        try { updateNotifCount(document.querySelectorAll('#notif-list li')); } catch {}
+        try { await loadNotificaciones(); } catch {}
         try {
           const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
           const ok1 = Boolean(sj?.usuario_llegada_ok);
@@ -954,9 +991,10 @@
         } catch {}
       } catch {}
     }
-    function updateNotifCount(list){
+    function updateNotifCount(){
       const badge = document.getElementById('notif-count');
-      if (badge) badge.textContent = String(list?.length||0);
+      const cPend = Array.isArray(notifPend)? notifPend.length : 0;
+      if (badge) badge.textContent = String(cPend);
     }
     function logout(){ localStorage.clear(); window.location.href='/login.html'; }
     function authHeaders(){ return { 'Content-Type':'application/json', 'Authorization': 'Bearer '+token }; }
@@ -2207,9 +2245,30 @@
       const fee = (String(sol?.tipo_entrega||'')==='delivery') ? Number(sol?.delivery_fee||0) : 0;
       const banda = String(sol?.clasificacion_distancia||'');
       const usuarioNeto = (fee>0) ? (total - fee) : total;
+      async function fetchRecoName(id){
+        try { const r = await fetch(`/api/recolector/${id}/perfil`, { headers: authHeaders() }); const j = await r.json(); const n = [String(j?.nombre||'').trim(), String(j?.apellidos||'').trim()].filter(Boolean).join(' '); return n || (j?.email||(`Recolector #${id}`)); } catch { return `Recolector #${id}`; }
+      }
+      const isDelivery = String(sol?.tipo_entrega||'')==='delivery';
+      const recoId = sol?.recolector_id!=null ? Number(sol.recolector_id) : null;
+      const pickupId = sol?.pickup_recolector_id!=null ? Number(sol.pickup_recolector_id) : null;
+      const handoffId = sol?.handoff_recolector_id!=null ? Number(sol.handoff_recolector_id) : null;
+      let entregaInfo = '';
+      if (isDelivery) {
+        const nameFinal = recoId ? await fetchRecoName(recoId) : null;
+        const namePickup = pickupId ? await fetchRecoName(pickupId) : null;
+        const nameHandoff = handoffId ? await fetchRecoName(handoffId) : null;
+        const huboHandoff = (handoffId && handoffId>0) || (pickupId && recoId && pickupId!==recoId);
+        if (huboHandoff) {
+          const finalName = nameFinal || nameHandoff || null;
+          entregaInfo = `<div class=\"muted\" style=\"margin-bottom:8px\">Delivery · <strong>${namePickup||'Recolector inicial'}</strong> → <strong>${finalName||'Recolector final'}</strong></div>`;
+        } else {
+          entregaInfo = `<div class=\"muted\" style=\"margin-bottom:8px\">Delivery · Recolector: <strong>${nameFinal||'Recolector'}</strong></div>`;
+        }
+      }
       const html = [
         warn,
         txInfo,
+        entregaInfo,
         `<div class=\"row jc-between my-8\">`,
           `<div><span class=\"muted\">Empresa</span> <strong>${emp?.nombre || ('Empresa '+empresaId)}</strong>${banda? ` · <span class=\"badge\">${banda}</span>`:''}</div>`,
           `<div class=\"right\"><span class=\"muted\">Total estimado</span> <strong>S/ ${total.toFixed(2)}</strong></div>`,

@@ -188,6 +188,7 @@ exports.solicitudesRouter.get("/notificaciones/stream", (0, asyncHandler_1.async
 exports.solicitudesRouter.get("/notificaciones", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const roleRaw = req.query.role;
     const idRaw = req.query.id;
+    const statusRaw = req.query.status;
     const role = roleRaw ? String(roleRaw) : null;
     const idNum = idRaw != null ? Number(idRaw) : null;
     const id = idNum != null && !Number.isNaN(idNum) ? idNum : null;
@@ -200,6 +201,15 @@ exports.solicitudesRouter.get("/notificaciones", (0, asyncHandler_1.asyncHandler
     if (id != null) {
         where.push(`destino_id=$${params.length + 1}`);
         params.push(id);
+    }
+    if (statusRaw) {
+        const s = String(statusRaw).toLowerCase();
+        if (s === 'pending') {
+            where.push(`leido=false`);
+        }
+        else if (s === 'past') {
+            where.push(`leido=true`);
+        }
     }
     const sql = `SELECT * FROM notificaciones ${where.length ? ('WHERE ' + where.join(' AND ')) : ''} ORDER BY creado_en DESC LIMIT 200`;
     const r = await pool_1.pool.query(sql, params);

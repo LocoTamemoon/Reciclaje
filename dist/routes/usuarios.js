@@ -20,10 +20,27 @@ exports.usuariosRouter.get("/:id/historial", (0, asyncHandler_1.asyncHandler)(as
 }));
 exports.usuariosRouter.get("/:id/dashboard", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
-    const pendientes = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado NOT IN ('aceptada','rechazada','completada','completada_repesada','cancelada','expirada')) OR (estado IN ('rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC", [id]);
-    const anteriores = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado NOT IN ('aceptada','rechazada','completada','cancelada','expirada')) OR (estado IN ('rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC", [id]);
+    const pendientes = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC", [id]);
+    const anteriores = await pool_1.pool.query("SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC", [id]);
+    function etiquetaSolicitud(s) {
+        const tipo = String(s?.tipo_entrega || "");
+        const estado = String(s?.estado || "");
+        const handoffIdRaw = s?.handoff_recolector_id;
+        const handoffId = handoffIdRaw != null ? Number(handoffIdRaw) : null;
+        const huboHandoff = handoffId != null && !Number.isNaN(handoffId) && handoffId > 0;
+        if (tipo === "delivery" && estado === "completada" && !huboHandoff)
+            return "completada_delivery";
+        if (tipo === "delivery" && estado === "completada" && huboHandoff)
+            return "completada_delivery_handoff";
+        if (tipo === "delivery" && estado === "completada_repesada" && !huboHandoff)
+            return "completada_repesada_delivery";
+        if (tipo === "delivery" && estado === "completada_repesada" && huboHandoff)
+            return "completada_repesada_delivery_handoff";
+        return null;
+    }
+    const anterioresEtiquetadas = anteriores.rows.map((s) => ({ ...s, etiqueta: etiquetaSolicitud(s) }));
     const historial = await (0, transaccionesRepo_1.historialUsuario)(id);
-    res.json({ solicitudes_pendientes: pendientes.rows, solicitudes_anteriores: anteriores.rows, historial_transacciones: historial });
+    res.json({ solicitudes_pendientes: pendientes.rows, solicitudes_anteriores: anterioresEtiquetadas, historial_transacciones: historial });
 }));
 exports.usuariosRouter.get("/:id/stats", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
