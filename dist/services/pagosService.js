@@ -15,7 +15,37 @@ async function registrarPesajeYPago(empresaId, solicitudId, usuarioId, metodoPag
         precios.set(m.material_id, Number(m.precio_por_kg));
     const puntosPor10kg = 40;
     const { transaccion, totalKg, puntos } = await (0, transaccionesRepo_1.crearTransaccionConPesaje)(solicitudId, usuarioId, empresaId, metodoPago, modoEntrega, lat, lon, pesajes, precios, puntosPor10kg);
-    await (0, solicitudesRepo_1.actualizarEstadoSolicitud)(solicitudId, "completada");
+    let empresaCambioValores = false;
+    try {
+        const origItems = Array.isArray(solPre?.items_json) ? solPre.items_json : [];
+        const origMap = new Map();
+        for (const it of origItems) {
+            try {
+                origMap.set(Number(it.material_id), Number(it.kg || 0));
+            }
+            catch { }
+        }
+        const seen = new Set();
+        for (const p of pesajes) {
+            const mid = Number(p.material_id);
+            seen.add(mid);
+            const origKg = origMap.has(mid) ? Number(origMap.get(mid)) : 0;
+            if (Math.abs(Number(p.kg_finales) - origKg) > 1e-6) {
+                empresaCambioValores = true;
+                break;
+            }
+        }
+        if (!empresaCambioValores) {
+            for (const [mid, kg] of origMap.entries()) {
+                if (!seen.has(Number(mid)) && Math.abs(Number(kg)) > 1e-6) {
+                    empresaCambioValores = true;
+                    break;
+                }
+            }
+        }
+    }
+    catch { }
+    await (0, solicitudesRepo_1.actualizarEstadoSolicitud)(solicitudId, empresaCambioValores ? "completada_repesada" : "completada");
     const sol = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
     if (sol && String(sol.tipo_entrega) === "delivery" && Number(sol.recolector_id || 0) > 0) {
         await pool_1.pool.query("UPDATE recolectores SET trabajos_completados = trabajos_completados + 1 WHERE id=$1", [Number(sol.recolector_id)]);

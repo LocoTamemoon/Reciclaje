@@ -400,8 +400,7 @@
           <div>Comisión (10%): <strong id="pesaje-fee">S/ 0.00</strong></div>
           <div>Total a pagar: <strong id="pesaje-net">S/ 0.00</strong></div>
           <div class="row" style="gap:8px; align-items:center;">
-            <input type="checkbox" id="pesaje-agree" />
-            <label for="pesaje-agree" class="check-wrap" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
+            
           </div>
         </div>
       </section>
@@ -482,19 +481,10 @@
 
   <div id="aceptar-modal" class="modal" hidden>
     <div class="modal-card">
-      <h3>Confirmar aceptación</h3>
+      <h3>Ver Detalle</h3>
       <div id="aceptar-detalle" class="mono"></div>
-      <div class="row ai-center gap-8 mt-10">
-        <input type="checkbox" id="aceptar-agree" />
-        <label for="aceptar-agree" class="check-wrap" style="font-size:12px;">Acepto las condiciones del Acuerdo de Suscriptor a Vida Verde</label>
-      </div>
-      <div id="aceptar-fee-box" class="right mt-8" hidden>
-        <div>Comisión (10%): <strong id="aceptar-fee">S/ 0.00</strong></div>
-        <div>Total a pagar: <strong id="aceptar-net">S/ 0.00</strong></div>
-      </div>
       <div class="modal-actions">
-        <button class="btn" id="btn-aceptar-go">Aceptar</button>
-        <button class="btn secondary" id="btn-aceptar-pesaje">Pesaje</button>
+        <button class="btn" id="btn-aceptar-pesaje">Pesaje</button>
         <button class="btn secondary" onclick="closeAceptar()">Volver</button>
       </div>
     </div>
@@ -2044,8 +2034,9 @@
         const canTrack = String(s.tipo_entrega)==='delivery' && s.recolector_id!=null && String(s.estado_publicacion||'')==='aceptada_recolector';
         const viajeBtn = canTrack ? `<button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button>` : (!isDelivery ? `<button class=\"btn\" onclick=\"usuarioRutaEmpresa(${s.id}, ${s.empresa_id})\">Ruta a la empresa</button>` : '');
         const finalBtn = isExp ? `<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>` : '';
-        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\">${displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${viajeBtn} ${finalBtn}</div></div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\" id=\"sol-estado-${s.id}\">${displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${viajeBtn} ${finalBtn}</div></div>`;
         ant.appendChild(li);
+        (async ()=>{ try { const detTx = await (await fetch(`/api/transacciones/por_solicitud/${s.id}`, { headers: authHeaders() })).json(); if (Boolean(detTx?.empresa_cambio_valores)) { const b = document.getElementById('sol-estado-'+String(s.id)); if (b) b.textContent = 'completada_repesada'; } } catch {} })();
       });
       if (sortedAnt.length > PAGE_SIZE){
         const li = document.createElement('li');
@@ -2090,6 +2081,19 @@
       const precios = new Map(matsEmp.map(m=> [Number(m.material_id), Number(m.precio_por_kg)]));
       const nombresEmp = new Map(matsEmp.map(m=> [Number(m.material_id), String(m.nombre)]));
       const items = Array.isArray(sol?.items_json) ? sol.items_json : [];
+      let warn = '';
+      let txInfo = '';
+      try {
+        const detTx = await (await fetch(`/api/transacciones/por_solicitud/${sid}`, { headers: authHeaders() })).json();
+        const txId = Number(detTx?.transaccion?.id || 0);
+        if (txId > 0) {
+          txInfo = `<div class=\"muted\" style=\"margin-bottom:8px\">Ligada a <strong>Transacción #${txId}</strong>. Revisa tu Historial para ver el resultado final.</div>`;
+        }
+        if (Boolean(detTx?.empresa_cambio_valores)) {
+          const ename = String(detTx?.transaccion?.empresa_nombre || emp?.nombre || ('Empresa '+empresaId));
+          warn = `<div class=\"muted\" style=\"color:#d32f2f; margin-bottom:8px\">La empresa ${ename} cambió los valores en el pesaje final</div>`;
+        }
+      } catch {}
       let total = 0;
       const rows = items.map(it=>{
         const mid = Number(it.material_id);
@@ -2104,6 +2108,8 @@
       const banda = String(sol?.clasificacion_distancia||'');
       const usuarioNeto = (fee>0) ? (total - fee) : total;
       const html = [
+        warn,
+        txInfo,
         `<div class=\"row jc-between my-8\">`,
           `<div><span class=\"muted\">Empresa</span> <strong>${emp?.nombre || ('Empresa '+empresaId)}</strong>${banda? ` · <span class=\"badge\">${banda}</span>`:''}</div>`,
           `<div class=\"right\"><span class=\"muted\">Total estimado</span> <strong>S/ ${total.toFixed(2)}</strong></div>`,
@@ -2325,12 +2331,12 @@
         : `<div class=\"right\" style=\"margin-top:10px\">Total: <strong>S/ ${Number(j.total).toFixed(2)}</strong> · Comisión 10%: <strong>S/ ${Number(j.comision_10).toFixed(2)}</strong> · Total con comisión: <strong>S/ ${Number(j.total_con_comision).toFixed(2)}</strong></div>`;
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
-      if (titleEl) titleEl.textContent = `Detalle Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}`;
+      if (titleEl) titleEl.textContent = `Solicitud #${j.transaccion.solicitud_id} · Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}`;
       let acciones = '';
       if (String(role)==='empresa' && Boolean(j?.es_delivery) && j?.recolector_final_id!=null && !Boolean(j?.ya_resena_recolector_empresa)) {
         acciones = `<div class=\"right mt-10\"><button class=\"btn secondary\" id=\"rate-reco-det-${id}\" onclick=\"openRating('recolector', ${id}, null, null)\">Calificar recolector</button></div>`;
       }
-      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Precio/kg</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}${acciones}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
+      if (contentEl) contentEl.innerHTML = `<div class=\"muted\">Solicitud #${j.transaccion.solicitud_id} · Transacción #${j.transaccion.id}</div><table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Precio/kg</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}${acciones}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
       if (modal) modal.hidden = false;
       histDetalleId = id;
     }
@@ -2433,13 +2439,13 @@
       const distUE = (j.dist_usuario_empresa_km!=null) ? `${Number(j.dist_usuario_empresa_km).toFixed(2)} km` : '—';
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
-      if (titleEl) titleEl.textContent = `Detalle Trabajo #${sid}`;
+      if (titleEl) titleEl.textContent = `Solicitud #${sid} · Transacción #${Number(j.transaccion_id)||'—'}`;
       let acciones = '';
       const puedeU = Boolean(j?.puede_calificar_usuario) && !Boolean(j?.ya_resena_usuario_por_recolector);
       const puedeE = Boolean(j?.puede_calificar_empresa) && !Boolean(j?.ya_resena_empresa_por_recolector);
       if (puedeU) acciones += `<button class=\"btn secondary\" id=\"rate-usr-reco-${sid}\" onclick=\"openRating('usuario_reco', ${Number(j.transaccion_id)}, null, ${Number(j.usuario_id)})\">Calificar usuario</button>`;
       if (puedeE) acciones += ` <button class=\"btn secondary\" id=\"rate-emp-reco-${sid}\" onclick=\"openRating('empresa_reco', ${Number(j.transaccion_id)}, ${Number(j.empresa_id)}, null)\">Calificar empresa</button>`;
-      if (contentEl) contentEl.innerHTML = `<table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right mt-10\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right mt-8\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>${(acciones? `<div class=\\\"right mt-10\\\">${acciones}</div>` : '')}`;
+      if (contentEl) contentEl.innerHTML = `<div class=\"muted\">Solicitud #${sid} · Transacción #${Number(j.transaccion_id)||'—'}</div><table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right mt-10\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right mt-8\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>${(acciones? `<div class=\\\"right mt-10\\\">${acciones}</div>` : '')}`;
       if (modal) modal.hidden = false;
       histDetalleId = sid;
     }
@@ -2555,7 +2561,7 @@
             <div class="muted">Estado: ${displayEstadoSolicitud(s.estado)} · ${new Date(s.creado_en).toLocaleString()}</div>
           </div>
           <div class="right">
-            <button class="btn secondary" onclick="openAceptar(${s.id}, ${s.usuario_id})">Aceptar</button>
+            <button class="btn" onclick="openAceptar(${s.id}, ${s.usuario_id})">Ver detalle</button>
             <button class="btn" onclick="empresaRechazar(${s.id})">Rechazar</button>
             <button class="btn" onclick="empresaPesaje(${s.id}, ${s.usuario_id})">Pesaje</button>
           </div>
@@ -2635,7 +2641,9 @@
       return { material_id: Number(it.material_id), nombre: (nombres.get(Number(it.material_id)) || ('#'+Number(it.material_id))), kg, precio, sub };
     });
     const detalle = document.getElementById('aceptar-detalle');
-    const html = [`<table style=\"width:100%; border-collapse:collapse;\">`,
+    let warn = '';
+    try { const detTx = await (await fetch(`/api/transacciones/por_solicitud/${sid}`, { headers: authHeaders() })).json(); if (Boolean(detTx?.empresa_cambio_valores)) warn = `<div class=\"muted\" style=\"color:#d32f2f; margin-bottom:8px\">La empresa ${detTx.transaccion.empresa_nombre} cambió los valores en el pesaje final</div>`; } catch {}
+    const html = [warn, `<table style=\"width:100%; border-collapse:collapse;\">`,
       `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Precio/kg</th><th style='text-align:right'>Kg</th><th style='text-align:right'>Subtotal</th></tr></thead>`,
       `<tbody>`,
       ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.precio.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.sub.toFixed(2)}</td></tr>`),
@@ -2644,30 +2652,14 @@
       `<div class='right' style='margin-top:10px;'>Total estimado: <strong>S/ ${total.toFixed(2)}</strong></div>`
     ].join('');
     detalle.innerHTML = html;
-    const btnGo = document.getElementById('btn-aceptar-go');
     const btnPes = document.getElementById('btn-aceptar-pesaje');
-    const chk = document.getElementById('aceptar-agree');
-    const feeBox = document.getElementById('aceptar-fee-box');
-    const feeEl = document.getElementById('aceptar-fee');
-    const netEl = document.getElementById('aceptar-net');
-    btnGo.disabled = true;
-    if (chk) chk.checked = false;
-    if (feeBox) feeBox.hidden = true;
-    if (feeEl) feeEl.textContent = 'S/ 0.00';
-    if (netEl) netEl.textContent = 'S/ 0.00';
-    btnGo.onclick = async ()=>{ await empresaAceptar(sid); closeAceptar(); };
-    btnPes.onclick = ()=>{ closeAceptar(); empresaPesaje(sid, usuarioId); };
-    chk.onchange = ()=>{
-      const ok = chk.checked;
-      btnGo.disabled = !ok;
-      feeBox.hidden = !ok;
-      if (ok){
-        const fee = total * 0.10;
-        const net = total + fee;
-        if (feeEl) feeEl.textContent = 'S/ ' + fee.toFixed(2);
-        if (netEl) netEl.textContent = 'S/ ' + net.toFixed(2);
-      }
-    };
+    const tipoEntrega = (String(sol?.tipo_entrega||'')==='delivery') ? 'Delivery' : 'Recojo';
+    const addInfo = document.createElement('div');
+    addInfo.className = 'muted';
+    addInfo.textContent = 'Tipo de entrega: ' + tipoEntrega;
+    const detEl = document.getElementById('aceptar-detalle');
+    if (detEl) detEl.appendChild(addInfo);
+    if (btnPes) btnPes.onclick = ()=>{ closeAceptar(); empresaPesaje(sid, usuarioId); };
     document.getElementById('aceptar-modal').hidden = false;
   }
 
@@ -3331,11 +3323,9 @@
         });
       });
       actualizarPesajeTotal();
-      const chk = document.getElementById('pesaje-agree');
       const btn = document.getElementById('btn-pesaje-confirm');
-      if (chk) chk.checked = false;
-      if (btn) btn.disabled = true;
-      if (chk) chk.onchange = ()=>{ if (btn) btn.disabled = !chk.checked; };
+      const hasKg = materialesSeleccionados.some(m=> Number(m.kg||0) > 0);
+      if (btn) btn.disabled = !hasKg;
     }
     function actualizarPesajeTotal(){
       let total = 0;
@@ -3353,6 +3343,9 @@
       if (totalEl) totalEl.textContent = 'S/ ' + total.toFixed(2);
       if (feeEl) feeEl.textContent = 'S/ ' + fee.toFixed(2);
       if (netEl) netEl.textContent = 'S/ ' + net.toFixed(2);
+      const btn = document.getElementById('btn-pesaje-confirm');
+      const hasKg = materialesSeleccionados.some(m=> Number(m.kg||0) > 0);
+      if (btn) btn.disabled = !hasKg;
     }
     function cancelarPesaje(){ setView('empresa_solicitudes'); }
     async function confirmarPesaje(){

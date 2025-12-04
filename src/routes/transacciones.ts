@@ -24,6 +24,22 @@ transaccionesRouter.get("/:id", asyncHandler(async (req: Request, res: Response)
   const comision_10 = total * 0.10;
   const total_con_comision = total + comision_10;
   const solicitud = await obtenerSolicitud(Number(tx.solicitud_id));
+  const origItems: any[] = Array.isArray((solicitud as any)?.items_json) ? (solicitud as any).items_json : [];
+  const origMap = new Map<number, number>();
+  for (const it of origItems) { try { origMap.set(Number(it.material_id), Number(it.kg||0)); } catch {} }
+  let empresaCambioValores = false;
+  const seen = new Set<number>();
+  for (const d of detalle) {
+    const mid = Number(d.material_id);
+    seen.add(mid);
+    const origKg = origMap.has(mid) ? Number(origMap.get(mid)) : 0;
+    if (Math.abs(Number(d.kg_finales) - origKg) > 1e-6) { empresaCambioValores = true; break; }
+  }
+  if (!empresaCambioValores) {
+    for (const [mid, kg] of origMap.entries()) {
+      if (!seen.has(Number(mid)) && Math.abs(Number(kg)) > 1e-6) { empresaCambioValores = true; break; }
+    }
+  }
   const esDelivery = String((solicitud as any)?.tipo_entrega||'') === 'delivery';
   const delivery_fee = esDelivery ? Number((solicitud as any)?.delivery_fee||0) : 0;
   const usuario_neto = total - delivery_fee;
@@ -36,5 +52,44 @@ transaccionesRouter.get("/:id", asyncHandler(async (req: Request, res: Response)
     ya_resena_recolector_empresa = await existeResenaRecolector(recoFinalId, 'empresa', Number(tx.empresa_id), id);
     ya_resena_recolector_usuario = await existeResenaRecolector(recoFinalId, 'usuario', Number(tx.usuario_id), id);
   }
-  res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa, ya_resena_recolector_empresa, ya_resena_recolector_usuario, recolector_final_id: recoFinalId, es_delivery: esDelivery });
+  res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, ya_resena_usuario, ya_resena_empresa, ya_resena_recolector_empresa, ya_resena_recolector_usuario, recolector_final_id: recoFinalId, es_delivery: esDelivery, empresa_cambio_valores: empresaCambioValores });
+}));
+
+transaccionesRouter.get("/por_solicitud/:sid", asyncHandler(async (req: Request, res: Response) => {
+  const sid = Number(req.params.sid);
+  const tx = await (await import("../repositories/transaccionesRepo")).obtenerTransaccionPorSolicitud(sid);
+  if (!tx) { res.status(404).json({ error: "not_found" }); return; }
+  const pesajes = await obtenerPesajesTransaccion(Number(tx.id));
+  const precios = await materialesDeEmpresa(Number(tx.empresa_id));
+  const precioMap = new Map<number, number>();
+  for (const p of precios) precioMap.set(Number(p.material_id), Number(p.precio_por_kg));
+  const detalle = pesajes.map((p: any) => {
+    const precio = precioMap.get(Number(p.material_id)) || 0;
+    const subtotal = Number(p.kg_finales) * precio;
+    return { material_id: p.material_id, nombre: p.nombre, kg_finales: Number(p.kg_finales), precio_por_kg: precio, subtotal };
+  });
+  const total = detalle.reduce((a: number, d: any) => a + d.subtotal, 0);
+  const comision_10 = total * 0.10;
+  const total_con_comision = total + comision_10;
+  const solicitud = await obtenerSolicitud(Number(tx.solicitud_id));
+  const origItems: any[] = Array.isArray((solicitud as any)?.items_json) ? (solicitud as any).items_json : [];
+  const origMap = new Map<number, number>();
+  for (const it of origItems) { try { origMap.set(Number(it.material_id), Number(it.kg||0)); } catch {} }
+  let empresaCambioValores = false;
+  const seen = new Set<number>();
+  for (const d of detalle) {
+    const mid = Number(d.material_id);
+    seen.add(mid);
+    const origKg = origMap.has(mid) ? Number(origMap.get(mid)) : 0;
+    if (Math.abs(Number(d.kg_finales) - origKg) > 1e-6) { empresaCambioValores = true; break; }
+  }
+  if (!empresaCambioValores) {
+    for (const [mid, kg] of origMap.entries()) {
+      if (!seen.has(Number(mid)) && Math.abs(Number(kg)) > 1e-6) { empresaCambioValores = true; break; }
+    }
+  }
+  const esDelivery = String((solicitud as any)?.tipo_entrega||'') === 'delivery';
+  const delivery_fee = esDelivery ? Number((solicitud as any)?.delivery_fee||0) : 0;
+  const usuario_neto = total - delivery_fee;
+  res.json({ transaccion: tx, detalle, total, delivery_fee, usuario_neto, comision_10, total_con_comision, es_delivery: esDelivery, empresa_cambio_valores: empresaCambioValores });
 }));
