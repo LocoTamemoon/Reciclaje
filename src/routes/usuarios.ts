@@ -33,6 +33,7 @@ usuariosRouter.get("/:id/dashboard", asyncHandler(async (req: Request, res: Resp
     const huboHandoff = handoffId != null && !Number.isNaN(handoffId) && handoffId > 0;
     if (tipo === "delivery" && estado === "completada" && !huboHandoff) return "completada_delivery";
     if (tipo === "delivery" && estado === "completada" && huboHandoff) return "completada_delivery_handoff";
+    if (tipo === "delivery" && estado === "completada_repesada" && !huboHandoff) return "completada_repesada_delivery";
     if (tipo === "delivery" && estado === "completada_repesada" && huboHandoff) return "completada_repesada_delivery_handoff";
     return null;
   }
