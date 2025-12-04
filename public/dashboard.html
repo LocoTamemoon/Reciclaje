@@ -2126,9 +2126,17 @@
         const canTrack = String(s.tipo_entrega)==='delivery' && s.recolector_id!=null && String(s.estado_publicacion||'')==='aceptada_recolector';
         const viajeBtn = canTrack ? `<button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button>` : (!isDelivery ? `<button class=\"btn\" onclick=\"usuarioRutaEmpresa(${s.id}, ${s.empresa_id})\">Ruta a la empresa</button>` : '');
         const finalBtn = isExp ? `<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>` : '';
-        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\" id=\"sol-estado-${s.id}\">${displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${viajeBtn} ${finalBtn}</div></div>`;
+        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\" id=\"sol-estado-${s.id}\">${s.etiqueta ? s.etiqueta : displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${viajeBtn} ${finalBtn}</div></div>`;
         ant.appendChild(li);
-        (async ()=>{ try { const detTx = await (await fetch(`/api/transacciones/por_solicitud/${s.id}`, { headers: authHeaders() })).json(); if (Boolean(detTx?.empresa_cambio_valores)) { const b = document.getElementById('sol-estado-'+String(s.id)); if (b) b.textContent = 'completada_repesada'; } } catch {} })();
+        (async ()=>{
+          try {
+            const b = document.getElementById('sol-estado-'+String(s.id));
+            if (!b) return;
+            if (s.etiqueta) { b.textContent = s.etiqueta; return; }
+            const detTx = await (await fetch(`/api/transacciones/por_solicitud/${s.id}`, { headers: authHeaders() })).json();
+            if (Boolean(detTx?.empresa_cambio_valores)) { b.textContent = 'completada_repesada'; }
+          } catch {}
+        })();
       });
       if (sortedAnt.length > PAGE_SIZE){
         const li = document.createElement('li');
