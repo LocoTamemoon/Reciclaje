@@ -63,7 +63,7 @@ export async function aceptarPorRecolector(id: number, recolectorId: number, veh
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS recolector_accept_lon NUMERIC(9,6)");
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS vehiculo_id INTEGER");
   const busy = await pool.query(
-    "SELECT 1 FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada') LIMIT 1",
+    "SELECT 1 FROM solicitudes WHERE ((recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa','llego_empresa','entregado_empresa','empresa_confirmo_recepcion')) OR (handoff_state='en_intercambio' AND handoff_recolector_id=$1)) LIMIT 1",
     [recolectorId]
   );
   if (busy.rows[0]) { throw Object.assign(new Error("recolector_ocupado"), { code: 422 }); }

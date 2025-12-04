@@ -18,15 +18,27 @@ usuariosRouter.get("/:id/historial", asyncHandler(async (req: Request, res: Resp
 usuariosRouter.get("/:id/dashboard", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const pendientes = await pool.query(
-    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado NOT IN ('aceptada','rechazada','completada','completada_repesada','cancelada','expirada')) OR (estado IN ('rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC",
     [id]
   );
   const anteriores = await pool.query(
-    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado NOT IN ('aceptada','rechazada','completada','cancelada','expirada')) OR (estado IN ('rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE usuario_id=$1 AND NOT ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND ( (estado='pendiente_delivery' AND estado_publicacion='publicada') OR (estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa')) ) ) ) ORDER BY creado_en DESC",
     [id]
   );
+  function etiquetaSolicitud(s: any): string | null {
+    const tipo = String(s?.tipo_entrega || "");
+    const estado = String(s?.estado || "");
+    const handoffIdRaw = (s as any)?.handoff_recolector_id;
+    const handoffId = handoffIdRaw != null ? Number(handoffIdRaw) : null;
+    const huboHandoff = handoffId != null && !Number.isNaN(handoffId) && handoffId > 0;
+    if (tipo === "delivery" && estado === "completada" && !huboHandoff) return "completada_delivery";
+    if (tipo === "delivery" && estado === "completada" && huboHandoff) return "completada_delivery_handoff";
+    if (tipo === "delivery" && estado === "completada_repesada" && huboHandoff) return "completada_repesada_delivery_handoff";
+    return null;
+  }
+  const anterioresEtiquetadas = anteriores.rows.map((s: any) => ({ ...s, etiqueta: etiquetaSolicitud(s) }));
   const historial = await historialUsuario(id);
-  res.json({ solicitudes_pendientes: pendientes.rows, solicitudes_anteriores: anteriores.rows, historial_transacciones: historial });
+  res.json({ solicitudes_pendientes: pendientes.rows, solicitudes_anteriores: anterioresEtiquetadas, historial_transacciones: historial });
 }));
 
 usuariosRouter.get("/:id/stats", asyncHandler(async (req: Request, res: Response) => {

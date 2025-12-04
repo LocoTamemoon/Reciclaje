@@ -23,8 +23,11 @@ recolectorRouter.get("/:id/en_curso", asyncHandler(async (req: Request, res: Res
   console.log("reco_en_curso_in", { id });
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_recolector_id INTEGER");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_expires_at TIMESTAMPTZ");
+  // cleanup expirados en_intercambio
+  try { await pool.query("UPDATE solicitudes SET handoff_state=NULL, handoff_recolector_id=NULL, handoff_old_ok=false, handoff_new_ok=false, estado='rumbo_a_empresa' WHERE handoff_state='en_intercambio' AND handoff_expires_at IS NOT NULL AND handoff_expires_at <= NOW()"); } catch {}
   const rows = await pool.query(
-    "SELECT * FROM solicitudes WHERE ((recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada')) OR (handoff_state='en_intercambio' AND handoff_recolector_id=$1)) ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE ((recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa','llego_empresa','entregado_empresa','empresa_confirmo_recepcion')) OR (handoff_state='en_intercambio' AND (handoff_expires_at IS NULL OR handoff_expires_at>NOW()) AND handoff_recolector_id=$1)) ORDER BY creado_en DESC LIMIT 1",
     [id]
   );
   console.log("reco_en_curso_out", { id, count: rows.rows.length });
@@ -246,7 +249,7 @@ recolectorRouter.post("/:id/ubicacion_actual", asyncHandler(async (req: Request,
   const r = await pool.query("UPDATE recolectores SET lat=$2, lon=$3 WHERE id=$1 RETURNING *", [id, Number(lat), Number(lon)]);
   console.log("reco_ubic_update_ok", { id });
   try {
-    const actives = await pool.query("SELECT id FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND (estado IS DISTINCT FROM 'completada')", [id]);
+  const actives = await pool.query("SELECT id FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa','llego_empresa','entregado_empresa','empresa_confirmo_recepcion')", [id]);
     for (const s of actives.rows) {
       await updateDeliveryProximityAndState(Number(s.id), Number(lat), Number(lon));
     }
@@ -314,7 +317,9 @@ recolectorRouter.post("/:sid/handoff/accept", asyncHandler(async (req: Request, 
   const exp = s.handoff_expires_at ? new Date(s.handoff_expires_at) : null;
   if (exp && exp.getTime() <= Date.now()) { await pool.query("UPDATE solicitudes SET handoff_state=NULL, handoff_expires_at=NULL WHERE id=$1", [sid]); res.status(422).json({ error: "expirado" }); return; }
   if (Number(s.recolector_id) === newRecoId) { res.status(422).json({ error: "mismo_recolector" }); return; }
-  await pool.query("UPDATE solicitudes SET handoff_state='en_intercambio', handoff_recolector_id=$2, handoff_old_ok=false, handoff_new_ok=false WHERE id=$1", [sid, newRecoId]);
+  const busy = await pool.query("SELECT 1 FROM solicitudes WHERE ((recolector_id=$1 AND tipo_entrega='delivery' AND estado_publicacion='aceptada_recolector' AND estado IN ('rumbo_usuario','cerca_usuario','rumbo_a_empresa','cerca_empresa')) OR (handoff_state='en_intercambio' AND (handoff_expires_at IS NULL OR handoff_expires_at>NOW()) AND handoff_recolector_id=$1)) LIMIT 1", [newRecoId]);
+  if (busy.rows[0]) { res.status(422).json({ error: "recolector_ocupado" }); return; }
+  await pool.query("UPDATE solicitudes SET handoff_state='en_intercambio', handoff_recolector_id=$2, handoff_old_ok=false, handoff_new_ok=false, handoff_expires_at = NOW() + INTERVAL '5 minutes' WHERE id=$1", [sid, newRecoId]);
   const chk = await pool.query("SELECT id, handoff_state, handoff_recolector_id FROM solicitudes WHERE id=$1", [sid]);
   console.log("handoff_accept_ok", { sid, newRecoId, row: chk.rows[0]||null });
   try {
