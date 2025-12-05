@@ -60,7 +60,22 @@
     #viaje-modal .modal-card{ width:720px; max-width:95vw; }
     #historial-modal .modal-card{ width:880px; max-width:95vw; }
     #empresa-img-modal .modal-card{ width:860px; max-width:95vw; }
+    #perfil-modal .modal-card{ width:680px; max-width:96vw; padding:20px; }
+    #historial-modal{ z-index: 1000; }
+    #perfil-modal{ z-index: 1001; }
     .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
+    .link{ color:#2563eb; text-decoration:underline; cursor:pointer; }
+    .link:hover{ text-decoration:none; }
+    .profile-header{ display:flex; align-items:center; gap:20px; }
+    .avatar-lg{ width:96px; height:96px; border-radius:50%; object-fit:cover; background:#eef; display:block; }
+    .chips{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .chip{ background:#eef; border-radius:999px; padding:4px 10px; font-weight:600; font-size:12px; }
+    .section-title{ font-weight:700; margin-top:18px; }
+    .review-list{ display:flex; flex-direction:column; gap:14px; margin-top:12px; }
+    .review-item{ padding:12px 0; border-bottom:1px solid #eee; }
+    .review-item:last-child{ border-bottom:none; }
+    .review-meta{ display:flex; justify-content:space-between; font-size:12px; color:#6b7280; }
+    .review-line{ font-size:13px; color:#374151; }
     @media (max-width: 880px){ .layout{ grid-template-columns: 1fr; } .sidebar{ position:sticky; top:0; z-index:10; } }
   </style>
   <link rel="stylesheet" href="/css/base.css">
@@ -536,6 +551,13 @@
       <div class="modal-actions">
         <button class="btn secondary" onclick="closeSolicitudDetalle()">Cerrar</button>
       </div>
+    </div>
+  </div>
+  <div id="perfil-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 id="perfil-modal-title">Perfil</h3>
+      <div id="perfil-modal-content"></div>
+      <div class="right mt-10"><button class="btn" onclick="document.getElementById('perfil-modal').hidden=true">Cerrar</button></div>
     </div>
   </div>
 
@@ -2085,8 +2107,8 @@
         });
         const html = [
           `<div class=\"row jc-between ai-start\" style=\"gap:18px; margin:6px 0 10px;\">`,
-            `<div><div class=\"muted\">Usuario</div><div><strong>${usuarioNombre||'Usuario'}</strong>${usuarioDni?` <span class=\"muted\">· DNI ${usuarioDni}</span>`:''}</div></div>`,
-            `<div class=\"right\"><div class=\"muted\">Empresa</div><div><strong>${empresaNombre||'Empresa'}</strong></div></div>`,
+          `<div><div class=\"muted\">Usuario</div><div><a href=\"#\" class=\"link\" onclick=\"openPerfilUsuario(${Number(sol?.usuario_id||0)}); return false;\"><strong>${usuarioNombre||'Usuario'}</strong></a>${usuarioDni?` <span class=\"muted\">· DNI ${usuarioDni}</span>`:''}</div></div>`,
+          `<div class=\"right\"><div class=\"muted\">Empresa</div><div><a href=\"#\" class=\"link\" onclick=\"openPerfilEmpresa(${Number(sol?.empresa_id||0)}); return false;\"><strong>${empresaNombre||'Empresa'}</strong></a></div></div>`,
           `</div>`,
           `<table class=\"table\" style=\"margin-top:8px;\">`,
             `<thead class=\"muted\"><tr><th class=\"ta-left\">Material</th><th class=\"ta-right\">Kg</th></tr></thead>`,
@@ -2157,9 +2179,9 @@
         const html = [
           `<div class=\"row jc-between my-8\">`,
             `<div><span class=\"muted\">Recolector a asistir</span> <strong>${asistRecoNombre||'Recolector'}</strong>${asistRecoDni?` · DNI ${asistRecoDni}`:''}</div>`,
-            `<div class=\"right\"><span class=\"muted\">Empresa</span> <strong>${empresaNombre||'Empresa'}</strong></div>`,
+            `<div class=\"right\"><span class=\"muted\">Empresa</span> <a href=\"#\" class=\"link\" onclick=\"openPerfilEmpresa(${Number(sol?.empresa_id||0)}); return false;\"><strong>${empresaNombre||'Empresa'}</strong></a></div>`,
           `</div>`,
-          `<div class=\"row my-4\"><span class=\"muted\">Usuario</span> <strong style=\"margin-left:6px;\">${usuarioNombre||'Usuario'}</strong>${usuarioDni?` · DNI ${usuarioDni}`:''}</div>`,
+          `<div class=\"row my-4\"><span class=\"muted\">Usuario</span> <a href=\"#\" class=\"link\" style=\"margin-left:6px;\" onclick=\"openPerfilUsuario(${Number(sol?.usuario_id||0)}); return false;\"><strong>${usuarioNombre||'Usuario'}</strong></a>${usuarioDni?` · DNI ${usuarioDni}`:''}</div>`,
           `<table class=\"table\">`,
             `<thead><tr><th class=\"ta-left\">Material</th><th class=\"ta-right\">Kg</th></tr></thead>`,
             `<tbody>`,
@@ -2242,8 +2264,10 @@
         const viajeBtn = canTrack ? `<button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button>` : (!isDelivery ? `<button class=\"btn\" onclick=\"usuarioRutaEmpresa(${s.id}, ${s.empresa_id})\">Ruta a la empresa</button>` : '');
         const finalBtn = isExp ? `<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>` : `<button class=\"btn\" onclick=\"usuarioCancelarSolicitud(${s.id})\">Cancelar</button>`;
         const fotoBtn = s.foto_material_url ? `<button class=\"btn secondary\" onclick=\"openSolicitudFoto('${String(s.foto_material_url)}')\">Ver foto</button>` : '';
-        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\">${displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${fotoBtn} ${viajeBtn} ${finalBtn}</div></div>`;
+        const recoHtml = (s.recolector_id!=null) ? ` · Recolector: <a href=\"#\" class=\"link\" onclick=\"openPerfilRecolector(${Number(s.recolector_id)})\"><strong id=\"reco-name-${s.id}\">Recolector #${Number(s.recolector_id)}</strong></a>` : '';
+        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → <a href=\"#\" class=\"link\" onclick=\"openPerfilEmpresa(${Number(s.empresa_id)})\"><strong>${en}</strong></a>${recoHtml} <span class=\"badge\">${displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${fotoBtn} ${viajeBtn} ${finalBtn}</div></div>`;
         pend.appendChild(li);
+        (async ()=>{ try{ if (s.recolector_id!=null){ const name = await fetchRecoName(Number(s.recolector_id)); const el = document.getElementById('reco-name-'+String(s.id)); if (el) el.textContent = String(name); } } catch {} })();
       });
       const totalPages2 = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
       if (sorted.length > PAGE_SIZE){
@@ -2295,7 +2319,8 @@
         const viajeBtn = canTrack ? `<button class=\"btn\" onclick=\"usuarioVerViaje(${s.id})\">Ver viaje</button>` : (!isDelivery ? `<button class=\"btn\" onclick=\"usuarioRutaEmpresa(${s.id}, ${s.empresa_id})\">Ruta a la empresa</button>` : '');
         const finalBtn = isExp ? `<button class=\"btn\" onclick=\"usuarioRepublicarSolicitud(${s.id})\">Re-publicar</button>` : '';
         const fotoBtn = s.foto_material_url ? `<button class=\"btn secondary\" onclick=\"openSolicitudFoto('${String(s.foto_material_url)}')\">Ver foto</button>` : '';
-        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → ${en} <span class=\"badge\" id=\"sol-estado-${s.id}\">${s.etiqueta ? s.etiqueta : displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${fotoBtn} ${viajeBtn} ${finalBtn}</div></div>`;
+        const recoHtml = (s.recolector_id!=null) ? ` · Recolector: <a href=\"#\" class=\"link\" onclick=\"openPerfilRecolector(${Number(s.recolector_id)})\"><strong id=\"reco-name-${s.id}\">Recolector #${Number(s.recolector_id)}</strong></a>` : '';
+        li.innerHTML = `<div class=\"row jc-between\"><div>Solicitud #${s.id} → <a href=\"#\" class=\"link\" onclick=\"openPerfilEmpresa(${Number(s.empresa_id)})\"><strong>${en}</strong></a>${recoHtml} <span class=\"badge\" id=\"sol-estado-${s.id}\">${s.etiqueta ? s.etiqueta : displayEstadoSolicitud(s.estado)}</span></div><div class=\"right\"><button class=\"btn secondary\" onclick=\"openSolicitudDetalle(${s.id}, ${s.empresa_id})\">Ver detalle</button> ${fotoBtn} ${viajeBtn} ${finalBtn}</div></div>`;
         ant.appendChild(li);
         (async ()=>{
           try {
@@ -2306,6 +2331,7 @@
             if (Boolean(detTx?.empresa_cambio_valores)) { b.textContent = 'completada_repesada'; }
           } catch {}
         })();
+        (async ()=>{ try{ if (s.recolector_id!=null){ const name = await fetchRecoName(Number(s.recolector_id)); const el = document.getElementById('reco-name-'+String(s.id)); if (el) el.textContent = String(name); } } catch {} })();
       });
       if (sortedAnt.length > PAGE_SIZE){
         const li = document.createElement('li');
@@ -2768,22 +2794,62 @@
         let empresaRucText = '';
         let handoffRecoNombreFull = '';
         let handoffRecoDniText = '';
+        let originalRecoNombreFull = '';
+        let originalRecoDniText = '';
         if (uid>0){ try{ const pj = await (await fetch(`/api/usuarios/${uid}/perfil`, { headers: authHeaders() })).json(); const u = pj?.usuario||pj||{}; const nn = [String(u.nombre||'').trim(), String(u.apellidos||'').trim()].filter(Boolean).join(' '); usuarioNombreFull = nn || (`Usuario #${uid}`); if (u?.dni) usuarioDniText = 'DNI '+String(u.dni); }catch{} }
         if (eid>0){ try{ const pj = await (await fetch(`/api/empresas/${eid}/perfil`, { headers: authHeaders() })).json(); const e = pj?.empresa||pj||{}; empresaNombreFull = String(e?.nombre||'') || (`Empresa #${eid}`); if (e?.ruc) empresaRucText = 'RUC '+String(e.ruc); }catch{} }
-        let handoffId = null;
-        try { const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json(); const rid = Number(sj?.recolector_id||0); const pid = Number(sj?.pickup_recolector_id||0); const hid = Number(sj?.handoff_recolector_id||0); if (hid>0) handoffId = hid; else if (pid>0 && pid!==rid) handoffId = pid; } catch {}
+        let handoffId = null; let originalId = null; let isDelivery = false;
+        try {
+          const sj = await (await fetch(`/api/solicitudes/${sid}`, { headers: authHeaders() })).json();
+          const rid = Number(sj?.recolector_id||0);
+          const pid = Number(sj?.pickup_recolector_id||0);
+          const hid = Number(sj?.handoff_recolector_id||0);
+          const trid = Number(base?.transaccion?.recolector_id||0);
+          isDelivery = (String(sj?.tipo_entrega||'')==='delivery') || (String(sj?.estado||'').includes('delivery')) || Boolean(base?.es_delivery);
+          originalId = (pid>0 ? pid : (rid>0 ? rid : (trid>0 ? trid : null)));
+          handoffId = (hid>0 ? hid : ((pid>0 && pid!==rid) ? pid : null));
+        } catch {}
+        if (isDelivery && !handoffId && originalId){ try{ const rp0 = await (await fetch(`/api/recolector/${originalId}/perfil`, { headers: authHeaders() })).json(); const nn0 = [String(rp0?.nombre||'').trim(), String(rp0?.apellidos||'').trim()].filter(Boolean).join(' '); originalRecoNombreFull = nn0 || (`Recolector #${originalId}`); if (rp0?.dni) originalRecoDniText = 'DNI '+String(rp0.dni); } catch {} }
+        if (isDelivery && !handoffId && originalId){ try{ const rp0 = await (await fetch(`/api/recolector/${originalId}/perfil`, { headers: authHeaders() })).json(); const nn0 = [String(rp0?.nombre||'').trim(), String(rp0?.apellidos||'').trim()].filter(Boolean).join(' '); originalRecoNombreFull = nn0 || (`Recolector #${originalId}`); if (rp0?.dni) originalRecoDniText = 'DNI '+String(rp0.dni); } catch {} }
         if (!handoffId){ try{ const hid2 = Number(base?.handoff_recolector_id||0); if (hid2>0) handoffId = hid2; } catch {} }
         if (handoffId){ try{ const rp = await (await fetch(`/api/recolector/${handoffId}/perfil`, { headers: authHeaders() })).json(); const nn = [String(rp?.nombre||'').trim(), String(rp?.apellidos||'').trim()].filter(Boolean).join(' '); handoffRecoNombreFull = nn || (`Recolector #${handoffId}`); if (rp?.dni) handoffRecoDniText = 'DNI '+String(rp.dni); } catch {} }
         const rutaHead = handoffId ? 'Usuario → Recolector (handoff) → Empresa' : 'Recolector → Usuario → Empresa';
-        const lineaU = `<div><span class=\"badge\">Usuario</span> <strong>${usuarioNombreFull||('Usuario #'+String(uid||''))}</strong> ${usuarioDniText?`<span class=\"muted\">(${usuarioDniText})</span>`:''}</div>`;
+        const lineaU = `<div><span class=\"badge\">Usuario</span> <a href=\"#\" class=\"link\" onclick=\"openPerfilUsuario(${Number(uid||0)}); return false;\"><strong>${usuarioNombreFull||('Usuario #'+String(uid||''))}</strong></a> ${usuarioDniText?`<span class=\"muted\">(${usuarioDniText})</span>`:''}</div>`;
+        const lineaR = (isDelivery && !handoffId && originalId) ? `<div class=\"mt-2\"><span class=\"badge\">Recolector</span> <strong>${originalRecoNombreFull||('Recolector #'+String(originalId||''))}</strong> ${originalRecoDniText?`<span class=\"muted\">(${originalRecoDniText})</span>`:''}</div>` : '';
         const lineaH = handoffId ? `<div class=\"mt-2\"><span class=\"badge\">Recolector (handoff)</span> <strong>${handoffRecoNombreFull||('Recolector #'+handoffId)}</strong> ${handoffRecoDniText?`<span class=\"muted\">(${handoffRecoDniText})</span>`:''}</div>` : '';
-        const lineaE = `<div class=\"mt-2\"><span class=\"badge\">Empresa</span> <strong>${empresaNombreFull||('Empresa #'+String(eid||''))}</strong> ${empresaRucText?`<span class=\"muted\">(${empresaRucText})</span>`:''}</div>`;
-        const cadena = `<div class=\"panel mt-8\"><div class=\"row jc-between ai-center\"><h3>${rutaHead}</h3></div><div class=\"mt-6\">${lineaU}${lineaH}${lineaE}</div></div>`;
+        const lineaE = `<div class=\"mt-2\"><span class=\"badge\">Empresa</span> <a href=\"#\" class=\"link\" onclick=\"openPerfilEmpresa(${Number(eid||0)}); return false;\"><strong>${empresaNombreFull||('Empresa #'+String(eid||''))}</strong></a> ${empresaRucText?`<span class=\"muted\">(${empresaRucText})</span>`:''}</div>`;
+        const cadena = `<div class=\"panel mt-8\"><div class=\"row jc-between ai-center\"><h3>${rutaHead}</h3></div><div class=\"mt-6\">${lineaR}${lineaU}${lineaH}${lineaE}</div></div>`;
         const html = contentEl.innerHTML;
         const prefix = `<div class=\"muted\">Solicitud #${sid}`;
         const idx = html.indexOf(prefix);
         const newHtml = `<div class=\"muted\">Solicitud #${sid} · Transacción #${String(base?.transaccion_id||'—')}\</div>${cadena}` + html.replace(prefix, '').trim();
         contentEl.innerHTML = newHtml;
+        try {
+          if (originalId) {
+            const origBadge = Array.from(contentEl.querySelectorAll('span.badge')).find(el=> el.textContent && el.textContent.toLowerCase().includes('recolector') && !String(el.textContent).toLowerCase().includes('handoff'));
+            const strong = origBadge ? origBadge.parentElement?.querySelector('strong') : null;
+            if (strong && !strong.closest('a')) {
+              const a = document.createElement('a');
+              a.href = '#';
+              a.className = 'link';
+              a.onclick = (e)=>{ e.preventDefault(); try{ openPerfilRecolector(Number(originalId)); }catch{} };
+              strong.parentElement?.insertBefore(a, strong);
+              a.appendChild(strong);
+            }
+          }
+          if (handoffId) {
+            const handBadge = Array.from(contentEl.querySelectorAll('span.badge')).find(el=> el.textContent && String(el.textContent).toLowerCase().includes('handoff'));
+            const strongH = handBadge ? handBadge.parentElement?.querySelector('strong') : null;
+            if (strongH && !strongH.closest('a')) {
+              const a = document.createElement('a');
+              a.href = '#';
+              a.className = 'link';
+              a.onclick = (e)=>{ e.preventDefault(); try{ openPerfilRecolector(Number(handoffId)); }catch{} };
+              strongH.parentElement?.insertBefore(a, strongH);
+              a.appendChild(strongH);
+            }
+          }
+        } catch {}
       } catch {}
     }
     async function enrichUsuarioDetalle(txId, base){
@@ -2802,19 +2868,57 @@
         let originalRecoDniText = '';
         if (uid>0){ try{ const pj = await (await fetch(`/api/usuarios/${uid}/perfil`, { headers: authHeaders() })).json(); const u = pj?.usuario||pj||{}; const nn = [String(u.nombre||'').trim(), String(u.apellidos||'').trim()].filter(Boolean).join(' '); usuarioNombreFull = nn || (`Usuario #${uid}`); if (u?.dni) usuarioDniText = 'DNI '+String(u.dni); }catch{} }
         if (eid>0){ try{ const pj = await (await fetch(`/api/empresas/${eid}/perfil`, { headers: authHeaders() })).json(); const e = pj?.empresa||pj||{}; empresaNombreFull = String(e?.nombre||'') || (`Empresa #${eid}`); if (e?.ruc) empresaRucText = 'RUC '+String(e.ruc); }catch{} }
-        let handoffId = null; let originalId = null;
-        try { const sid2 = Number(base?.transaccion?.solicitud_id||0); if (sid2>0){ const sj = await (await fetch(`/api/solicitudes/${sid2}`, { headers: authHeaders() })).json(); const rid = Number(sj?.recolector_id||0); const pid = Number(sj?.pickup_recolector_id||0); const hid = Number(sj?.handoff_recolector_id||0); originalId = (pid>0 ? pid : (rid>0 ? rid : null)); handoffId = (hid>0 ? hid : ((pid>0 && pid!==rid) ? pid : null)); } } catch {}
+        let handoffId = null; let originalId = null; let isDelivery = Boolean(base?.es_delivery) || Number(base?.delivery_fee||0)>0;
+        try {
+          const sid2 = Number(base?.transaccion?.solicitud_id||0);
+          if (sid2>0){
+            const sj = await (await fetch(`/api/solicitudes/${sid2}`, { headers: authHeaders() })).json();
+            const rid = Number(sj?.recolector_id||0);
+            const pid = Number(sj?.pickup_recolector_id||0);
+            const hid = Number(sj?.handoff_recolector_id||0);
+            originalId = (pid>0 ? pid : (rid>0 ? rid : null));
+            handoffId = (hid>0 ? hid : ((pid>0 && pid!==rid) ? pid : null));
+            if (!isDelivery) isDelivery = (String(sj?.tipo_entrega||'')==='delivery') || (String(sj?.estado||'').includes('delivery'));
+          }
+        } catch {}
         if (originalId){ try{ const rp0 = await (await fetch(`/api/recolector/${originalId}/perfil`, { headers: authHeaders() })).json(); const nn0 = [String(rp0?.nombre||'').trim(), String(rp0?.apellidos||'').trim()].filter(Boolean).join(' '); originalRecoNombreFull = nn0 || (`Recolector #${originalId}`); if (rp0?.dni) originalRecoDniText = 'DNI '+String(rp0.dni); } catch {} }
         if (handoffId){ try{ const rp = await (await fetch(`/api/recolector/${handoffId}/perfil`, { headers: authHeaders() })).json(); const nn = [String(rp?.nombre||'').trim(), String(rp?.apellidos||'').trim()].filter(Boolean).join(' '); handoffRecoNombreFull = nn || (`Recolector #${handoffId}`); if (rp?.dni) handoffRecoDniText = 'DNI '+String(rp.dni); } catch {} }
-        const showR0 = (handoffId!=null && originalId!=null && Number(originalId)!==Number(handoffId));
-        const rutaHead = handoffId ? (showR0 ? 'Recolector original → Usuario → Recolector (handoff) → Empresa' : 'Usuario → Recolector (handoff) → Empresa') : 'Recolector → Usuario → Empresa';
+        const showR0 = isDelivery && (handoffId!=null && originalId!=null && Number(originalId)!==Number(handoffId));
+        const rutaHead = isDelivery ? (handoffId ? (showR0 ? 'Recolector original → Usuario → Recolector (handoff) → Empresa' : 'Usuario → Recolector (handoff) → Empresa') : 'Recolector → Usuario → Empresa') : 'Usuario → Empresa';
         const lineaR0 = showR0 ? `<div class=\"mt-2\"><span class=\"badge\">Recolector original</span> <strong>${originalRecoNombreFull||('Recolector #'+String(originalId||''))}</strong> ${originalRecoDniText?`<span class=\"muted\">(${originalRecoDniText})</span>`:''}</div>` : '';
-        const lineaU = `<div><span class=\"badge\">Usuario</span> <strong>${usuarioNombreFull||('Usuario #'+String(uid||''))}</strong> ${usuarioDniText?`<span class=\"muted\">(${usuarioDniText})</span>`:''}</div>`;
-        const lineaH = handoffId ? `<div class=\"mt-2\"><span class=\"badge\">Recolector (handoff)</span> <strong>${handoffRecoNombreFull||('Recolector #'+handoffId)}</strong> ${handoffRecoDniText?`<span class=\"muted\">(${handoffRecoDniText})</span>`:''}</div>` : '';
-        const lineaE = `<div class=\"mt-2\"><span class=\"badge\">Empresa</span> <strong>${empresaNombreFull||('Empresa #'+String(eid||''))}</strong> ${empresaRucText?`<span class=\"muted\">(${empresaRucText})</span>`:''}</div>`;
-        const cadena = `<div class=\"panel mt-8\"><div class=\"row jc-between ai-center\"><h3>${rutaHead}</h3></div><div class=\"mt-6\">${lineaR0}${lineaU}${lineaH}${lineaE}</div></div>`;
+        const lineaR = (isDelivery && !handoffId && originalId) ? `<div class=\"mt-2\"><span class=\"badge\">Recolector</span> <strong>${originalRecoNombreFull||('Recolector #'+String(originalId||''))}</strong> ${originalRecoDniText?`<span class=\"muted\">(${originalRecoDniText})</span>`:''}</div>` : '';
+        const lineaU = `<div><span class=\"badge\">Usuario</span> <a href=\"#\" class=\"link\" onclick=\"openPerfilUsuario(${Number(uid||0)}); return false;\"><strong>${usuarioNombreFull||('Usuario #'+String(uid||''))}</strong></a> ${usuarioDniText?`<span class=\"muted\">(${usuarioDniText})</span>`:''}</div>`;
+        const lineaH = (isDelivery && handoffId) ? `<div class=\"mt-2\"><span class=\"badge\">Recolector (handoff)</span> <strong>${handoffRecoNombreFull||('Recolector #'+handoffId)}</strong> ${handoffRecoDniText?`<span class=\"muted\">(${handoffRecoDniText})</span>`:''}</div>` : '';
+        const lineaE = `<div class=\"mt-2\"><span class=\"badge\">Empresa</span> <a href=\"#\" class=\"link\" onclick=\"openPerfilEmpresa(${Number(eid||0)}); return false;\"><strong>${empresaNombreFull||('Empresa #'+String(eid||''))}</strong></a> ${empresaRucText?`<span class=\"muted\">(${empresaRucText})</span>`:''}</div>`;
+        const cadena = `<div class=\"panel mt-8\"><div class=\"row jc-between ai-center\"><h3>${rutaHead}</h3></div><div class=\"mt-6\">${lineaR0}${lineaR}${lineaU}${lineaH}${lineaE}</div></div>`;
         const html = contentEl.innerHTML;
         contentEl.innerHTML = `${cadena}` + html;
+        try {
+          if (originalId) {
+            const origBadge = Array.from(contentEl.querySelectorAll('span.badge')).find(el=> el.textContent && (el.textContent.toLowerCase().includes('recolector original') || (el.textContent.toLowerCase().trim()==='recolector')));
+            const strong = origBadge ? origBadge.parentElement?.querySelector('strong') : null;
+            if (strong && !strong.closest('a')) {
+              const a = document.createElement('a');
+              a.href = '#';
+              a.className = 'link';
+              a.onclick = (e)=>{ e.preventDefault(); try{ openPerfilRecolector(Number(originalId)); }catch{} };
+              strong.parentElement?.insertBefore(a, strong);
+              a.appendChild(strong);
+            }
+          }
+          if (handoffId) {
+            const handBadge = Array.from(contentEl.querySelectorAll('span.badge')).find(el=> el.textContent && String(el.textContent).toLowerCase().includes('handoff'));
+            const strongH = handBadge ? handBadge.parentElement?.querySelector('strong') : null;
+            if (strongH && !strongH.closest('a')) {
+              const a = document.createElement('a');
+              a.href = '#';
+              a.className = 'link';
+              a.onclick = (e)=>{ e.preventDefault(); try{ openPerfilRecolector(Number(handoffId)); }catch{} };
+              strongH.parentElement?.insertBefore(a, strongH);
+              a.appendChild(strongH);
+            }
+          }
+        } catch {}
       } catch {}
     }
     let ratingCtx = { tipo:null, txId:null, empresaId:null, usuarioId:null, sid:null };
@@ -4704,3 +4808,138 @@
         navHandoff2.classList.toggle('active', showReco && histRecoTab==='handoff');
       }
 */</script>
+<script>
+    async function openPerfilUsuario(uid){
+      const modal = document.getElementById('perfil-modal');
+      const c = document.getElementById('perfil-modal-content');
+      const t = document.getElementById('perfil-modal-title');
+      if (!modal || !c || !t) return;
+      t.textContent = 'Perfil de usuario';
+      c.innerHTML = '<div class="muted">Cargando...</div>';
+      try {
+        const up = await (await fetch(`/api/usuarios/${Number(uid)}/perfil`, { headers: authHeaders() })).json();
+        const rs = await (await fetch(`/api/resenas/usuario/${Number(uid)}`, { headers: authHeaders() })).json();
+        const u = up?.usuario || up || {};
+        const nombre = [String(u.nombre||'').trim(), String(u.apellidos||'').trim()].filter(Boolean).join(' ') || (`Usuario #${uid}`);
+        const dni = String(u.dni||'').trim();
+        const foto = String(u.foto_perfil_path||'').trim();
+        const puntajes = Array.isArray(rs)? rs.map(r=> Number(r.puntaje||0)).filter(n=> !isNaN(n)) : [];
+        const avg = puntajes.length ? (puntajes.reduce((a,b)=> a+b, 0) / puntajes.length) : null;
+        const reseñasCount = Array.isArray(rs)? rs.length : 0;
+        const puntos = Number(u.puntos_acumulados||0);
+        const kg = Number(u.kg_totales||0);
+        const items = Array.isArray(rs)? rs.slice(0,5).map(r=> {
+          const fecha = r.creado_en ? new Date(r.creado_en).toLocaleString() : '';
+          const autor = r.empresa_nombre ? `Empresa: ${String(r.empresa_nombre)}` : 'Empresa';
+          const msg = r.mensaje ? String(r.mensaje) : '';
+          return `<li><div class=\"row jc-between\"><strong>${autor}</strong><span class=\"muted\">${fecha}</span></div><div class=\"muted\">Tx #${String(r.transaccion_id||'—')} · ⭐ ${Number(r.puntaje)}</div>${msg? `<div>${msg}</div>`:''}</li>`;
+        }).join('') : '';
+        c.innerHTML = `
+          <div class=\"profile-header\">
+            ${foto? `<img src=\"${foto}\" alt=\"foto perfil\" class=\"avatar-lg\"/>` : `<div class=\"avatar-lg\" style=\"display:flex;align-items:center;justify-content:center;font-size:28px;\">👤</div>`}
+            <div>
+              <div><strong>${nombre}</strong>${dni?` <span class=\"muted\">(DNI ${dni})</span>`:''}</div>
+              <div class=\"chips\">
+                ${avg!=null? `<span class=\"chip\">⭐ ${avg.toFixed(1)}</span>`:''}
+                <span class=\"chip\">Reseñas ${reseñasCount}</span>
+                <span class=\"chip\">Kg totales ${kg.toFixed(2)}</span>
+                <span class=\"chip\">Puntos ${puntos}</span>
+              </div>
+            </div>
+          </div>
+          <div class=\"section-title\">Últimas reseñas</div>
+          <ul class=\"review-list\">${items||'<li class=\\"muted\\">Sin reseñas</li>'}</ul>`;
+      } catch {
+        c.innerHTML = '<div class="muted">No se pudo cargar el perfil</div>';
+      }
+      modal.hidden = false;
+    }
+
+    async function openPerfilEmpresa(eid){
+      const modal = document.getElementById('perfil-modal');
+      const c = document.getElementById('perfil-modal-content');
+      const t = document.getElementById('perfil-modal-title');
+      if (!modal || !c || !t) return;
+      t.textContent = 'Perfil de empresa';
+      c.innerHTML = '<div class="muted">Cargando...</div>';
+      try {
+        const ep = await (await fetch(`/api/empresas/${Number(eid)}/perfil`, { headers: authHeaders() })).json();
+        const rs = await (await fetch(`/api/resenas/empresa/${Number(eid)}`, { headers: authHeaders() })).json();
+        const e = ep?.empresa || ep || {};
+        const nombre = String(e.nombre||'') || (`Empresa #${eid}`);
+        const ruc = String(e.ruc||'');
+        const logo = String(e.logo||e.foto_local_1||'').trim();
+        const puntajes = Array.isArray(rs)? rs.map(r=> Number(r.puntaje||0)).filter(n=> !isNaN(n)) : [];
+        const avg = puntajes.length ? (puntajes.reduce((a,b)=> a+b, 0) / puntajes.length) : null;
+        const reseñasCount = Array.isArray(rs)? rs.length : 0;
+        const trabajos = Number((ep?.stats?.transacciones)||0);
+        const items = Array.isArray(rs)? rs.slice(0,5).map(r=> {
+          const fecha = r.creado_en ? new Date(r.creado_en).toLocaleString() : '';
+          const rol = String(r.autor_rol||'');
+          const autor = r.autor_nombre ? String(r.autor_nombre) : (rol==='recolector'?'Recolector':'Usuario');
+          const msg = r.mensaje ? String(r.mensaje) : '';
+          return `<li><div class=\"row jc-between\"><strong>${autor}</strong><span class=\"muted\">${fecha}</span></div><div class=\"muted\">Tx #${String(r.transaccion_id||'—')} · ⭐ ${Number(r.puntaje)}</div>${msg? `<div>${msg}</div>`:''}</li>`;
+        }).join('') : '';
+        c.innerHTML = `
+          <div class=\"profile-header\">
+            ${logo? `<img src=\"${logo}\" alt=\"logo empresa\" class=\"avatar-lg\" style=\"border-radius:12px\"/>` : `<div class=\"avatar-lg\" style=\"display:flex;align-items:center;justify-content:center;font-size:28px;border-radius:12px;\">🏢</div>`}
+            <div>
+              <div><strong>${nombre}</strong>${ruc?` <span class=\"muted\">(RUC ${ruc})</span>`:''}</div>
+              <div class=\"chips\">
+                ${avg!=null? `<span class=\"chip\">⭐ ${avg.toFixed(1)}</span>`:''}
+                <span class=\"chip\">Reseñas ${reseñasCount}</span>
+                <span class=\"chip\">Trabajos ${trabajos}</span>
+              </div>
+            </div>
+          </div>
+          <div class=\"section-title\">Últimas reseñas</div>
+          <ul class=\"review-list\">${items||'<li class=\\"muted\\">Sin reseñas</li>'}</ul>`;
+      } catch {
+        c.innerHTML = '<div class="muted">No se pudo cargar el perfil</div>';
+      }
+      modal.hidden = false;
+    }
+
+    async function openPerfilRecolector(rid){
+      const modal = document.getElementById('perfil-modal');
+      const c = document.getElementById('perfil-modal-content');
+      const t = document.getElementById('perfil-modal-title');
+      if (!modal || !c || !t) return;
+      t.textContent = 'Perfil de recolector';
+      c.innerHTML = '<div class="muted">Cargando...</div>';
+      try {
+        const rp = await (await fetch(`/api/recolector/${Number(rid)}/perfil`, { headers: authHeaders() })).json();
+        const rs = await (await fetch(`/api/resenas/recolector/${Number(rid)}`, { headers: authHeaders() })).json();
+        const nombre = [String(rp?.nombre||'').trim(), String(rp?.apellidos||'').trim()].filter(Boolean).join(' ') || (`Recolector #${rid}`);
+        const dni = String(rp?.dni||'').trim();
+        const foto = String(rp?.foto_perfil||'').trim();
+        const puntajes = Array.isArray(rs)? rs.map(r=> Number(r.puntaje||0)).filter(n=> !isNaN(n)) : [];
+        const avg = puntajes.length ? (puntajes.reduce((a,b)=> a+b, 0) / puntajes.length) : null;
+        const reseñasCount = Array.isArray(rs)? rs.length : 0;
+        const trabajos = Number(rp?.trabajos_completados||0);
+        const items = Array.isArray(rs)? rs.slice(0,5).map(r=> {
+          const fecha = r.creado_en ? new Date(r.creado_en).toLocaleString() : '';
+          const quien = String(r.evaluador_rol||'')==='empresa' ? (`Empresa #${String(r.evaluador_id||'')}`) : 'Usuario';
+          const msg = r.mensaje ? String(r.mensaje) : '';
+          return `<li><div class=\"row jc-between\"><strong>${quien}</strong><span class=\"muted\">${fecha}</span></div><div class=\"muted\">Tx #${String(r.transaccion_id||'—')} · ⭐ ${Number(r.puntaje)}</div>${msg? `<div>${msg}</div>`:''}</li>`;
+        }).join('') : '';
+        c.innerHTML = `
+          <div class=\"profile-header\">
+            ${foto? `<img src=\"${foto}\" alt=\"foto perfil\" class=\"avatar-lg\"/>` : `<div class=\"avatar-lg\" style=\"display:flex;align-items:center;justify-content:center;font-size:28px;\">🧑‍🔧</div>`}
+            <div>
+              <div><strong>${nombre}</strong>${dni?` <span class=\"muted\">(DNI ${dni})</span>`:''}</div>
+              <div class=\"chips\">
+                ${avg!=null? `<span class=\"chip\">⭐ ${avg.toFixed(1)}</span>`:''}
+                <span class=\"chip\">Reseñas ${reseñasCount}</span>
+                <span class=\"chip\">Trabajos ${trabajos}</span>
+              </div>
+            </div>
+          </div>
+          <div class=\"section-title\">Últimas reseñas</div>
+          <ul class=\"review-list\">${items||'<li class=\\"muted\\">Sin reseñas</li>'}</ul>`;
+      } catch {
+        c.innerHTML = '<div class="muted">No se pudo cargar el perfil</div>';
+      }
+      modal.hidden = false;
+    }
+</script>
