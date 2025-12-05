@@ -63,6 +63,7 @@
     #perfil-modal .modal-card{ width:680px; max-width:96vw; padding:20px; }
     #historial-modal{ z-index: 1000; }
     #perfil-modal{ z-index: 1001; }
+    #empresa-img-modal{ z-index: 1100; }
     .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
     .link{ color:#2563eb; text-decoration:underline; cursor:pointer; }
     .link:hover{ text-decoration:none; }
@@ -2648,11 +2649,7 @@
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
       if (titleEl) titleEl.textContent = `Solicitud #${j.transaccion.solicitud_id} · Transacción #${j.transaccion.id} · ${j.transaccion.empresa_nombre}`;
-      let acciones = '';
-      if (String(role)==='empresa' && Boolean(j?.es_delivery) && j?.recolector_final_id!=null && !Boolean(j?.ya_resena_recolector_empresa)) {
-        acciones = `<div class=\"right mt-10\"><button class=\"btn secondary\" id=\"rate-reco-det-${id}\" onclick=\"openRating('recolector', ${id}, null, null)\">Calificar recolector</button></div>`;
-      }
-      if (contentEl) contentEl.innerHTML = `<div class=\"muted\">Solicitud #${j.transaccion.solicitud_id} · Transacción #${j.transaccion.id}</div><table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Precio/kg</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}${acciones}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
+      if (contentEl) contentEl.innerHTML = `<div class=\"muted\">Solicitud #${j.transaccion.solicitud_id} · Transacción #${j.transaccion.id}</div><table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Precio/kg</th><th class=\"ta-right\">Kg</th><th class=\"ta-right\">Subtotal</th></tr></thead><tbody>${filas}</tbody></table>${footer}<div class=\"muted\">Puntos obtenidos: ${j.transaccion.puntos_obtenidos}</div>`;
       if (modal) modal.hidden = false;
       histDetalleId = id;
       try { setTimeout(()=>{ enrichUsuarioDetalle(id, j); }, 0); } catch {}
@@ -2766,12 +2763,7 @@
       const titleEl = document.getElementById('historial-modal-title');
       const contentEl = document.getElementById('historial-modal-content');
       if (titleEl) titleEl.textContent = `Solicitud #${sid} · Transacción #${Number(j.transaccion_id)||'—'}`;
-      let acciones = '';
-      const puedeU = Boolean(j?.puede_calificar_usuario) && !Boolean(j?.ya_resena_usuario_por_recolector);
-      const puedeE = Boolean(j?.puede_calificar_empresa) && !Boolean(j?.ya_resena_empresa_por_recolector);
-      if (puedeU) acciones += `<button class=\"btn secondary\" id=\"rate-usr-reco-${sid}\" onclick=\"openRating('usuario_reco', ${Number(j.transaccion_id)}, null, ${Number(j.usuario_id)})\">Calificar usuario</button>`;
-      if (puedeE) acciones += ` <button class=\"btn secondary\" id=\"rate-emp-reco-${sid}\" onclick=\"openRating('empresa_reco', ${Number(j.transaccion_id)}, ${Number(j.empresa_id)}, null)\">Calificar empresa</button>`;
-      if (contentEl) contentEl.innerHTML = `<div class=\"muted\">Solicitud #${sid} · Transacción #${Number(j.transaccion_id)||'—'}</div><table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right mt-10\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right mt-8\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>${(acciones? `<div class=\\\"right mt-10\\\">${acciones}</div>` : '')}`;
+      if (contentEl) contentEl.innerHTML = `<div class=\"muted\">Solicitud #${sid} · Transacción #${Number(j.transaccion_id)||'—'}</div><table class=\"table\"><thead><tr><th>Material</th><th class=\"ta-right\">Kg finales</th></tr></thead><tbody>${filas}</tbody></table><div class=\"right mt-10\">Total kg: <strong>${Number(j.total_kg||0).toFixed(2)}</strong> · Viaje: <span class=\"badge\">${j.clasificacion||'—'}</span></div><div class=\"right mt-8\">Recolector → Usuario: <strong>${distRU}</strong> · Usuario → Empresa: <strong>${distUE}</strong></div>`;
       if (modal) modal.hidden = false;
       histDetalleId = sid;
       try { setTimeout(()=>{ enrichRecoDetalle(sid, j); }, 0); } catch {}
@@ -2947,11 +2939,13 @@
       const b3 = document.getElementById('rate-reco-'+txId);
       if (b1 && (yaEmp || !ventanaAbierta)) b1.style.display = 'none';
       if (b2 && (yaUsr || !ventanaAbierta)) b2.style.display = 'none';
-      if (b3 && (yaRecoE || !ventanaAbierta)) b3.style.display = 'none';
-      if (b3 && String(role)!=='empresa' && (yaRecoU || !ventanaAbierta)) b3.style.display = 'none';
-      if (b3 && (!hasRecoFinal || !esDelivery)) b3.style.display = 'none';
-      const bDet = document.getElementById('rate-reco-det-'+String(txId));
-      if (bDet && !ventanaAbierta) bDet.style.display = 'none';
+      if (b3){
+        if (!ventanaAbierta) b3.style.display = 'none';
+        else if (!hasRecoFinal || !esDelivery) b3.style.display = 'none';
+        else if (String(role)==='empresa' && yaRecoE) b3.style.display = 'none';
+        else if (String(role)==='usuario' && yaRecoU) b3.style.display = 'none';
+      }
+      
     }
     async function submitRating(){
       const puntaje = Number(document.getElementById('rating-score').value);
@@ -4869,6 +4863,10 @@
         const nombre = String(e.nombre||'') || (`Empresa #${eid}`);
         const ruc = String(e.ruc||'');
         const logo = String(e.logo||e.foto_local_1||'').trim();
+        const fotoLocal1 = String(e.foto_local_1||'').trim();
+        const fotoLocal2 = String(e.foto_local_2||'').trim();
+        const fotoLocal3 = String(e.foto_local_3||'').trim();
+        const fallbackImg = '/img/nodisponible.png';
         const puntajes = Array.isArray(rs)? rs.map(r=> Number(r.puntaje||0)).filter(n=> !isNaN(n)) : [];
         const avg = puntajes.length ? (puntajes.reduce((a,b)=> a+b, 0) / puntajes.length) : null;
         const reseñasCount = Array.isArray(rs)? rs.length : 0;
@@ -4882,7 +4880,7 @@
         }).join('') : '';
         c.innerHTML = `
           <div class=\"profile-header\">
-            ${logo? `<img src=\"${logo}\" alt=\"logo empresa\" class=\"avatar-lg\" style=\"border-radius:12px\"/>` : `<div class=\"avatar-lg\" style=\"display:flex;align-items:center;justify-content:center;font-size:28px;border-radius:12px;\">🏢</div>`}
+            ${logo? `<img src=\"${logo}\" alt=\"logo empresa\" class=\"avatar-lg\" style=\"border-radius:12px;cursor:pointer\" onclick=\"openEmpresaImg('${logo||fallbackImg}')\" onerror=\"this.src='${fallbackImg}'\"/>` : `<div class=\"avatar-lg\" style=\"display:flex;align-items:center;justify-content:center;font-size:28px;border-radius:12px;\">🏢</div>`}
             <div>
               <div><strong>${nombre}</strong>${ruc?` <span class=\"muted\">(RUC ${ruc})</span>`:''}</div>
               <div class=\"chips\">
@@ -4890,6 +4888,21 @@
                 <span class=\"chip\">Reseñas ${reseñasCount}</span>
                 <span class=\"chip\">Trabajos ${trabajos}</span>
               </div>
+            </div>
+          </div>
+          <div class=\"section-title\">Fotos del Local</div>
+          <div class=\"row\" style=\"gap:16px; margin-top:8px;\">
+            <div class=\"thumb-wrap\">
+              <img class=\"thumb\" src=\"${fotoLocal1||fallbackImg}\" alt=\"local 1\" onerror=\"this.src='${fallbackImg}'\" style=\"cursor:pointer\" onclick=\"openEmpresaImg('${fotoLocal1||fallbackImg}')\" />
+              <div class=\"muted\">Local 1</div>
+            </div>
+            <div class=\"thumb-wrap\">
+              <img class=\"thumb\" src=\"${fotoLocal2||fallbackImg}\" alt=\"local 2\" onerror=\"this.src='${fallbackImg}'\" style=\"cursor:pointer\" onclick=\"openEmpresaImg('${fotoLocal2||fallbackImg}')\" />
+              <div class=\"muted\">Local 2</div>
+            </div>
+            <div class=\"thumb-wrap\">
+              <img class=\"thumb\" src=\"${fotoLocal3||fallbackImg}\" alt=\"local 3\" onerror=\"this.src='${fallbackImg}'\" style=\"cursor:pointer\" onclick=\"openEmpresaImg('${fotoLocal3||fallbackImg}')\" />
+              <div class=\"muted\">Local 3</div>
             </div>
           </div>
           <div class=\"section-title\">Últimas reseñas</div>
@@ -4913,6 +4926,9 @@
         const nombre = [String(rp?.nombre||'').trim(), String(rp?.apellidos||'').trim()].filter(Boolean).join(' ') || (`Recolector #${rid}`);
         const dni = String(rp?.dni||'').trim();
         const foto = String(rp?.foto_perfil||'').trim();
+        const doc = String(rp?.foto_documento||'').trim();
+        const veh = String(rp?.foto_vehiculo||'').trim();
+        const fallbackImg = '/img/nodisponible.png';
         const puntajes = Array.isArray(rs)? rs.map(r=> Number(r.puntaje||0)).filter(n=> !isNaN(n)) : [];
         const avg = puntajes.length ? (puntajes.reduce((a,b)=> a+b, 0) / puntajes.length) : null;
         const reseñasCount = Array.isArray(rs)? rs.length : 0;
@@ -4925,7 +4941,7 @@
         }).join('') : '';
         c.innerHTML = `
           <div class=\"profile-header\">
-            ${foto? `<img src=\"${foto}\" alt=\"foto perfil\" class=\"avatar-lg\"/>` : `<div class=\"avatar-lg\" style=\"display:flex;align-items:center;justify-content:center;font-size:28px;\">🧑‍🔧</div>`}
+            ${foto? `<img src=\"${foto}\" alt=\"foto perfil\" class=\"avatar-lg\" style=\"cursor:pointer\" onclick=\"openEmpresaImg('${foto||fallbackImg}')\"/>` : `<div class=\"avatar-lg\" style=\"display:flex;align-items:center;justify-content:center;font-size:28px;\">🧑‍🔧</div>`}
             <div>
               <div><strong>${nombre}</strong>${dni?` <span class=\"muted\">(DNI ${dni})</span>`:''}</div>
               <div class=\"chips\">
@@ -4933,6 +4949,17 @@
                 <span class=\"chip\">Reseñas ${reseñasCount}</span>
                 <span class=\"chip\">Trabajos ${trabajos}</span>
               </div>
+            </div>
+          </div>
+          <div class=\"section-title\">Documentos y Vehículo</div>
+          <div class=\"row\" style=\"gap:16px; margin-top:8px;\">
+            <div class=\"thumb-wrap\">
+              <img class=\"thumb\" src=\"${doc||fallbackImg}\" alt=\"documento\" onerror=\"this.src='${fallbackImg}'\" style=\"cursor:pointer\" onclick=\"openEmpresaImg('${doc||fallbackImg}')\" />
+              <div class=\"muted\">Documento</div>
+            </div>
+            <div class=\"thumb-wrap\">
+              <img class=\"thumb\" src=\"${veh||fallbackImg}\" alt=\"vehiculo\" onerror=\"this.src='${fallbackImg}'\" style=\"cursor:pointer\" onclick=\"openEmpresaImg('${veh||fallbackImg}')\" />
+              <div class=\"muted\">Vehículo</div>
             </div>
           </div>
           <div class=\"section-title\">Últimas reseñas</div>
