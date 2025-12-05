@@ -157,7 +157,7 @@ export async function guardarItemsSolicitudJSON(id: number, items: { material_id
 
 export async function historialRecolector(recolectorId: number) {
   const res = await pool.query(
-    "SELECT s.id, s.usuario_id, u.email AS usuario_email, s.empresa_id, e.nombre AS empresa_nombre, s.delivery_fee, s.clasificacion_distancia, s.creado_en, s.estado, s.recolector_id, s.pickup_recolector_id, s.handoff_recolector_id FROM solicitudes s JOIN usuarios u ON u.id=s.usuario_id JOIN empresas e ON e.id=s.empresa_id WHERE (s.recolector_id=$1 OR s.pickup_recolector_id=$1) AND s.tipo_entrega='delivery' AND s.estado='completada' ORDER BY s.creado_en DESC",
+    "SELECT s.id, s.usuario_id, u.email AS usuario_email, s.empresa_id, e.nombre AS empresa_nombre, s.delivery_fee, s.clasificacion_distancia, s.creado_en, s.estado, s.recolector_id, s.pickup_recolector_id, s.handoff_recolector_id FROM solicitudes s JOIN usuarios u ON u.id=s.usuario_id JOIN empresas e ON e.id=s.empresa_id WHERE (s.recolector_id=$1 OR s.pickup_recolector_id=$1) AND s.tipo_entrega='delivery' AND s.estado IN ('completada','completada_repesada') ORDER BY s.creado_en DESC",
     [recolectorId]
   );
   return res.rows;

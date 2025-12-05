@@ -831,7 +831,7 @@ exports.recolectorRouter.post("/stats/recompute_all", (0, asyncHandler_1.asyncHa
     const updated = [];
     for (const r of idsRes.rows) {
         const id = Number(r.id);
-        const cRes = await pool_1.pool.query("SELECT COUNT(*)::int AS c FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado='completada'", [id]);
+        const cRes = await pool_1.pool.query("SELECT COUNT(*)::int AS c FROM solicitudes WHERE (recolector_id=$1 OR pickup_recolector_id=$1) AND tipo_entrega='delivery' AND estado IN ('completada','completada_repesada')", [id]);
         const c = Number((cRes.rows[0] || {}).c || 0);
         await pool_1.pool.query("UPDATE recolectores SET trabajos_completados=$2 WHERE id=$1", [id, c]);
         updated.push({ id, trabajos_completados: c });

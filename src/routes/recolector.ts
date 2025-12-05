@@ -649,7 +649,7 @@ recolectorRouter.post("/stats/recompute_all", asyncHandler(async (_req: Request,
   for (const r of idsRes.rows) {
     const id = Number(r.id);
     const cRes = await pool.query(
-      "SELECT COUNT(*)::int AS c FROM solicitudes WHERE recolector_id=$1 AND tipo_entrega='delivery' AND estado='completada'",
+      "SELECT COUNT(*)::int AS c FROM solicitudes WHERE (recolector_id=$1 OR pickup_recolector_id=$1) AND tipo_entrega='delivery' AND estado IN ('completada','completada_repesada')",
       [id]
     );
     const c = Number((cRes.rows[0] || {}).c || 0);

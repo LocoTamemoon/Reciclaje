@@ -102,7 +102,7 @@ exports.adminRouter.patch("/empresas/:id/estado", requireAdmin, (0, asyncHandler
     }
     let canceladas = 0;
     if (!estado) {
-        const rows = await pool_1.pool.query("UPDATE solicitudes SET estado='cancelada', estado_publicacion='cancelada' WHERE empresa_id=$1 AND estado NOT IN ('completada','rechazada','cancelada','expirada') RETURNING id, usuario_id, recolector_id, pickup_recolector_id, tipo_entrega", [id]);
+        const rows = await pool_1.pool.query("UPDATE solicitudes SET estado='cancelada', estado_publicacion='cancelada' WHERE empresa_id=$1 AND estado NOT IN ('completada','completada_repesada','rechazada','cancelada','expirada') RETURNING id, usuario_id, recolector_id, pickup_recolector_id, tipo_entrega", [id]);
         canceladas = rows.rowCount || 0;
         const subs = global.__notifSubs || (global.__notifSubs = {});
         const notify = async (sid, destRole, destId, tipo, mensaje) => {

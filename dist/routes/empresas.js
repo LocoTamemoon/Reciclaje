@@ -140,10 +140,14 @@ exports.empresasRouter.get("/stats_distritos", (0, asyncHandler_1.asyncHandler)(
 }));
 exports.empresasRouter.get("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
-    const eRes = await pool_1.pool.query("SELECT id, ruc, nombre, logo, reputacion_promedio, resenas_recibidas_count, foto_local_1, foto_local_2, foto_local_3 FROM empresas WHERE id=$1", [id]);
+    const eRes = await pool_1.pool.query("SELECT id, ruc, nombre, logo, reputacion_promedio, resenas_recibidas_count, foto_local_1, foto_local_2, foto_local_3, estado FROM empresas WHERE id=$1", [id]);
     const emp = eRes.rows[0] || null;
     if (!emp) {
         res.status(404).json({ error: "not_found" });
+        return;
+    }
+    if (!emp.estado) {
+        res.status(403).json({ error: "empresa_inactiva" });
         return;
     }
     const matsRes = await pool_1.pool.query("SELECT COUNT(*)::int AS c FROM empresa_materiales_precio WHERE empresa_id=$1", [id]);

@@ -109,6 +109,7 @@ function calcularFeePorBanda(banda: "ideal" | "normal" | "larga", km: number): n
 export async function crearNuevaSolicitud(usuarioId: number, empresaId: number, items?: { material_id: number; kg: number }[], delivery?: boolean, consent?: boolean, termsVersion?: string | null, useCurrent?: boolean) {
   const empresa = await obtenerEmpresa(empresaId);
   if (!empresa) throw new Error("Empresa no encontrada");
+  if (!empresa.estado) throw new Error("empresa_inactiva");
   let solicitud: any;
   if (delivery) {
     await pool.query("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS delivery_cooldown_until TIMESTAMPTZ");

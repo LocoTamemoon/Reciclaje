@@ -144,6 +144,8 @@ async function crearNuevaSolicitud(usuarioId, empresaId, items, delivery, consen
     const empresa = await (0, empresasRepo_1.obtenerEmpresa)(empresaId);
     if (!empresa)
         throw new Error("Empresa no encontrada");
+    if (!empresa.estado)
+        throw new Error("empresa_inactiva");
     let solicitud;
     if (delivery) {
         await pool_1.pool.query("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS delivery_cooldown_until TIMESTAMPTZ");

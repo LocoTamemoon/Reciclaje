@@ -34,14 +34,30 @@ async function listarResenasEmpresa(empresaId) {
     const sql = `
     SELECT re.id, re.puntaje, re.mensaje, re.creado_en, re.transaccion_id,
            'usuario' AS autor_rol,
-           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,''))),''), u.email, 'Usuario ' || u.id) AS autor_nombre
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,''))),''), u.email, 'Usuario ' || u.id) AS autor_nombre,
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,''))),''), u.email, 'Usuario ' || u.id) AS usuario_nombre,
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,''))),''), TRIM(u.email), u.id::text) AS usuario,
+           'Usuario' AS autor_etiqueta,
+           CASE
+             WHEN NULLIF(TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,''))), '') IS NOT NULL THEN 'Usuario ' || TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,'')))
+             WHEN COALESCE(TRIM(u.email),'') <> '' THEN 'Usuario ' || TRIM(u.email)
+             ELSE 'Usuario ' || u.id::text
+           END AS autor_texto
     FROM resenas_empresas re
     JOIN usuarios u ON u.id = re.usuario_id
     WHERE re.empresa_id = $1 AND re.estado = true
     UNION ALL
     SELECT rr.id, rr.puntaje, rr.mensaje, rr.creado_en, rr.transaccion_id,
            'recolector' AS autor_rol,
-           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,''))),''), r.email, 'Recolector ' || r.id) AS autor_nombre
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,''))),''), r.email, 'Recolector ' || r.id) AS autor_nombre,
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,''))),''), r.email, 'Recolector ' || r.id) AS usuario_nombre,
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,''))),''), TRIM(r.email), r.id::text) AS usuario,
+           'Recolector' AS autor_etiqueta,
+           CASE
+             WHEN NULLIF(TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,''))), '') IS NOT NULL THEN 'Recolector ' || TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,'')))
+             WHEN COALESCE(TRIM(r.email),'') <> '' THEN 'Recolector ' || TRIM(r.email)
+             ELSE 'Recolector ' || r.id::text
+           END AS autor_texto
     FROM resenas_empresas_por_recolector rr
     JOIN recolectores r ON r.id = rr.recolector_id
     WHERE rr.empresa_id = $1 AND rr.estado = true
