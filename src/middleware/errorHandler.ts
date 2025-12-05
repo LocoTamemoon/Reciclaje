@@ -20,5 +20,9 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     res.status(401).json({ error: "credenciales_invalidas" });
     return;
   }
+  if (String(err?.message) === "empresa_inactiva") {
+    res.status(403).json({ error: "empresa_inactiva" });
+    return;
+  }
   res.status(500).json({ error: "internal_error", message: err?.message || "Error" });
 }

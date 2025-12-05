@@ -68,6 +68,7 @@ export async function loginEmpresa(email: string, password: string) {
   if (!e) throw new Error("credenciales_invalidas");
   const ok = await bcrypt.compare(password, e.password_hash || "");
   if (!ok) throw new Error("credenciales_invalidas");
+  if (!e.estado) throw new Error("empresa_inactiva");
   const token = signToken({ tipo: "empresa", id: e.id });
   return { token, empresa: e };
 }
@@ -126,4 +127,14 @@ export async function loginRecolector(email: string, password: string) {
   if (!ok) throw new Error("credenciales_invalidas");
   const token = signToken({ tipo: "recolector", id: r.id });
   return { token, recolector: r };
+}
+
+export async function loginAdmin(email: string, password: string) {
+  const res = await pool.query("SELECT * FROM admins WHERE email=$1", [email]);
+  const a = res.rows[0];
+  if (!a) throw new Error("credenciales_invalidas");
+  const ok = await bcrypt.compare(password, a.password_hash || "");
+  if (!ok) throw new Error("credenciales_invalidas");
+  const token = signToken({ tipo: "admin", id: a.id });
+  return { token, admin: { id: a.id, email: a.email, nombre: a.nombre, apellidos: a.apellidos, foto_perfil: a.foto_perfil } };
 }

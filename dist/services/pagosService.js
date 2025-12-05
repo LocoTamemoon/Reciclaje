@@ -47,8 +47,20 @@ async function registrarPesajeYPago(empresaId, solicitudId, usuarioId, metodoPag
     catch { }
     await (0, solicitudesRepo_1.actualizarEstadoSolicitud)(solicitudId, empresaCambioValores ? "completada_repesada" : "completada");
     const sol = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
-    if (sol && String(sol.tipo_entrega) === "delivery" && Number(sol.recolector_id || 0) > 0) {
-        await pool_1.pool.query("UPDATE recolectores SET trabajos_completados = trabajos_completados + 1 WHERE id=$1", [Number(sol.recolector_id)]);
+    if (sol && String(sol.tipo_entrega) === "delivery") {
+        const finalId = Number(sol.recolector_id || 0);
+        const pickId = Number(sol.pickup_recolector_id || 0);
+        const incIds = [];
+        if (finalId > 0)
+            incIds.push(finalId);
+        if (pickId > 0 && pickId !== finalId)
+            incIds.push(pickId);
+        for (const rid of incIds) {
+            try {
+                await pool_1.pool.query("UPDATE recolectores SET trabajos_completados = trabajos_completados + 1 WHERE id=$1", [rid]);
+            }
+            catch { }
+        }
     }
     await (0, usuariosRepo_1.acumularKgYPuntos)(usuarioId, totalKg, puntos);
     for (const p of pesajes) {

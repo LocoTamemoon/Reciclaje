@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Login</title>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <style>
+    body{ font-family: system-ui, -apple-system, Segoe UI, Roboto; background:#f7fafc; }
+    .wrap{ max-width:980px; margin:24px auto; padding:0 16px; }
+    .panel{ background:white; border:1px solid #e5e7eb; border-radius:12px; padding:20px; box-shadow:0 8px 16px rgba(16,185,129,0.08); }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .menu{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+    .btn{ padding:10px 14px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; }
+    .btn.primary{ background:#10b981; color:#fff; border-color:#10b981; }
+    .table{ width:100%; border-collapse: collapse; }
+    .table th, .table td{ border-bottom:1px solid #eee; padding:8px; text-align:left; }
+    .mono{ font-family: ui-monospace, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel" id="login-card">
+      <div class="row ai-center jc-between">
+        <div class="row ai-center gap-12"><div class="avatar">🛡️</div><div><div class="title">Acceso Admin</div><div class="subtitle">Inicia sesión para administrar el sistema</div></div></div>
+      </div>
+      <div id="alert" class="badge" style="display:none"></div>
+      <div class="grid2">
+        <div>
+          <label>Correo</label>
+          <input id="email" type="email" placeholder="admin@ejemplo.com" />
+        </div>
+        <div>
+          <label>Contraseña</label>
+          <input id="pass" type="password" placeholder="********" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px; gap:8px;">
+        <button class="btn primary" onclick="login()">Ingresar</button>
+      </div>
+    </div>
+
+    <div class="panel" id="admin-card" hidden>
+      <div class="row ai-center jc-between">
+        <div class="row ai-center gap-12"><div class="avatar">🛡️</div><div><div class="title">Panel Admin</div><div class="subtitle mono" id="admin-info"></div></div></div>
+        <button class="btn" onclick="logout()">Cerrar sesión</button>
+      </div>
+      <div class="menu">
+        <button class="btn" onclick="setView('usuarios')">Usuarios</button>
+        <button class="btn" onclick="setView('recolectores')">Recolectores</button>
+        <button class="btn" onclick="setView('empresas')">Empresas</button>
+        <button class="btn" onclick="setView('solicitudes')">Solicitudes</button>
+        <button class="btn" onclick="setView('transacciones')">Transacciones</button>
+        <button class="btn" onclick="setView('resenas')">Reseñas</button>
+      </div>
+      <div id="view-usuarios" hidden>
+        <table class="table" id="tbl-usuarios"><thead><tr><th>ID</th><th>Correo</th><th>Nombre</th><th>Estado</th><th>Puntos</th><th>Kilos</th><th>Solicitudes</th><th>Acciones</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="view-recolectores" hidden>
+        <table class="table" id="tbl-reco"><thead><tr><th>ID</th><th>Correo</th><th>Nombre</th><th>Estado</th><th>Trabajos</th><th>DNI</th><th>Acciones</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="view-empresas" hidden>
+        <table class="table" id="tbl-emp"><thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>RUC</th><th>Estado</th><th>Reputación</th><th>Acciones</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="view-solicitudes" hidden>
+        <table class="table" id="tbl-sol"><thead><tr><th>ID</th><th>Usuario</th><th>Empresa</th><th>Recolector</th><th>Entrega</th><th>Estado</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="view-transacciones" hidden>
+        <table class="table" id="tbl-tx"><thead><tr><th>ID</th><th>Solicitud</th><th>Usuario</th><th>Empresa</th><th>Monto</th><th>Modo</th><th>Puntos</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="view-resenas" hidden>
+        <table class="table" id="tbl-reviews"><thead><tr><th>Tipo</th><th>Target</th><th>Autor</th><th>Puntaje</th><th>Mensaje</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showAlert(msg, type){ const a=document.getElementById('alert'); if(!a) return; a.textContent=msg; a.style.display='block'; a.style.background= type==='error' ? '#fde2e2' : '#F2FBF7'; a.style.borderColor= type==='error' ? '#fecaca' : '#cfeeda'; }
+    function authHeaders(){ const t=localStorage.getItem('token'); return t? { 'Authorization': 'Bearer '+t } : {}; }
+    function setRole(r){ localStorage.setItem('role', r); }
+    function setView(v){ const ids=['usuarios','recolectores','empresas','solicitudes','transacciones','resenas']; ids.forEach(id=>{ const el=document.getElementById('view-'+id); if(el) el.hidden = (id!==v); }); if(v==='usuarios') loadUsuarios(); if(v==='recolectores') loadRecolectores(); if(v==='empresas') loadEmpresas(); if(v==='solicitudes') loadSolicitudes(); if(v==='transacciones') loadTransacciones(); if(v==='resenas') loadResenas(); }
+    async function login(){ const email=(document.getElementById('email')||{}).value||''; const pass=(document.getElementById('pass')||{}).value||''; if(!email || !pass){ showAlert('Ingresa correo y contraseña','error'); return; } try{ const r=await fetch('/api/auth/login/admin', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email, password: pass }) }); const j=await r.json(); if(j.token){ localStorage.setItem('token', j.token); setRole('admin'); document.getElementById('login-card').hidden=true; document.getElementById('admin-card').hidden=false; const me=await (await fetch('/api/admin/me', { headers: authHeaders() })).json(); document.getElementById('admin-info').textContent = me? (me.email+' (ID '+me.id+')') : email; setView('usuarios'); } else { showAlert('Credenciales inválidas','error'); } } catch { showAlert('Error al iniciar sesión','error'); } }
+    function logout(){ localStorage.removeItem('token'); localStorage.removeItem('role'); document.getElementById('admin-card').hidden=true; document.getElementById('login-card').hidden=false; }
+    async function loadUsuarios(){ try{ const rows=await (await fetch('/api/admin/usuarios', { headers: authHeaders() })).json(); const tb=document.querySelector('#tbl-usuarios tbody'); tb.innerHTML=''; rows.forEach(r=>{ const tr=document.createElement('tr'); const lab=r.estado? 'Desactivar':'Activar'; tr.innerHTML = `<td>${r.id}</td><td>${r.email}</td><td>${(r.nombre||'')+' '+(r.apellidos||'')}</td><td>${r.estado? 'Activo':'Inactivo'}</td><td>${r.puntos_acumulados||0}</td><td>${r.kg_totales||0}</td><td>${r.solicitudes_count||0}</td><td><button class='btn' onclick='toggleUsuario(${r.id}, ${!r.estado})'>${lab}</button></td>`; tb.appendChild(tr); }); }catch{} }
+    async function toggleUsuario(id, estado){ try{ await fetch(`/api/admin/usuarios/${id}/estado`, { method:'PATCH', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ estado }) }); await loadUsuarios(); }catch{}}
+    async function loadRecolectores(){ try{ const rows=await (await fetch('/api/admin/recolectores', { headers: authHeaders() })).json(); const tb=document.querySelector('#tbl-reco tbody'); tb.innerHTML=''; rows.forEach(r=>{ const tr=document.createElement('tr'); const lab=r.estado? 'Desactivar':'Activar'; tr.innerHTML = `<td>${r.id}</td><td>${r.email}</td><td>${(r.nombre||'')+' '+(r.apellidos||'')}</td><td>${r.estado? 'Activo':'Inactivo'}</td><td>${r.trabajos_completados||0}</td><td>${r.dni||''}</td><td><button class='btn' onclick='toggleReco(${r.id}, ${!r.estado})'>${lab}</button></td>`; tb.appendChild(tr); }); }catch{} }
+    async function toggleReco(id, estado){ try{ await fetch(`/api/admin/recolectores/${id}/estado`, { method:'PATCH', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ estado }) }); await loadRecolectores(); }catch{}}
+    async function loadEmpresas(){ try{ const rows=await (await fetch('/api/admin/empresas', { headers: authHeaders() })).json(); const tb=document.querySelector('#tbl-emp tbody'); tb.innerHTML=''; rows.forEach(r=>{ const tr=document.createElement('tr'); const lab=r.estado? 'Desactivar':'Activar'; tr.innerHTML = `<td>${r.id}</td><td>${r.nombre}</td><td>${r.email||''}</td><td>${r.ruc||''}</td><td>${r.estado? 'Activo':'Inactivo'}</td><td>${r.reputacion_promedio||0}</td><td><button class='btn' onclick='toggleEmpresa(${r.id}, ${!r.estado})'>${lab}</button></td>`; tb.appendChild(tr); }); }catch{} }
+    async function toggleEmpresa(id, estado){ try{ await fetch(`/api/admin/empresas/${id}/estado`, { method:'PATCH', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ estado }) }); await loadEmpresas(); }catch{}}
+    async function loadSolicitudes(){ try{ const rows=await (await fetch('/api/admin/solicitudes', { headers: authHeaders() })).json(); const tb=document.querySelector('#tbl-sol tbody'); tb.innerHTML=''; rows.forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${r.id}</td><td>${r.usuario_id}</td><td>${r.empresa_id}</td><td>${r.recolector_id||''}</td><td>${r.tipo_entrega||''}</td><td>${r.estado}</td>`; tb.appendChild(tr); }); }catch{} }
+    async function loadTransacciones(){ try{ const rows=await (await fetch('/api/admin/transacciones', { headers: authHeaders() })).json(); const tb=document.querySelector('#tbl-tx tbody'); tb.innerHTML=''; rows.forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${r.id}</td><td>${r.solicitud_id}</td><td>${r.usuario_id}</td><td>${r.empresa_id}</td><td>${Number(r.monto_pagado||0).toFixed(2)}</td><td>${r.modo_entrega||''}</td><td>${r.puntos_obtenidos||0}</td>`; tb.appendChild(tr); }); }catch{} }
+    async function loadResenas(){ try{ const rows=await (await fetch('/api/admin/resenas', { headers: authHeaders() })).json(); const tb=document.querySelector('#tbl-reviews tbody'); tb.innerHTML=''; rows.forEach(r=>{ const tr=document.createElement('tr'); const fecha = r.creado_en ? new Date(r.creado_en).toLocaleString() : ''; const lab = r.estado? 'Desactivar':'Activar'; tr.innerHTML = `<td class='mono'>${r.tipo}</td><td>${r.target_nombre} (#${r.target_id})</td><td>${r.autor_nombre} <span class='muted'>(${r.autor_rol})</span></td><td>${r.puntaje}</td><td>${r.mensaje||''}</td><td>${fecha}</td><td>${r.estado? 'Activa':'Inactiva'}</td><td><button class='btn' onclick='toggleResena("${r.tipo}", ${r.id}, ${!r.estado})'>${lab}</button></td>`; tb.appendChild(tr); }); }catch{} }
+    async function toggleResena(tipo, id, estado){ try{ await fetch(`/api/admin/resenas/${tipo}/${id}/estado`, { method:'PATCH', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ estado }) }); await loadResenas(); }catch{} }
+  </script>
+</body>
+</html>

@@ -55,6 +55,15 @@ exports.recolectorRouter.post("/:sid/aceptar", (0, asyncHandler_1.asyncHandler)(
     const sid = Number(req.params.sid);
     const { recolector_id, vehiculo_id, lat, lon } = req.body;
     console.log("reco_aceptar_in", { sid, recolector_id, vehiculo_id, lat, lon });
+    try {
+        const st = await pool_1.pool.query("SELECT estado FROM recolectores WHERE id=$1", [Number(recolector_id)]);
+        const activo = Boolean(st.rows[0]?.estado);
+        if (!activo) {
+            res.status(422).json({ error: "recolector_inactivo" });
+            return;
+        }
+    }
+    catch { }
     let s = null;
     try {
         s = await (0, solicitudesRepo_1.aceptarPorRecolector)(sid, Number(recolector_id), vehiculo_id != null ? Number(vehiculo_id) : null, lat != null ? Number(lat) : null, lon != null ? Number(lon) : null);
@@ -276,6 +285,20 @@ exports.recolectorRouter.patch("/:id/distrito", (0, asyncHandler_1.asyncHandler)
     }
     const r = await pool_1.pool.query("UPDATE recolectores SET id_distrito=$2 WHERE id=$1 RETURNING id, id_distrito", [id, distrito_id]);
     res.json(r.rows[0] || null);
+}));
+exports.recolectorRouter.patch("/:id/estado", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const id = Number(req.params.id);
+    const estado = Boolean(req.body?.estado);
+    if (!id || Number.isNaN(id)) {
+        res.status(400).json({ error: "invalid_id" });
+        return;
+    }
+    const r = await pool_1.pool.query("UPDATE recolectores SET estado=$2 WHERE id=$1 RETURNING id, estado", [id, estado]);
+    if (!r.rows[0]) {
+        res.status(404).json({ error: "not_found" });
+        return;
+    }
+    res.json(r.rows[0]);
 }));
 exports.recolectorRouter.patch("/vehiculos/:vid", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const vid = Number(req.params.vid);

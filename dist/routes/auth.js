@@ -162,3 +162,8 @@ exports.authRouter.post("/login/recolector", (0, asyncHandler_1.asyncHandler)(as
     const r = await (0, authService_1.loginRecolector)(String(email), String(password));
     res.json(r);
 }));
+exports.authRouter.post("/login/admin", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const { email, password } = req.body;
+    const r = await (0, authService_1.loginAdmin)(String(email), String(password));
+    res.json(r);
+}));

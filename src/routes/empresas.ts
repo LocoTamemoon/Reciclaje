@@ -32,6 +32,11 @@ empresasRouter.get("/:id/materiales", asyncHandler(async (req: Request, res: Res
 
 empresasRouter.post("/:id/materiales/upsert", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  try {
+    const st = await pool.query("SELECT estado FROM empresas WHERE id=$1", [id]);
+    const activo = Boolean(st.rows[0]?.estado);
+    if (!activo) { res.status(422).json({ error: "empresa_inactiva" }); return; }
+  } catch {}
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   const results = [] as any[];
   for (const it of items) {
@@ -44,6 +49,11 @@ empresasRouter.post("/:id/materiales/upsert", asyncHandler(async (req: Request, 
 empresasRouter.delete("/:id/materiales/:mid", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const mid = Number(req.params.mid);
+  try {
+    const st = await pool.query("SELECT estado FROM empresas WHERE id=$1", [id]);
+    const activo = Boolean(st.rows[0]?.estado);
+    if (!activo) { res.status(422).json({ error: "empresa_inactiva" }); return; }
+  } catch {}
   await eliminarEmpresaMaterial(id, mid);
   res.json({ removed: true });
 }));
@@ -57,6 +67,11 @@ empresasRouter.get("/:id/solicitudes", asyncHandler(async (req: Request, res: Re
 empresasRouter.post("/:id/solicitudes/:sid/aceptar", asyncHandler(async (req: Request, res: Response) => {
   const empresaId = Number(req.params.id);
   const solicitudId = Number(req.params.sid);
+  try {
+    const st = await pool.query("SELECT estado FROM empresas WHERE id=$1", [empresaId]);
+    const activo = Boolean(st.rows[0]?.estado);
+    if (!activo) { res.status(422).json({ error: "empresa_inactiva" }); return; }
+  } catch {}
   const s = await aceptarSolicitud(empresaId, solicitudId);
   const sol = await obtenerSolicitud(solicitudId);
   const items = Array.isArray((sol as any)?.items_json) ? (sol as any).items_json : [];
@@ -76,6 +91,11 @@ empresasRouter.post("/:id/solicitudes/:sid/aceptar", asyncHandler(async (req: Re
 empresasRouter.post("/:id/solicitudes/:sid/rechazar", asyncHandler(async (req: Request, res: Response) => {
   const empresaId = Number(req.params.id);
   const solicitudId = Number(req.params.sid);
+  try {
+    const st = await pool.query("SELECT estado FROM empresas WHERE id=$1", [empresaId]);
+    const activo = Boolean(st.rows[0]?.estado);
+    if (!activo) { res.status(422).json({ error: "empresa_inactiva" }); return; }
+  } catch {}
   const s = await rechazarSolicitud(empresaId, solicitudId);
   res.json(s);
 }));
@@ -84,6 +104,11 @@ empresasRouter.post("/:id/solicitudes/:sid/pesaje_pago", asyncHandler(async (req
   const empresaId = Number(req.params.id);
   const solicitudId = Number(req.params.sid);
   const { usuario_id, metodo_pago, lat, lon, pesajes } = req.body;
+  try {
+    const st = await pool.query("SELECT estado FROM empresas WHERE id=$1", [empresaId]);
+    const activo = Boolean(st.rows[0]?.estado);
+    if (!activo) { res.status(422).json({ error: "empresa_inactiva" }); return; }
+  } catch {}
   const t = await registrarPesajeYPago(
     empresaId,
     solicitudId,

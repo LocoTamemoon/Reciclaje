@@ -14,6 +14,7 @@ const errorHandler_1 = require("./middleware/errorHandler");
 const auth_1 = require("./routes/auth");
 const transacciones_1 = require("./routes/transacciones");
 const materiales_1 = require("./routes/materiales");
+const admin_1 = require("./routes/admin");
 const recolector_1 = require("./routes/recolector");
 const pool_1 = require("./db/pool");
 const solicitudesService_1 = require("./services/solicitudesService");
@@ -80,8 +81,36 @@ app.use("/api/auth", auth_1.authRouter);
 app.use("/api/transacciones", transacciones_1.transaccionesRouter);
 app.use("/api/materiales", materiales_1.materialesRouter);
 app.use("/api/recolector", recolector_1.recolectorRouter);
+app.use("/api/admin", admin_1.adminRouter);
 ensureDistritosSchema();
 ensureHandoffSchema();
+async function ensureActivosSchema() {
+    try {
+        await pool_1.pool.query("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado BOOLEAN DEFAULT true");
+        await pool_1.pool.query("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS estado BOOLEAN DEFAULT true");
+        await pool_1.pool.query("ALTER TABLE resenas_empresas ADD COLUMN IF NOT EXISTS estado BOOLEAN DEFAULT true");
+        await pool_1.pool.query("ALTER TABLE resenas_empresas_por_recolector ADD COLUMN IF NOT EXISTS estado BOOLEAN DEFAULT true");
+        await pool_1.pool.query("ALTER TABLE resenas_usuarios ADD COLUMN IF NOT EXISTS estado BOOLEAN DEFAULT true");
+        await pool_1.pool.query("ALTER TABLE resenas_usuarios_por_recolector ADD COLUMN IF NOT EXISTS estado BOOLEAN DEFAULT true");
+        await pool_1.pool.query("ALTER TABLE resenas_recolectores ADD COLUMN IF NOT EXISTS estado BOOLEAN DEFAULT true");
+    }
+    catch { }
+}
+ensureActivosSchema();
+async function ensureAdminSchema() {
+    try {
+        await pool_1.pool.query("CREATE TABLE IF NOT EXISTS admins (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, nombre TEXT, apellidos TEXT, foto_perfil TEXT, estado BOOLEAN DEFAULT true, creado_en TIMESTAMPTZ DEFAULT NOW())");
+        const email = process.env.ADMIN_EMAIL;
+        const pass = process.env.ADMIN_PASSWORD;
+        if (email && pass) {
+            const bcrypt = require("bcryptjs");
+            const hash = await bcrypt.hash(String(pass), 10);
+            await pool_1.pool.query("INSERT INTO admins(email, password_hash, nombre, estado) VALUES($1,$2,$3,true) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash", [String(email), String(hash), "Admin"]);
+        }
+    }
+    catch { }
+}
+ensureAdminSchema();
 async function ensureUsuariosDniSchema() {
     try {
         await pool_1.pool.query("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS dni VARCHAR(7)");

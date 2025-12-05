@@ -24,5 +24,9 @@ function errorHandler(err, req, res, next) {
         res.status(401).json({ error: "credenciales_invalidas" });
         return;
     }
+    if (String(err?.message) === "empresa_inactiva") {
+        res.status(403).json({ error: "empresa_inactiva" });
+        return;
+    }
     res.status(500).json({ error: "internal_error", message: err?.message || "Error" });
 }

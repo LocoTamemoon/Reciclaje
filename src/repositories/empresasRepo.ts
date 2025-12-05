@@ -4,7 +4,7 @@ import path from "path";
 
 export async function listarEmpresas() {
   const empresas = await pool.query(
-    "SELECT e.*, COALESCE(cm.materiales, '[]') AS materiales FROM empresas e LEFT JOIN (SELECT empresa_id, JSON_AGG(JSON_BUILD_OBJECT('material_id', material_id, 'precio_por_kg', precio_por_kg)) AS materiales FROM empresa_materiales_precio GROUP BY empresa_id) cm ON cm.empresa_id = e.id ORDER BY e.id"
+    "SELECT e.*, COALESCE(cm.materiales, '[]') AS materiales FROM empresas e LEFT JOIN (SELECT empresa_id, JSON_AGG(JSON_BUILD_OBJECT('material_id', material_id, 'precio_por_kg', precio_por_kg)) AS materiales FROM empresa_materiales_precio GROUP BY empresa_id) cm ON cm.empresa_id = e.id WHERE e.estado=true ORDER BY e.id"
   );
   return empresas.rows;
 }

@@ -10,6 +10,7 @@ exports.loginEmpresa = loginEmpresa;
 exports.setEmpresaCredentialsByRuc = setEmpresaCredentialsByRuc;
 exports.registerRecolector = registerRecolector;
 exports.loginRecolector = loginRecolector;
+exports.loginAdmin = loginAdmin;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const pool_1 = require("../db/pool");
@@ -50,6 +51,8 @@ async function loginEmpresa(email, password) {
     const ok = await bcryptjs_1.default.compare(password, e.password_hash || "");
     if (!ok)
         throw new Error("credenciales_invalidas");
+    if (!e.estado)
+        throw new Error("empresa_inactiva");
     const token = signToken({ tipo: "empresa", id: e.id });
     return { token, empresa: e };
 }
@@ -84,4 +87,15 @@ async function loginRecolector(email, password) {
         throw new Error("credenciales_invalidas");
     const token = signToken({ tipo: "recolector", id: r.id });
     return { token, recolector: r };
+}
+async function loginAdmin(email, password) {
+    const res = await pool_1.pool.query("SELECT * FROM admins WHERE email=$1", [email]);
+    const a = res.rows[0];
+    if (!a)
+        throw new Error("credenciales_invalidas");
+    const ok = await bcryptjs_1.default.compare(password, a.password_hash || "");
+    if (!ok)
+        throw new Error("credenciales_invalidas");
+    const token = signToken({ tipo: "admin", id: a.id });
+    return { token, admin: { id: a.id, email: a.email, nombre: a.nombre, apellidos: a.apellidos, foto_perfil: a.foto_perfil } };
 }

@@ -37,20 +37,20 @@ async function listarResenasEmpresa(empresaId) {
            COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre,''),' ',COALESCE(u.apellidos,''))),''), u.email, 'Usuario ' || u.id) AS autor_nombre
     FROM resenas_empresas re
     JOIN usuarios u ON u.id = re.usuario_id
-    WHERE re.empresa_id = $1
+    WHERE re.empresa_id = $1 AND re.estado = true
     UNION ALL
     SELECT rr.id, rr.puntaje, rr.mensaje, rr.creado_en, rr.transaccion_id,
            'recolector' AS autor_rol,
            COALESCE(NULLIF(TRIM(CONCAT(COALESCE(r.nombre,''),' ',COALESCE(r.apellidos,''))),''), r.email, 'Recolector ' || r.id) AS autor_nombre
     FROM resenas_empresas_por_recolector rr
     JOIN recolectores r ON r.id = rr.recolector_id
-    WHERE rr.empresa_id = $1
+    WHERE rr.empresa_id = $1 AND rr.estado = true
     ORDER BY creado_en DESC`;
     const res = await pool_1.pool.query(sql, [empresaId]);
     return res.rows;
 }
 async function listarResenasUsuario(usuarioId) {
-    const res = await pool_1.pool.query("SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 ORDER BY ru.creado_en DESC", [usuarioId]);
+    const res = await pool_1.pool.query("SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 AND ru.estado=true ORDER BY ru.creado_en DESC", [usuarioId]);
     return res.rows;
 }
 async function crearResenaRecolector(recolectorId, evaluadorRol, evaluadorId, transaccionId, solicitudId, puntaje, mensaje) {
@@ -62,7 +62,7 @@ async function existeResenaRecolector(recolectorId, evaluadorRol, evaluadorId, t
     return (res.rowCount || 0) > 0;
 }
 async function listarResenasRecolector(recolectorId) {
-    const res = await pool_1.pool.query("SELECT rr.id, rr.puntaje, rr.mensaje, rr.creado_en, rr.transaccion_id, rr.solicitud_id, rr.evaluador_rol, rr.evaluador_id FROM resenas_recolectores rr WHERE rr.recolector_id=$1 ORDER BY rr.creado_en DESC", [recolectorId]);
+    const res = await pool_1.pool.query("SELECT rr.id, rr.puntaje, rr.mensaje, rr.creado_en, rr.transaccion_id, rr.solicitud_id, rr.evaluador_rol, rr.evaluador_id FROM resenas_recolectores rr WHERE rr.recolector_id=$1 AND rr.estado=true ORDER BY rr.creado_en DESC", [recolectorId]);
     return res.rows;
 }
 async function crearResenaEmpresaPorRecolector(empresaId, recolectorId, transaccionId, puntaje, mensaje) {

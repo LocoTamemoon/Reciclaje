@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { pool } from "../db/pool";
-import { registerUsuario, registerEmpresa, loginUsuario, loginEmpresa, setEmpresaCredentialsByRuc, registerRecolector, loginRecolector } from "../services/authService";
+import { registerUsuario, registerEmpresa, loginUsuario, loginEmpresa, setEmpresaCredentialsByRuc, registerRecolector, loginRecolector, loginAdmin } from "../services/authService";
 
 export const authRouter = Router();
 
@@ -160,5 +160,11 @@ authRouter.post("/register/recolector", asyncHandler(async (req: Request, res: R
 authRouter.post("/login/recolector", asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const r = await loginRecolector(String(email), String(password));
+  res.json(r);
+}));
+
+authRouter.post("/login/admin", asyncHandler(async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  const r = await loginAdmin(String(email), String(password));
   res.json(r);
 }));
