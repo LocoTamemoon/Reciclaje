@@ -280,8 +280,9 @@ recolectorRouter.get("/handoff/publicados", asyncHandler(async (req: Request, re
   const viewerId = Number((req.query.viewer_id as any) || NaN);
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_state TEXT");
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS handoff_expires_at TIMESTAMPTZ");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS foto_material_url TEXT");
   const r = await pool.query(
-    "SELECT id, usuario_id, empresa_id, recolector_id, handoff_pick_lat, handoff_pick_lon, handoff_expires_at FROM solicitudes WHERE handoff_state='publicado' AND (handoff_expires_at IS NULL OR handoff_expires_at > NOW()) ORDER BY creado_en DESC"
+    "SELECT id, usuario_id, empresa_id, recolector_id, handoff_pick_lat, handoff_pick_lon, handoff_expires_at, foto_material_url FROM solicitudes WHERE handoff_state='publicado' AND (handoff_expires_at IS NULL OR handoff_expires_at > NOW()) ORDER BY creado_en DESC"
   );
   const list = r.rows.filter((row: any)=> Number(row.recolector_id||0) !== (Number.isNaN(viewerId)?0:viewerId));
   res.json(list);

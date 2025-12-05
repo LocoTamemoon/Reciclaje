@@ -1,17 +1,52 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.solicitudesRouter = void 0;
 const express_1 = require("express");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const solicitudesService_1 = require("../services/solicitudesService");
 const solicitudesRepo_1 = require("../repositories/solicitudesRepo");
 const asyncHandler_1 = require("../middleware/asyncHandler");
 const pool_1 = require("../db/pool");
 exports.solicitudesRouter = (0, express_1.Router)();
 exports.solicitudesRouter.post("/", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
-    const { usuario_id, empresa_id, items, delivery, delivery_consent, delivery_terms_version, delivery_use_current } = req.body;
+    const { usuario_id, empresa_id, items, delivery, delivery_consent, delivery_terms_version, delivery_use_current, foto_base64 } = req.body;
     const normalizedItems = Array.isArray(items) ? items.map((it) => ({ material_id: Number(it.material_id), kg: Number(it.kg) })) : [];
     const s = await (0, solicitudesService_1.crearNuevaSolicitud)(Number(usuario_id), Number(empresa_id), normalizedItems, Boolean(delivery), Boolean(delivery_consent), delivery_terms_version ? String(delivery_terms_version) : null, Boolean(delivery_use_current));
-    res.json(s);
+    let out = s;
+    try {
+        if (foto_base64) {
+            const dir = path_1.default.resolve("public", "img");
+            try {
+                fs_1.default.mkdirSync(dir, { recursive: true });
+            }
+            catch { }
+            const code = Date.now().toString(36);
+            const filename = `${Number(s.id)}_solicitud_${code}.png`;
+            const full = path_1.default.join(dir, filename);
+            const data = /^data:image\/(png|jpeg);base64,/i.test(String(foto_base64)) ? String(foto_base64).replace(/^data:image\/(png|jpeg);base64,/i, "") : String(foto_base64);
+            const buf = Buffer.from(data, "base64");
+            try {
+                fs_1.default.writeFileSync(full, buf);
+            }
+            catch { }
+            const url = `/img/${filename}`;
+            try {
+                await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS foto_material_url TEXT");
+            }
+            catch { }
+            try {
+                const r = await pool_1.pool.query("UPDATE solicitudes SET foto_material_url=$2 WHERE id=$1 RETURNING *", [Number(s.id), url]);
+                out = r.rows[0] || s;
+            }
+            catch { }
+        }
+    }
+    catch { }
+    res.json(out);
 }));
 exports.solicitudesRouter.post("/:sid/cancelar", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const sid = Number(req.params.sid);

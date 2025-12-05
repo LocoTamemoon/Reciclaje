@@ -1,4 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
+import fs from "fs";
+import path from "path";
 import { crearNuevaSolicitud, cancelarSolicitudPorUsuario, republicarSolicitudPorUsuario } from "../services/solicitudesService";
 import { obtenerSolicitud } from "../repositories/solicitudesRepo";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -7,10 +9,29 @@ import { pool } from "../db/pool";
 export const solicitudesRouter = Router();
 
 solicitudesRouter.post("/", asyncHandler(async (req: Request, res: Response) => {
-  const { usuario_id, empresa_id, items, delivery, delivery_consent, delivery_terms_version, delivery_use_current } = req.body;
+  const { usuario_id, empresa_id, items, delivery, delivery_consent, delivery_terms_version, delivery_use_current, foto_base64 } = req.body;
   const normalizedItems = Array.isArray(items) ? items.map((it: any)=>({ material_id: Number(it.material_id), kg: Number(it.kg) })) : [];
   const s = await crearNuevaSolicitud(Number(usuario_id), Number(empresa_id), normalizedItems, Boolean(delivery), Boolean(delivery_consent), delivery_terms_version ? String(delivery_terms_version) : null, Boolean(delivery_use_current));
-  res.json(s);
+  let out = s;
+  try {
+    if (foto_base64) {
+      const dir = path.resolve("public", "img");
+      try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+      const code = Date.now().toString(36);
+      const filename = `${Number(s.id)}_solicitud_${code}.png`;
+      const full = path.join(dir, filename);
+      const data = /^data:image\/(png|jpeg);base64,/i.test(String(foto_base64)) ? String(foto_base64).replace(/^data:image\/(png|jpeg);base64,/i, "") : String(foto_base64);
+      const buf = Buffer.from(data, "base64");
+      try { fs.writeFileSync(full, buf); } catch {}
+      const url = `/img/${filename}`;
+      try { await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS foto_material_url TEXT"); } catch {}
+      try {
+        const r = await pool.query("UPDATE solicitudes SET foto_material_url=$2 WHERE id=$1 RETURNING *", [Number(s.id), url]);
+        out = r.rows[0] || s;
+      } catch {}
+    }
+  } catch {}
+  res.json(out);
 }));
 
 solicitudesRouter.post("/:sid/cancelar", asyncHandler(async (req: Request, res: Response) => {
