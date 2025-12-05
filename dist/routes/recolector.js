@@ -192,6 +192,10 @@ exports.recolectorRouter.get("/:id/vehiculos", (0, asyncHandler_1.asyncHandler)(
     console.log("vehiculos_list_out", { id, count: r.rows.length });
     res.json(r.rows);
 }));
+exports.recolectorRouter.get("/vehiculo_tipos", (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    const r = await pool_1.pool.query("SELECT id, nombre FROM vehiculo_tipos WHERE activo=true ORDER BY nombre");
+    res.json(r.rows);
+}));
 exports.recolectorRouter.get("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
     console.log("reco_perfil_in", { id });

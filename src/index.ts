@@ -99,6 +99,17 @@ async function ensureUsuariosDniSchema(){
   } catch {}
 }
 ensureUsuariosDniSchema();
+async function ensureEmpresasRucConstraint(){
+  try {
+    try {
+      const c = await pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='empresas' AND constraint_name='empresas_ruc_chk' LIMIT 1");
+      if (!c.rows[0]) {
+        await pool.query("ALTER TABLE empresas ADD CONSTRAINT empresas_ruc_chk CHECK (ruc ~ '^[0-9]{11}$')");
+      }
+    } catch {}
+  } catch {}
+}
+ensureEmpresasRucConstraint();
 
 const viajeStreams: Map<number, Set<any>> = new Map();
 const viajeSimTimers: Map<number, any> = new Map();

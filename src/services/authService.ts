@@ -30,11 +30,22 @@ export async function registerUsuario(
   return { token, usuario: u };
 }
 
-export async function registerEmpresa(email: string, password: string, ruc: string, nombre: string, logo: string | null, lat: number | null, lon: number | null) {
+export async function registerEmpresa(
+  email: string,
+  password: string,
+  ruc: string,
+  nombre: string,
+  logo: string | null,
+  foto_local_1: string | null,
+  foto_local_2: string | null,
+  foto_local_3: string | null,
+  lat: number | null,
+  lon: number | null
+) {
   const hash = await bcrypt.hash(password, 10);
   const res = await pool.query(
-    "INSERT INTO empresas(email, password_hash, ruc, nombre, logo, lat, lon) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
-    [email, hash, ruc, nombre, logo, lat, lon]
+    "INSERT INTO empresas(email, password_hash, ruc, nombre, logo, foto_local_1, foto_local_2, foto_local_3, lat, lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
+    [email, hash, ruc, nombre, logo, foto_local_1, foto_local_2, foto_local_3, lat, lon]
   );
   const e = res.rows[0];
   const token = signToken({ tipo: "empresa", id: e.id });
@@ -70,13 +81,39 @@ export async function setEmpresaCredentialsByRuc(ruc: string, email: string, pas
   return res.rows[0];
 }
 
-export async function registerRecolector(email: string, password: string, lat: number | null, lon: number | null) {
+export async function registerRecolector(
+  email: string,
+  password: string,
+  nombre: string | null,
+  apellidos: string | null,
+  dni: string | null,
+  distrito_id: number | null,
+  foto_perfil_path: string | null,
+  foto_documento_path: string | null,
+  foto_vehiculo_path: string | null,
+  lat: number | null,
+  lon: number | null,
+  vehiculo_tipo_id: number | null,
+  placa: string | null,
+  capacidad_kg: number | null
+) {
   const hash = await bcrypt.hash(password, 10);
   const res = await pool.query(
-    "INSERT INTO recolectores(email, password_hash, lat, lon) VALUES($1,$2,$3,$4) RETURNING *",
-    [email, hash, lat, lon]
+    "INSERT INTO recolectores(email, password_hash, nombre, apellidos, dni, id_distrito, foto_perfil, foto_documento, foto_vehiculo, lat, lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *",
+    [email, hash, nombre, apellidos, dni, distrito_id, foto_perfil_path, foto_documento_path, foto_vehiculo_path, lat, lon]
   );
   const r = res.rows[0];
+  if (vehiculo_tipo_id != null && placa && capacidad_kg != null) {
+    try {
+      const t = await pool.query("SELECT id FROM vehiculo_tipos WHERE id=$1 AND activo=true", [Number(vehiculo_tipo_id)]);
+      if (t.rows[0]) {
+        await pool.query(
+          "INSERT INTO vehiculos(recolector_id, tipo_id, placa, capacidad_kg, activo) VALUES($1,$2,$3,$4,true)",
+          [Number(r.id), Number(vehiculo_tipo_id), String(placa), Number(capacidad_kg)]
+        );
+      }
+    } catch {}
+  }
   const token = signToken({ tipo: "recolector", id: r.id });
   return { token, recolector: r };
 }

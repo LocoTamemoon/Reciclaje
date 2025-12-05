@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registro de Recolector</title>
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <style>
+    body{background:linear-gradient(180deg,#eefaf3 0%, #e6f7ef 60%, #f6fbf7 100%)}
+    .wrap{max-width:880px;margin:0 auto;padding:24px}
+    .title{font-weight:800;font-size:28px;margin:0 0 8px}
+    .subtitle{color:var(--color-muted);margin:0 0 18px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .full{grid-column:1 / -1}
+    .hint{color:var(--color-muted);font-size:12px}
+    .avatar{width:80px;height:80px;border-radius:999px;background:linear-gradient(180deg,#e8fbf2,#d6f5e6);border:1px solid #cfeeda;box-shadow:0 10px 20px rgba(34,197,94,0.20);display:flex;align-items:center;justify-content:center;font-size:30px}
+  </style>
+  <script>
+    function setToken(t){ localStorage.setItem('token', t); }
+    function setRole(r){ localStorage.setItem('role', r); }
+    function setUser(u){ localStorage.setItem('user', JSON.stringify(u)); }
+    function goHome(){ window.location.href='/'; }
+    async function useLocation(){
+      const lat=document.getElementById('lat');
+      const lon=document.getElementById('lon');
+      function set(llat,llon){ if(lat) lat.value=String(llat||''); if(lon) lon.value=String(llon||''); }
+      try{
+        if(navigator.geolocation){
+          navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude,p.coords.longitude); }, async ()=>{
+            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+          }, { enableHighAccuracy:true, timeout:3000 });
+          return;
+        }
+      }catch{}
+    }
+    function readFileBase64(file){
+      return new Promise((resolve)=>{ try{ const fr=new FileReader(); fr.onload=()=>resolve(fr.result); fr.readAsDataURL(file); }catch{ resolve(null); } });
+    }
+    function showAlert(msg,type){ const el=document.getElementById('alert'); if(!el) return; el.textContent=msg; el.className='badge'; el.style.background= type==='error' ? '#ffecec' : '#F2FBF7'; el.style.borderColor= type==='error' ? '#fca5a5' : '#cfeeda'; }
+    async function loadDistritos(){
+      try{
+        const r=await fetch('/api/recolector/distritos'); const list=await r.json(); const sel=document.getElementById('distrito'); if(!sel) return; sel.innerHTML='';
+        const opt0=document.createElement('option'); opt0.value=''; opt0.textContent='Selecciona distrito'; sel.appendChild(opt0);
+        list.forEach((d)=>{ const o=document.createElement('option'); o.value=String(d.id_distrito); o.textContent=d.nombre; sel.appendChild(o); });
+      }catch{}
+    }
+    async function loadTiposVehiculo(){
+      try{
+        const r=await fetch('/api/recolector/vehiculo_tipos'); const list=await r.json(); const sel=document.getElementById('veh-tipo'); if(!sel) return; sel.innerHTML='';
+        const opt0=document.createElement('option'); opt0.value=''; opt0.textContent='Tipo de vehículo'; sel.appendChild(opt0);
+        list.forEach((t)=>{ const o=document.createElement('option'); o.value=String(t.id); o.textContent=t.nombre; sel.appendChild(o); });
+      }catch{}
+    }
+    async function submit(){
+      const email=(document.getElementById('email')||{}).value||'';
+      const pass=(document.getElementById('pass')||{}).value||'';
+      const pass2=(document.getElementById('pass2')||{}).value||'';
+      const lat=(document.getElementById('lat')||{}).value||'';
+      const lon=(document.getElementById('lon')||{}).value||'';
+      const nombre=(document.getElementById('nombre')||{}).value||'';
+      const apellidos=(document.getElementById('apellidos')||{}).value||'';
+      const dni=(document.getElementById('dni')||{}).value||'';
+      const distrito=(document.getElementById('distrito')||{}).value||'';
+      const tipo=(document.getElementById('veh-tipo')||{}).value||'';
+      const placa=(document.getElementById('placa')||{}).value||'';
+      const capacidad=(document.getElementById('capacidad')||{}).value||'';
+      if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
+      if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
+      if(dni && !/^\d{7}$/.test(String(dni))){ showAlert('DNI debe tener 7 dígitos','error'); return; }
+      const f1=(document.getElementById('foto')||{}).files? (document.getElementById('foto').files[0]||null) : null;
+      const f2=(document.getElementById('foto-doc')||{}).files? (document.getElementById('foto-doc').files[0]||null) : null;
+      const f3=(document.getElementById('foto-veh')||{}).files? (document.getElementById('foto-veh').files[0]||null) : null;
+      if(!f1 || !f2 || !f3){ showAlert('Debes subir foto de perfil, documento y vehículo','error'); return; }
+      let foto = await readFileBase64(f1);
+      let fotoDoc = await readFileBase64(f2);
+      let fotoVeh = await readFileBase64(f3);
+      try{
+        const body={ email, password:pass, nombre, apellidos, dni, distrito_id: distrito? Number(distrito): null, foto_base64: foto, foto_documento_base64: fotoDoc, foto_vehiculo_base64: fotoVeh, lat: lat? Number(lat): null, lon: lon? Number(lon): null, vehiculo_tipo_id: tipo? Number(tipo): null, placa: placa||null, capacidad_kg: capacidad? Number(capacidad): null };
+        const r=await fetch('/api/auth/register/recolector', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+        const j=await r.json();
+        if(j.token){ setToken(j.token); setRole('recolector'); setUser(j.recolector); window.location.href='/dashboard.html'; return; }
+        showAlert('No se pudo registrar. Revisa los datos.','error');
+      }catch{ showAlert('Error de red al registrar.','error'); }
+    }
+    document.addEventListener('DOMContentLoaded', ()=>{ loadDistritos(); loadTiposVehiculo(); });
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row jc-between ai-center">
+      <div class="row ai-center gap-12"><div class="avatar">🚛</div><div><div class="title">Registro de Recolector</div><div class="subtitle">Únete para realizar recojos y entregas.</div></div></div>
+      <button class="btn secondary" onclick="goHome()">Inicio</button>
+    </div>
+    <div id="alert" class="badge" style="display:block; margin-top:10px; background:#F2FBF7; border-color:#cfeeda"></div>
+    <div class="panel mt-12">
+      <div class="grid2">
+        <div>
+          <label>Nombres</label>
+          <input id="nombre" type="text" placeholder="nombres" />
+        </div>
+        <div>
+          <label>Apellidos</label>
+          <input id="apellidos" type="text" placeholder="apellidos" />
+        </div>
+        <div>
+          <label>DNI</label>
+          <input id="dni" type="text" placeholder="7 dígitos" maxlength="7" inputmode="numeric" />
+        </div>
+        <div>
+          <label>Distrito</label>
+          <select id="distrito"></select>
+        </div>
+        <div class="full">
+          <label>Correo</label>
+          <input id="email" type="email" placeholder="correo@ejemplo.com" />
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="pass" type="password" placeholder="••••" />
+        </div>
+        <div>
+          <label>Confirmar</label>
+          <input id="pass2" type="password" placeholder="••••" />
+        </div>
+        <div class="full">
+          <label>Foto de perfil</label>
+          <input id="foto" type="file" accept="image/png,image/jpeg" required />
+          <div class="hint">Se guardará en /public/img</div>
+        </div>
+        <div>
+          <label>Foto documento</label>
+          <input id="foto-doc" type="file" accept="image/png,image/jpeg" required />
+        </div>
+        <div>
+          <label>Foto vehículo</label>
+          <input id="foto-veh" type="file" accept="image/png,image/jpeg" required />
+        </div>
+        <div>
+          <label>Tipo de vehículo</label>
+          <select id="veh-tipo"></select>
+        </div>
+        <div>
+          <label>Placa</label>
+          <input id="placa" type="text" placeholder="ABC-123" />
+        </div>
+        <div>
+          <label>Capacidad (kg)</label>
+          <input id="capacidad" type="number" step="0.1" min="0" placeholder="0" />
+        </div>
+        <div>
+          <label>Lat</label>
+          <input id="lat" type="text" placeholder="opcional" />
+        </div>
+        <div>
+          <label>Lon</label>
+          <input id="lon" type="text" placeholder="opcional" />
+        </div>
+      </div>
+      <div class="row jc-between mt-12">
+        <button class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
+        <button class="btn" onclick="submit()">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

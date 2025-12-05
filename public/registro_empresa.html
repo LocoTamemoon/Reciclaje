@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registro de Empresa</title>
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <style>
+    body{background:linear-gradient(180deg,#eefaf3 0%, #e6f7ef 60%, #f6fbf7 100%)}
+    .wrap{max-width:880px;margin:0 auto;padding:24px}
+    .title{font-weight:800;font-size:28px;margin:0 0 8px}
+    .subtitle{color:var(--color-muted);margin:0 0 18px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .full{grid-column:1 / -1}
+    .hint{color:var(--color-muted);font-size:12px}
+    .avatar{width:80px;height:80px;border-radius:999px;background:linear-gradient(180deg,#e8fbf2,#d6f5e6);border:1px solid #cfeeda;box-shadow:0 10px 20px rgba(34,197,94,0.20);display:flex;align-items:center;justify-content:center;font-size:30px}
+  </style>
+  <script>
+    function setToken(t){ localStorage.setItem('token', t); }
+    function setRole(r){ localStorage.setItem('role', r); }
+    function setUser(u){ localStorage.setItem('user', JSON.stringify(u)); }
+    function goHome(){ window.location.href='/'; }
+    async function useLocation(){
+      const lat=document.getElementById('lat');
+      const lon=document.getElementById('lon');
+      function set(llat,llon){ if(lat) lat.value=String(llat||''); if(lon) lon.value=String(llon||''); }
+      try{
+        if(navigator.geolocation){
+          navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude,p.coords.longitude); }, async ()=>{
+            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+          }, { enableHighAccuracy:true, timeout:3000 });
+          return;
+        }
+      }catch{}
+    }
+    function readFileBase64(file){
+      return new Promise((resolve)=>{ try{ const fr=new FileReader(); fr.onload=()=>resolve(fr.result); fr.readAsDataURL(file); }catch{ resolve(null); } });
+    }
+    function showAlert(msg,type){ const el=document.getElementById('alert'); if(!el) return; el.textContent=msg; el.className='badge'; el.style.background= type==='error' ? '#ffecec' : '#F2FBF7'; el.style.borderColor= type==='error' ? '#fca5a5' : '#cfeeda'; }
+    async function loadMateriales(){
+      try{
+        const r=await fetch('/api/materiales'); const list=await r.json();
+        const box=document.getElementById('mat-box'); if(!box) return; box.innerHTML='';
+        list.forEach((m)=>{
+          const wrap=document.createElement('div'); wrap.className='row'; wrap.style.alignItems='flex-end'; wrap.style.gap='8px'; wrap.style.margin='6px 0';
+          wrap.innerHTML = `
+            <label class="check-wrap" style="min-width:180px"><input type="checkbox" data-mid="${m.id}" /><span>${m.nombre}</span></label>
+            <div style="flex:1"><label>Precio/kg</label><input type="number" step="0.1" min="0" data-price-for="${m.id}" placeholder="0.00" /></div>
+            <div style="flex:1"><label>Condiciones</label><input type="text" data-cond-for="${m.id}" placeholder="Opcional" /></div>
+          `;
+          box.appendChild(wrap);
+        });
+      }catch{}
+    }
+    async function submit(){
+      const nombre=(document.getElementById('nombre')||{}).value||'';
+      const ruc=(document.getElementById('ruc')||{}).value||'';
+      const email=(document.getElementById('email')||{}).value||'';
+      const pass=(document.getElementById('pass')||{}).value||'';
+      const pass2=(document.getElementById('pass2')||{}).value||'';
+      const lat=(document.getElementById('lat')||{}).value||'';
+      const lon=(document.getElementById('lon')||{}).value||'';
+      if(!nombre || !ruc){ showAlert('Nombre y RUC son requeridos','error'); return; }
+      if(!/^\d{11}$/.test(ruc)){ showAlert('RUC debe tener exactamente 11 dígitos','error'); return; }
+      if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
+      if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
+      let logo=null; const file=(document.getElementById('logo')||{}).files? (document.getElementById('logo').files[0]||null) : null; if(file){ logo = await readFileBase64(file); }
+      let f1=null; const file1=(document.getElementById('foto1')||{}).files? (document.getElementById('foto1').files[0]||null) : null; if(file1){ f1 = await readFileBase64(file1); }
+      let f2=null; const file2=(document.getElementById('foto2')||{}).files? (document.getElementById('foto2').files[0]||null) : null; if(file2){ f2 = await readFileBase64(file2); }
+      let f3=null; const file3=(document.getElementById('foto3')||{}).files? (document.getElementById('foto3').files[0]||null) : null; if(file3){ f3 = await readFileBase64(file3); }
+      try{
+        const body={ email, password:pass, ruc, nombre, logo_base64: logo, foto_local_1_base64: f1, foto_local_2_base64: f2, foto_local_3_base64: f3, lat: lat? Number(lat): null, lon: lon? Number(lon): null };
+        const r=await fetch('/api/auth/register/empresa', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+        const j=await r.json();
+        if(j.token){
+          setToken(j.token); setRole('empresa'); setUser(j.empresa);
+          try{
+            const items=[]; const box=document.getElementById('mat-box');
+            const checks=box ? box.querySelectorAll('input[type="checkbox"][data-mid]') : [];
+            checks.forEach((chk)=>{
+              if(chk.checked){
+                const mid=Number(chk.getAttribute('data-mid'));
+                const priceEl=box.querySelector(`input[data-price-for="${mid}"]`);
+                const condEl=box.querySelector(`input[data-cond-for="${mid}"]`);
+                const precio = priceEl && priceEl.value? Number(priceEl.value): 0;
+                const condiciones = condEl && condEl.value? String(condEl.value): null;
+                items.push({ material_id: mid, precio_por_kg: precio, condiciones });
+              }
+            });
+            if(items.length){ await fetch(`/api/empresas/${j.empresa.id}/materiales/upsert`, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${j.token}` }, body: JSON.stringify({ items }) }); }
+          }catch{}
+          window.location.href='/dashboard.html';
+          return;
+        }
+        showAlert('No se pudo registrar. Revisa los datos.','error');
+      }catch{ showAlert('Error de red al registrar.','error'); }
+    }
+    document.addEventListener('DOMContentLoaded', loadMateriales);
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row jc-between ai-center">
+      <div class="row ai-center gap-12"><div class="avatar">🏢</div><div><div class="title">Registro de Empresa</div><div class="subtitle">Crea tu cuenta y publica tu catálogo.</div></div></div>
+      <button class="btn secondary" onclick="goHome()">Inicio</button>
+    </div>
+    <div id="alert" class="badge" style="display:block; margin-top:10px; background:#F2FBF7; border-color:#cfeeda"></div>
+    <div class="panel mt-12">
+      <div class="grid2">
+        <div>
+          <label>Nombre de empresa</label>
+          <input id="nombre" type="text" placeholder="Nombre" />
+        </div>
+        <div>
+          <label>RUC</label>
+          <input id="ruc" type="text" placeholder="11 dígitos" maxlength="11" inputmode="numeric" pattern="^\d{11}$" />
+          <div class="hint">11 dígitos (numérico)</div>
+        </div>
+        <div>
+          <label>Correo</label>
+          <input id="email" type="email" placeholder="correo@empresa.com" />
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="pass" type="password" placeholder="••••" />
+        </div>
+        <div>
+          <label>Confirmar</label>
+          <input id="pass2" type="password" placeholder="••••" />
+        </div>
+        <div class="full">
+          <label>Logo</label>
+          <input id="logo" type="file" accept="image/png,image/jpeg" />
+          <div class="hint">Se guardará en /public/img</div>
+        </div>
+        <div class="full">
+          <label>Fotos del local</label>
+          <div class="grid2">
+            <div>
+              <input id="foto1" type="file" accept="image/png,image/jpeg" />
+              <div class="hint">foto_local_1</div>
+            </div>
+            <div>
+              <input id="foto2" type="file" accept="image/png,image/jpeg" />
+              <div class="hint">foto_local_2</div>
+            </div>
+            <div>
+              <input id="foto3" type="file" accept="image/png,image/jpeg" />
+              <div class="hint">foto_local_3</div>
+            </div>
+          </div>
+        </div>
+        <div class="full">
+          <label>Materiales y precios</label>
+          <div id="mat-box"></div>
+        </div>
+        <div>
+          <label>Lat</label>
+          <input id="lat" type="text" placeholder="opcional" />
+        </div>
+        <div>
+          <label>Lon</label>
+          <input id="lon" type="text" placeholder="opcional" />
+        </div>
+      </div>
+      <div class="row jc-between mt-12">
+        <button class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
+        <button class="btn" onclick="submit()">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

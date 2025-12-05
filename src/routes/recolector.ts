@@ -160,6 +160,11 @@ recolectorRouter.get("/:id/vehiculos", asyncHandler(async (req: Request, res: Re
   res.json(r.rows);
 }));
 
+recolectorRouter.get("/vehiculo_tipos", asyncHandler(async (_req: Request, res: Response) => {
+  const r = await pool.query("SELECT id, nombre FROM vehiculo_tipos WHERE activo=true ORDER BY nombre");
+  res.json(r.rows);
+}));
+
 recolectorRouter.get("/:id/perfil", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   console.log("reco_perfil_in", { id });
