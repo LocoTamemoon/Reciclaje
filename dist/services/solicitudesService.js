@@ -6,6 +6,7 @@ exports.updateDeliveryProximityAndState = updateDeliveryProximityAndState;
 exports.crearNuevaSolicitud = crearNuevaSolicitud;
 exports.aceptarSolicitud = aceptarSolicitud;
 exports.rechazarSolicitud = rechazarSolicitud;
+exports.confirmarDeliveryEmpresa = confirmarDeliveryEmpresa;
 exports.cancelarSolicitudPorUsuario = cancelarSolicitudPorUsuario;
 exports.republicarSolicitudPorUsuario = republicarSolicitudPorUsuario;
 exports.recalcularClasificacionYFee = recalcularClasificacionYFee;
@@ -199,6 +200,18 @@ async function rechazarSolicitud(empresaId, solicitudId) {
     if (!solicitud || solicitud.empresa_id !== empresaId)
         throw new Error("Solicitud no válida");
     return await (0, solicitudesRepo_1.actualizarEstadoSolicitud)(solicitudId, "rechazada");
+}
+async function confirmarDeliveryEmpresa(empresaId, solicitudId) {
+    const s = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
+    if (!s || Number(s.empresa_id) !== Number(empresaId))
+        throw new Error("Solicitud no válida");
+    if (String(s.tipo_entrega) !== 'delivery')
+        throw new Error("No es delivery");
+    await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS estado_publicacion TEXT");
+    await pool_1.pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS publicacion_expira_en TIMESTAMPTZ");
+    await pool_1.pool.query("UPDATE solicitudes SET estado='pendiente_delivery', estado_publicacion='publicada', publicacion_expira_en=NOW() + INTERVAL '30 minutes' WHERE id=$1", [solicitudId]);
+    const cur = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);
+    return cur;
 }
 async function cancelarSolicitudPorUsuario(usuarioId, solicitudId) {
     const solicitud = await (0, solicitudesRepo_1.obtenerSolicitud)(solicitudId);

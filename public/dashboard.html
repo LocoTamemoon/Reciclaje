@@ -71,6 +71,10 @@
     .avatar-lg{ width:96px; height:96px; border-radius:50%; object-fit:cover; background:#eef; display:block; }
     .chips{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
     .chip{ background:#eef; border-radius:999px; padding:4px 10px; font-weight:600; font-size:12px; }
+    .code-pill{ display:inline-block; font-family: ui-monospace, Menlo, monospace; font-weight:700; letter-spacing:1px; background:#0ea5e9; color:#052433; border:1px solid #0369a1; border-radius:12px; padding:6px 10px; box-shadow:0 4px 12px var(--shadow); }
+    .segmented{ display:flex; gap:8px; background:#ecfdf5; border:1px solid var(--border); border-radius:999px; padding:4px; }
+    .segmented .seg{ flex:1; }
+    .segmented .active{ background:#10b981; color:#081012; }
     .section-title{ font-weight:700; margin-top:18px; }
     .review-list{ display:flex; flex-direction:column; gap:14px; margin-top:12px; }
     .review-item{ padding:12px 0; border-bottom:1px solid #eee; }
@@ -355,7 +359,16 @@
           <h2>Usa tus puntos</h2>
           <div class="badge" id="rewards-puntos">Puntos: 0</div>
         </div>
-        <ul id="rewards-list" class="list"></ul>
+        <div class="segmented mt-8">
+          <button id="rewards-tab-catalog" class="btn secondary seg" onclick="setRewardsTab('catalog')">Catálogo</button>
+          <button id="rewards-tab-bank" class="btn secondary seg" onclick="setRewardsTab('bank')">Canjeados</button>
+        </div>
+        <ul id="rewards-list" class="list" style="margin-top:12px;"></ul>
+        <div id="reward-bank-header" class="row jc-between ai-center mt-12" style="display:none;">
+          <h3>Banco de Recompensas de Puntos</h3>
+          <button class="btn secondary" onclick="loadRewardBank()">Actualizar</button>
+        </div>
+        <ul id="reward-bank-list" class="list" style="display:none;"></ul>
       </section>
       <section id="view-resenas" class="panel bg-white/60 backdrop-blur-md ring-emerald-200 rounded-2xl" hidden>
         <div class="row jc-between">
@@ -757,7 +770,7 @@
       if (v==='perfil') loadPerfil();
       if (v==='empresa_solicitudes') loadSolicitudesEmpresa();
       if (v==='resenas' && role==='empresa') loadResenasEmpresa();
-      if (v==='rewards' && role==='usuario') loadRewards();
+      if (v==='rewards' && role==='usuario') { loadRewards(); loadRewardBank(); setRewardsTab('catalog'); }
       if (v==='mapa'){ if (!mapaInit) initMapa(); }
     }
     let notifES = null;
@@ -1023,7 +1036,7 @@
     }
     function logout(){ localStorage.clear(); window.location.href='/login.html'; }
     function authHeaders(){ return { 'Content-Type':'application/json', 'Authorization': 'Bearer '+token }; }
-    function displayEstadoSolicitud(estado){ return estado; }
+    function displayEstadoSolicitud(estado){ const e=String(estado||''); if (e==='pendiente_empresa') return 'pendiente_aceptacion_empresa'; return e; }
 
     let empresaSeleccionada = null;
     let materialesSeleccionados = [];
@@ -2567,7 +2580,11 @@
       const gastos = await (await fetch(`/api/usuarios/${user.id}/puntos/gastos`, { headers: authHeaders() })).json();
       const rewards = await (await fetch('/api/usuarios/recompensas', { headers: authHeaders() })).json();
       const names = new Map(rewards.map((r)=> [String(r.key), String(r.nombre)]));
-      histGastosData = gastos.map((g)=>({ ...g, nombre: names.get(String(g.reward_key)) || String(g.reward_key) }));
+      histGastosData = gastos.map((g)=>{
+        const nm0 = names.get(String(g.reward_key)) || String(g.reward_key);
+        const nm = ((String(nm0||'').toLowerCase().includes('movilidad')) || String(g.reward_key)==='descuento_movilidad') ? 'Suscripción Netflix' : String(nm0||'');
+        return { ...g, nombre: nm };
+      });
       renderHistGastos();
     }
     function renderHistGastos(){
@@ -3022,16 +3039,19 @@
       list.forEach(s=>{
         const li = document.createElement('li');
         const fotoBtn = s.foto_material_url ? `<button class=\"btn secondary\" onclick=\"openSolicitudFoto('${String(s.foto_material_url)}')\">Ver foto</button>` : '';
+        const isDel = String(s.tipo_entrega||'')==='delivery';
+        const isPendEmp = String(s.estado||'')==='pendiente_empresa';
+        const acciones = isDel && isPendEmp
+          ? `<button class=\"btn\" onclick=\"openAceptar(${s.id}, ${s.usuario_id})\">Detalles</button> <button class=\"btn\" onclick=\"empresaAceptar(${s.id})\">Confirmar delivery</button> ${fotoBtn} <button class=\"btn\" onclick=\"empresaRechazar(${s.id})\">Rechazar</button>`
+          : `<button class=\"btn\" onclick=\"openAceptar(${s.id}, ${s.usuario_id})\">Detalles</button> ${fotoBtn}
+             <button class=\"btn\" onclick=\"empresaRechazar(${s.id})\">Rechazar</button>
+             <button class=\"btn\" onclick=\"empresaPesaje(${s.id}, ${s.usuario_id})\">Pesaje</button>`;
         li.innerHTML = `<div class=\"row\" style=\"justify-content:space-between;\">\n\
           <div>
-            <div><strong>Solicitud #${s.id}</strong> del usuario ${s.usuario_id}</div>
-            <div class="muted">Estado: ${displayEstadoSolicitud(s.estado)} · ${new Date(s.creado_en).toLocaleString()}</div>
+            <div><strong>Solicitud #${s.id}</strong> del <a href=\"#\" class=\"link\" onclick=\"openPerfilUsuario(${s.usuario_id})\">usuario ${s.usuario_id}</a></div>
+            <div class=\"muted\">Estado: ${displayEstadoSolicitud(s.estado)} · ${new Date(s.creado_en).toLocaleString()}</div>
           </div>
-          <div class="right">
-            <button class=\"btn\" onclick=\"openAceptar(${s.id}, ${s.usuario_id})\">Ver detalle</button> ${fotoBtn}
-            <button class="btn" onclick="empresaRechazar(${s.id})">Rechazar</button>
-            <button class="btn" onclick="empresaPesaje(${s.id}, ${s.usuario_id})">Pesaje</button>
-          </div>
+          <div class=\"right\">${acciones}</div>
         </div>`;
         ul.appendChild(li);
       });
@@ -3045,9 +3065,10 @@
       list.forEach(it=>{
         const li = document.createElement('li');
         const puede = Number(user.puntos_acumulados||0) >= Number(it.costo);
+        const nombre = (String(it.nombre||'').toLowerCase().includes('movilidad') || String(it.key)==='descuento_movilidad') ? 'Suscripción Netflix' : String(it.nombre||'');
         li.innerHTML = `<div class="row" style="justify-content:space-between;">
           <div>
-            <div><strong>${it.nombre}</strong></div>
+            <div><strong>${nombre}</strong></div>
             <div class="muted">Costo: ${it.costo} puntos</div>
           </div>
           <div class="right"><button class="btn" ${puede? '' : 'disabled'} onclick="redeemReward('${it.key}', ${it.costo})">Canjear</button></div>
@@ -3061,8 +3082,78 @@
       if (j?.error==='insufficient_points') { alert('No tienes puntos suficientes'); return; }
       alert('Canje realizado');
       user.puntos_acumulados = Number(j.nuevo_puntos||user.puntos_acumulados);
+      try { const code = String(j.codigo||j.code||'').trim(); if (code){ const arr = JSON.parse(localStorage.getItem('reward_codes')||'[]'); arr.unshift({ key:String(key), code, ts: Date.now() }); localStorage.setItem('reward_codes', JSON.stringify(arr.slice(0,50))); } } catch {}
       loadRewards();
+      try { loadRewardBank(); } catch {}
       if (document.getElementById('view-perfil') && document.getElementById('view-perfil').hidden===false) loadPerfil();
+    }
+    async function loadRewardBank(){
+      const ul = document.getElementById('reward-bank-list');
+      if (!ul) return;
+      ul.innerHTML='';
+      const gastos = await (await fetch(`/api/usuarios/${user.id}/puntos/gastos`, { headers: authHeaders() })).json();
+      const rewards = await (await fetch('/api/usuarios/recompensas', { headers: authHeaders() })).json();
+      const names = new Map((Array.isArray(rewards)?rewards:[]).map((r)=> [String(r.key), String(r.nombre)]));
+      const rename = (name, key)=> ((String(name||'').toLowerCase().includes('movilidad')) || String(key)==='descuento_movilidad') ? 'Suscripción Netflix' : String(name||'');
+      const list = Array.isArray(gastos)? gastos : [];
+      list.slice().sort((a,b)=> new Date(b.creado_en||0).getTime() - new Date(a.creado_en||0).getTime()).forEach((g, idx)=>{
+        const nom0 = names.get(String(g.reward_key)) || String(g.nombre||g.reward_key||'Recompensa');
+        const nom = rename(nom0, String(g.reward_key||''));
+        const ts = new Date(g.creado_en||Date.now()).toLocaleString();
+        const pts = Number(g.puntos||0);
+        const code = String(g.codigo||g.reward_code||'');
+        const id = 'code-'+String(idx);
+        const storeKey = String(g.reward_key||'') + '|' + String(new Date(g.creado_en||Date.now()).getTime());
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="row jc-between"><div><div><strong>${nom}</strong></div><div class="muted">Gasto de puntos: ${pts} · ${ts}</div></div><div class="right"><span class="muted" id="${id}">Código: •••••••</span> <button id="btn-${id}" class="btn secondary" onclick="revealCode('${id}', '${code}', '${String(g.reward_key||'')}', '${storeKey}')">Desvelar</button></div></div>`;
+        ul.appendChild(li);
+      });
+    }
+    function revealCode(elId, code, key, storeKey){
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const c = String(code||'').trim();
+      if (c) {
+        el.textContent = c;
+        try{ el.className='code-pill'; }catch{}
+        const b = document.getElementById('btn-'+elId);
+        if (b){ b.textContent='Copiar'; b.onclick = ()=>{ try{ navigator.clipboard.writeText(String(el.textContent||'')); alert('Código copiado'); }catch{} }; }
+        return;
+      }
+      try {
+        const arr = JSON.parse(localStorage.getItem('reward_codes')||'[]');
+        const found = arr.find(x=> String(x.storeKey||x.key)===String(storeKey||key));
+        if (found && found.code){
+          el.textContent = String(found.code);
+          try{ el.className='code-pill'; }catch{}
+          const b = document.getElementById('btn-'+elId);
+          if (b){ b.textContent='Copiar'; b.onclick = ()=>{ try{ navigator.clipboard.writeText(String(el.textContent||'')); alert('Código copiado'); }catch{} }; }
+          return;
+        }
+      } catch {}
+      const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let s='';
+      for(let i=0;i<16;i++){ s+=chars[Math.floor(Math.random()*chars.length)]; }
+      const newCode = s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16);
+      el.textContent = newCode;
+      try{ el.className='code-pill'; }catch{}
+      const b = document.getElementById('btn-'+elId);
+      if (b){ b.textContent='Copiar'; b.onclick = ()=>{ try{ navigator.clipboard.writeText(String(newCode)); alert('Código copiado'); }catch{} }; }
+      try {
+        const arr = JSON.parse(localStorage.getItem('reward_codes')||'[]');
+        arr.unshift({ key:String(key), storeKey:String(storeKey||key), code:newCode, ts:Date.now() });
+        localStorage.setItem('reward_codes', JSON.stringify(arr.slice(0,100)));
+      } catch {}
+    }
+    function setRewardsTab(tab){
+      const cat = document.getElementById('rewards-list');
+      const bankH = document.getElementById('reward-bank-header');
+      const bank = document.getElementById('reward-bank-list');
+      const tCat = document.getElementById('rewards-tab-catalog');
+      const tBank = document.getElementById('rewards-tab-bank');
+      if (!cat || !bank || !bankH || !tCat || !tBank) return;
+      if (tab==='catalog'){ cat.style.display=''; bank.style.display='none'; bankH.style.display='none'; tCat.classList.add('active'); tBank.classList.remove('active'); }
+      else { cat.style.display='none'; bank.style.display=''; bankH.style.display=''; tCat.classList.remove('active'); tBank.classList.add('active'); }
     }
     async function loadResenasEmpresa(){
       const ul = document.getElementById('resenas-list');
@@ -3112,34 +3203,40 @@
     const nombres = new Map(mats.map(m=> [Number(m.material_id), String(m.nombre)]));
     const items = Array.isArray(sol?.items_json) ? sol.items_json : [];
     let total = 0;
+    let kgTotal = 0;
     const rows = items.map(it=>{
       const precio = precios.get(Number(it.material_id)) || 0;
       const kg = Number(it.kg)||0;
       const sub = precio * kg;
       total += sub;
+      kgTotal += kg;
       return { material_id: Number(it.material_id), nombre: (nombres.get(Number(it.material_id)) || ('#'+Number(it.material_id))), kg, precio, sub };
     });
     const detalle = document.getElementById('aceptar-detalle');
     let warn = '';
     try { const detTx = await (await fetch(`/api/transacciones/por_solicitud/${sid}`, { headers: authHeaders() })).json(); if (Boolean(detTx?.empresa_cambio_valores)) warn = `<div class=\"muted\" style=\"color:#d32f2f; margin-bottom:8px\">La empresa ${detTx.transaccion.empresa_nombre} cambió los valores en el pesaje final</div>`; } catch {}
-    const headerInfo = `<div class=\"row ai-center\" style=\"gap:8px; margin-bottom:8px;\"><div><strong>${usuarioNombre}${usuarioApellidos?(' '+usuarioApellidos):''}</strong></div><div class=\"muted\">${usuarioDni?('DNI '+usuarioDni):''}</div></div>`;
+    const headerInfo = `<div class=\"row ai-center\" style=\"gap:8px; margin-bottom:8px;\"><div><a href=\"#\" class=\"link\" onclick=\"openPerfilUsuario(${usuarioId})\"><strong>${usuarioNombre}${usuarioApellidos?(' '+usuarioApellidos):''}</strong></a></div><div class=\"muted\">${usuarioDni?('DNI '+usuarioDni):''}</div></div>`;
     const html = [warn, headerInfo, `<table style=\"width:100%; border-collapse:collapse;\">`,
       `<thead><tr><th style='text-align:left'>Material</th><th style='text-align:right'>Precio/kg</th><th style='text-align:right'>Kg</th><th style='text-align:right'>Subtotal</th></tr></thead>`,
       `<tbody>`,
       ...rows.map(r=>`<tr><td style='padding:6px'>${r.nombre}</td><td style='padding:6px; text-align:right'>${r.precio.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.kg.toFixed(2)}</td><td style='padding:6px; text-align:right'>${r.sub.toFixed(2)}</td></tr>`),
       `</tbody>`,
       `</table>`,
-      `<div class='right' style='margin-top:10px;'>Total estimado: <strong>S/ ${total.toFixed(2)}</strong></div>`
+      `<div class='right' style='margin-top:10px;'>Total estimado: <strong>S/ ${total.toFixed(2)}</strong> · Kg totales: <strong>${kgTotal.toFixed(2)} kg</strong></div>`
     ].join('');
     detalle.innerHTML = html;
     const btnPes = document.getElementById('btn-aceptar-pesaje');
+    const isDeliveryPendEmp = (String(sol?.tipo_entrega||'')==='delivery') && (String(sol?.estado||'')==='pendiente_empresa');
     const tipoEntrega = (String(sol?.tipo_entrega||'')==='delivery') ? 'Delivery' : 'Recojo';
     const addInfo = document.createElement('div');
     addInfo.className = 'muted';
     addInfo.textContent = 'Tipo de entrega: ' + tipoEntrega;
     const detEl = document.getElementById('aceptar-detalle');
     if (detEl) detEl.appendChild(addInfo);
-    if (btnPes) btnPes.onclick = ()=>{ closeAceptar(); empresaPesaje(sid, usuarioId); };
+    if (btnPes) {
+      if (isDeliveryPendEmp) { btnPes.style.display = 'none'; }
+      else { btnPes.style.display = ''; btnPes.onclick = ()=>{ closeAceptar(); empresaPesaje(sid, usuarioId); }; }
+    }
     document.getElementById('aceptar-modal').hidden = false;
   }
 
@@ -4084,7 +4181,8 @@
         if (vFile) vFile.onchange = async ()=>{ const g = vFile.files?.[0]||null; if (!g) return; const b64 = await new Promise((resolve)=>{ const fr=new FileReader(); fr.onload=()=>resolve(String(fr.result)); fr.readAsDataURL(g); }); const im = document.getElementById('reco-veh-img'); if (im) im.src = String(b64); const headers = Object.assign({}, authHeaders(), { 'Content-Type':'application/json' }); await fetch(`/api/recolector/${user.id}/perfil`, { method:'PATCH', headers, body: JSON.stringify({ foto_vehiculo_base64: b64 }) }); };
         const recoResList = document.getElementById('perfil-reco-resenas-list');
         const recoResRefresh = document.getElementById('perfil-reco-resenas-refresh');
-        async function loadRecoResenas(){ try{ const r = await fetch(`/api/resenas/recolector/${user.id}`, { headers: authHeaders() }); const list = await r.json(); if (recoResList){ recoResList.innerHTML=''; const arr = Array.isArray(list)?list:[]; arr.forEach(re=>{ const li=document.createElement('li'); const ts = new Date(re.creado_en||Date.now()).toLocaleString(); const stars = '★★★★★'.slice(0, Math.max(0, Math.min(5, Number(re.puntaje||0)))); const quien = String(re.evaluador_rol)==='empresa' ? (`Empresa #${re.evaluador_id}`) : (`Usuario #${re.evaluador_id}`); const msg = re.mensaje ? re.mensaje : '*****'; li.innerHTML = `<div class="row jc-between"><div><div><strong>${quien}</strong> <span class="muted">(${re.evaluador_rol})</span></div><div class="muted">${msg}</div></div><div class="right"><div class="muted">${ts}</div><div style="margin-top:4px;"><span class="badge">${stars}</span></div></div></div>`; recoResList.appendChild(li); }); if (arr.length===0){ const li=document.createElement('li'); li.className='muted'; li.textContent='Sin reseñas aún'; recoResList.appendChild(li); } } }catch{} }
+        async function loadRecoResenas(){ try{ const r = await fetch(`/api/resenas/recolector/${user.id}`, { headers: authHeaders() }); const list = await r.json(); if (recoResList){ recoResList.innerHTML=''; const arr = Array.isArray(list)?list:[]; for (const re of arr){ const li=document.createElement('li'); const ts = new Date(re.creado_en||Date.now()).toLocaleString(); const stars = '★★★★★'.slice(0, Math.max(0, Math.min(5, Number(re.puntaje||0)))); let autorNom = (re.autor_nombre && String(re.autor_nombre).trim()) || (String(re.evaluador_rol)==='usuario' ? [String(re.evaluador_nombre||'').trim(), String(re.evaluador_apellidos||'').trim()].filter(Boolean).join(' ') : String(re.empresa_nombre||'').trim()); if (!autorNom){ if (String(re.evaluador_rol)==='usuario'){ try{ const pj = await (await fetch(`/api/usuarios/${Number(re.evaluador_id)}/perfil`, { headers: authHeaders() })).json(); const u = pj?.usuario || pj || {}; autorNom = [String(u.nombre||'').trim(), String(u.apellidos||'').trim()].filter(Boolean).join(' '); }catch{} } else if (String(re.evaluador_rol)==='empresa'){ try{ const ep = await (await fetch(`/api/empresas/${Number(re.evaluador_id)}/perfil`, { headers: authHeaders() })).json(); const e = ep?.empresa || ep || {}; autorNom = String(e.nombre||'').trim(); }catch{} } }
+          autorNom = autorNom || (String(re.evaluador_rol)==='empresa' ? 'Empresa' : 'Usuario'); const msg = re.mensaje ? re.mensaje : '*****'; li.innerHTML = `<div class=\"row jc-between\"><div><div><strong>${autorNom}</strong> <span class=\"muted\">(${re.evaluador_rol})</span></div><div class=\"muted\">${msg}</div></div><div class=\"right\"><div class=\"muted\">${ts}</div><div style=\"margin-top:4px;\"><span class=\"badge\">${stars}</span></div></div></div>`; recoResList.appendChild(li); } if (arr.length===0){ const li=document.createElement('li'); li.className='muted'; li.textContent='Sin reseñas aún'; recoResList.appendChild(li); } } }catch{} }
         if (recoResRefresh) recoResRefresh.onclick = ()=> loadRecoResenas();
         await loadRecoResenas();
         return;
@@ -4935,7 +5033,7 @@
         const trabajos = Number(rp?.trabajos_completados||0);
         const items = Array.isArray(rs)? rs.slice(0,5).map(r=> {
           const fecha = r.creado_en ? new Date(r.creado_en).toLocaleString() : '';
-          const quien = String(r.evaluador_rol||'')==='empresa' ? (`Empresa #${String(r.evaluador_id||'')}`) : 'Usuario';
+          const quien = (r.autor_nombre && String(r.autor_nombre).trim()) || (String(r.evaluador_rol||'')==='empresa' ? 'Empresa' : 'Usuario');
           const msg = r.mensaje ? String(r.mensaje) : '';
           return `<li><div class=\"row jc-between\"><strong>${quien}</strong><span class=\"muted\">${fecha}</span></div><div class=\"muted\">Tx #${String(r.transaccion_id||'—')} · ⭐ ${Number(r.puntaje)}</div>${msg? `<div>${msg}</div>`:''}</li>`;
         }).join('') : '';

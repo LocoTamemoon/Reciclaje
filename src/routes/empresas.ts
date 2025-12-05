@@ -6,7 +6,7 @@ import { listarEmpresas, materialesDeEmpresa, crearEmpresa, actualizarUbicacionE
 import { historialEmpresa } from "../repositories/transaccionesRepo";
 import { upsertEmpresaMaterialPrecio, eliminarEmpresaMaterial } from "../repositories/materialesRepo";
 import { solicitudesPendientesEmpresa } from "../repositories/solicitudesRepo";
-import { aceptarSolicitud, rechazarSolicitud } from "../services/solicitudesService";
+import { aceptarSolicitud, rechazarSolicitud, confirmarDeliveryEmpresa } from "../services/solicitudesService";
 import { obtenerSolicitud } from "../repositories/solicitudesRepo";
 import { registrarPesajeYPago } from "../services/pagosService";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -72,6 +72,12 @@ empresasRouter.post("/:id/solicitudes/:sid/aceptar", asyncHandler(async (req: Re
     const activo = Boolean(st.rows[0]?.estado);
     if (!activo) { res.status(422).json({ error: "empresa_inactiva" }); return; }
   } catch {}
+  const solPre = await obtenerSolicitud(solicitudId);
+  if (String((solPre as any)?.tipo_entrega) === 'delivery' && String((solPre as any)?.estado) === 'pendiente_empresa') {
+    const pub = await confirmarDeliveryEmpresa(empresaId, solicitudId);
+    res.json({ solicitud: pub, publicado: true });
+    return;
+  }
   const s = await aceptarSolicitud(empresaId, solicitudId);
   const sol = await obtenerSolicitud(solicitudId);
   const items = Array.isArray((sol as any)?.items_json) ? (sol as any).items_json : [];

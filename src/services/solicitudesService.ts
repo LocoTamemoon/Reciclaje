@@ -162,6 +162,20 @@ export async function rechazarSolicitud(empresaId: number, solicitudId: number) 
   return await actualizarEstadoSolicitud(solicitudId, "rechazada");
 }
 
+export async function confirmarDeliveryEmpresa(empresaId: number, solicitudId: number) {
+  const s: any = await obtenerSolicitud(solicitudId);
+  if (!s || Number(s.empresa_id) !== Number(empresaId)) throw new Error("Solicitud no válida");
+  if (String(s.tipo_entrega) !== 'delivery') throw new Error("No es delivery");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS estado_publicacion TEXT");
+  await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS publicacion_expira_en TIMESTAMPTZ");
+  await pool.query(
+    "UPDATE solicitudes SET estado='pendiente_delivery', estado_publicacion='publicada', publicacion_expira_en=NOW() + INTERVAL '30 minutes' WHERE id=$1",
+    [solicitudId]
+  );
+  const cur = await obtenerSolicitud(solicitudId);
+  return cur;
+}
+
 export async function cancelarSolicitudPorUsuario(usuarioId: number, solicitudId: number) {
   const solicitud = await obtenerSolicitud(solicitudId);
   if (!solicitud || solicitud.usuario_id !== usuarioId) throw new Error("Solicitud no válida");

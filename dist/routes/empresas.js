@@ -82,6 +82,12 @@ exports.empresasRouter.post("/:id/solicitudes/:sid/aceptar", (0, asyncHandler_1.
         }
     }
     catch { }
+    const solPre = await (0, solicitudesRepo_2.obtenerSolicitud)(solicitudId);
+    if (String(solPre?.tipo_entrega) === 'delivery' && String(solPre?.estado) === 'pendiente_empresa') {
+        const pub = await (0, solicitudesService_1.confirmarDeliveryEmpresa)(empresaId, solicitudId);
+        res.json({ solicitud: pub, publicado: true });
+        return;
+    }
     const s = await (0, solicitudesService_1.aceptarSolicitud)(empresaId, solicitudId);
     const sol = await (0, solicitudesRepo_2.obtenerSolicitud)(solicitudId);
     const items = Array.isArray(sol?.items_json) ? sol.items_json : [];

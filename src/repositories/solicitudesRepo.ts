@@ -20,7 +20,7 @@ export async function crearSolicitudDelivery(
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS publicacion_expira_en timestamp");
   await pool.query("ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS usuario_pick_actual boolean DEFAULT false");
   const res = await pool.query(
-    "INSERT INTO solicitudes(usuario_id, empresa_id, estado, tipo_entrega, estado_publicacion, delivery_fee, clasificacion_distancia, delivery_consent, delivery_terms_version, usuario_pick_actual, publicacion_expira_en) VALUES($1,$2,'pendiente_delivery','delivery','publicada',$3,$4,$5,$6,$7, NOW() + INTERVAL '30 minutes') RETURNING *",
+    "INSERT INTO solicitudes(usuario_id, empresa_id, estado, tipo_entrega, delivery_fee, clasificacion_distancia, delivery_consent, delivery_terms_version, usuario_pick_actual) VALUES($1,$2,'pendiente_empresa','delivery',$3,$4,$5,$6,$7) RETURNING *",
     [usuarioId, empresaId, deliveryFee, clasificacion, consent, termsVersion, Boolean(useCurrent)]
   );
   return res.rows[0];
@@ -36,7 +36,7 @@ export async function solicitudesPendientesEmpresa(empresaId: number) {
     "UPDATE solicitudes SET estado='expirada', estado_publicacion='expirada' WHERE tipo_entrega='delivery' AND estado='pendiente_delivery' AND estado_publicacion='publicada' AND publicacion_expira_en IS NOT NULL AND publicacion_expira_en <= NOW()"
   );
   const res = await pool.query(
-    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND estado IN ('llego_empresa','entregado_empresa') AND estado NOT IN ('empresa_confirmo_recepcion','completada','rechazada','cancelada','expirada')) ) ORDER BY creado_en DESC",
+    "SELECT * FROM solicitudes WHERE empresa_id=$1 AND ( (tipo_entrega IS DISTINCT FROM 'delivery' AND estado='pendiente_empresa') OR (tipo_entrega='delivery' AND (estado='pendiente_empresa' OR (estado IN ('llego_empresa','entregado_empresa') AND estado NOT IN ('empresa_confirmo_recepcion','completada','rechazada','cancelada','expirada'))) ) ) ORDER BY creado_en DESC",
     [empresaId]
   );
   return res.rows;
