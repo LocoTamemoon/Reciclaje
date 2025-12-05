@@ -226,9 +226,15 @@ recolectorRouter.patch("/:id/distrito", asyncHandler(async (req: Request, res: R
   res.json(r.rows[0] || null);
 }));
 
+function toBool(v: any): boolean {
+  if (v === true || v === 1) return true;
+  const s = String(v).toLowerCase();
+  return s === "true" || s === "1";
+}
+
 recolectorRouter.patch("/:id/estado", asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const estado = Boolean(req.body?.estado);
+  const estado = toBool((req.body as any)?.estado);
   if (!id || Number.isNaN(id)) { res.status(400).json({ error: "invalid_id" }); return; }
   const r = await pool.query("UPDATE recolectores SET estado=$2 WHERE id=$1 RETURNING id, estado", [id, estado]);
   if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }

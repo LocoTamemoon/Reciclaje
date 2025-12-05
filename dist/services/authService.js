@@ -63,6 +63,10 @@ async function setEmpresaCredentialsByRuc(ruc, email, password) {
 }
 async function registerRecolector(email, password, nombre, apellidos, dni, distrito_id, foto_perfil_path, foto_documento_path, foto_vehiculo_path, lat, lon, vehiculo_tipo_id, placa, capacidad_kg) {
     const hash = await bcryptjs_1.default.hash(password, 10);
+    try {
+        await pool_1.pool.query("ALTER TABLE recolectores ADD COLUMN IF NOT EXISTS estado BOOLEAN NOT NULL DEFAULT false");
+    }
+    catch { }
     const res = await pool_1.pool.query("INSERT INTO recolectores(email, password_hash, nombre, apellidos, dni, id_distrito, foto_perfil, foto_documento, foto_vehiculo, lat, lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *", [email, hash, nombre, apellidos, dni, distrito_id, foto_perfil_path, foto_documento_path, foto_vehiculo_path, lat, lon]);
     const r = res.rows[0];
     if (vehiculo_tipo_id != null && placa && capacidad_kg != null) {
@@ -85,6 +89,8 @@ async function loginRecolector(email, password) {
     const ok = await bcryptjs_1.default.compare(password, r.password_hash || "");
     if (!ok)
         throw new Error("credenciales_invalidas");
+    if (r.estado !== true)
+        throw new Error("recolector_inactivo");
     const token = signToken({ tipo: "recolector", id: r.id });
     return { token, recolector: r };
 }

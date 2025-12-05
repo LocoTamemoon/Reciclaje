@@ -9,6 +9,12 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const pool_1 = require("../db/pool");
 const asyncHandler_1 = require("../middleware/asyncHandler");
 exports.adminRouter = (0, express_1.Router)();
+function toBool(v) {
+    if (v === true || v === 1)
+        return true;
+    const s = String(v).toLowerCase();
+    return s === "true" || s === "1";
+}
 function requireAdmin(req, res, next) {
     try {
         const auth = String(req.headers.authorization || '');
@@ -41,7 +47,7 @@ exports.adminRouter.get("/usuarios", requireAdmin, (0, asyncHandler_1.asyncHandl
 }));
 exports.adminRouter.patch("/usuarios/:id/estado", requireAdmin, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
-    const estado = Boolean(req.body?.estado);
+    const estado = toBool(req.body?.estado);
     if (!id || Number.isNaN(id)) {
         res.status(400).json({ error: "invalid_id" });
         return;
@@ -72,7 +78,7 @@ exports.adminRouter.get("/recolectores", requireAdmin, (0, asyncHandler_1.asyncH
 }));
 exports.adminRouter.patch("/recolectores/:id/estado", requireAdmin, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
-    const estado = Boolean(req.body?.estado);
+    const estado = toBool(req.body?.estado);
     if (!id || Number.isNaN(id)) {
         res.status(400).json({ error: "invalid_id" });
         return;
@@ -90,7 +96,7 @@ exports.adminRouter.get("/empresas", requireAdmin, (0, asyncHandler_1.asyncHandl
 }));
 exports.adminRouter.patch("/empresas/:id/estado", requireAdmin, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const id = Number(req.params.id);
-    const estado = Boolean(req.body?.estado);
+    const estado = toBool(req.body?.estado);
     if (!id || Number.isNaN(id)) {
         res.status(400).json({ error: "invalid_id" });
         return;
@@ -199,7 +205,7 @@ exports.adminRouter.get("/resenas", requireAdmin, (0, asyncHandler_1.asyncHandle
 exports.adminRouter.patch("/resenas/:tipo/:id/estado", requireAdmin, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const tipo = String(req.params.tipo);
     const id = Number(req.params.id);
-    const estado = Boolean(req.body?.estado);
+    const estado = toBool(req.body?.estado);
     if (!id || Number.isNaN(id)) {
         res.status(400).json({ error: "invalid_id" });
         return;

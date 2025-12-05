@@ -5,6 +5,12 @@ import { asyncHandler } from "../middleware/asyncHandler";
 
 export const adminRouter = Router();
 
+function toBool(v: any): boolean {
+  if (v === true || v === 1) return true;
+  const s = String(v).toLowerCase();
+  return s === "true" || s === "1";
+}
+
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   try {
     const auth = String(req.headers.authorization||'');
@@ -31,7 +37,7 @@ adminRouter.get("/usuarios", requireAdmin, asyncHandler(async (_req: Request, re
 
 adminRouter.patch("/usuarios/:id/estado", requireAdmin, asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const estado = Boolean(req.body?.estado);
+  const estado = toBool((req.body as any)?.estado);
   if (!id || Number.isNaN(id)) { res.status(400).json({ error: "invalid_id" }); return; }
   const r = await pool.query("UPDATE usuarios SET estado=$2 WHERE id=$1 RETURNING id, estado", [id, estado]);
   if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }
@@ -58,7 +64,7 @@ adminRouter.get("/recolectores", requireAdmin, asyncHandler(async (_req: Request
 
 adminRouter.patch("/recolectores/:id/estado", requireAdmin, asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const estado = Boolean(req.body?.estado);
+  const estado = toBool((req.body as any)?.estado);
   if (!id || Number.isNaN(id)) { res.status(400).json({ error: "invalid_id" }); return; }
   const r = await pool.query("UPDATE recolectores SET estado=$2 WHERE id=$1 RETURNING id, estado", [id, estado]);
   if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }
@@ -72,7 +78,7 @@ adminRouter.get("/empresas", requireAdmin, asyncHandler(async (_req: Request, re
 
 adminRouter.patch("/empresas/:id/estado", requireAdmin, asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const estado = Boolean(req.body?.estado);
+  const estado = toBool((req.body as any)?.estado);
   if (!id || Number.isNaN(id)) { res.status(400).json({ error: "invalid_id" }); return; }
   const r = await pool.query("UPDATE empresas SET estado=$2 WHERE id=$1 RETURNING id, estado", [id, estado]);
   if (!r.rows[0]) { res.status(404).json({ error: "not_found" }); return; }
@@ -167,7 +173,7 @@ adminRouter.get("/resenas", requireAdmin, asyncHandler(async (_req: Request, res
 adminRouter.patch("/resenas/:tipo/:id/estado", requireAdmin, asyncHandler(async (req: Request, res: Response) => {
   const tipo = String(req.params.tipo);
   const id = Number(req.params.id);
-  const estado = Boolean(req.body?.estado);
+  const estado = toBool((req.body as any)?.estado);
   if (!id || Number.isNaN(id)) { res.status(400).json({ error: "invalid_id" }); return; }
   let sql: string | null = null;
   switch (tipo) {

@@ -53,7 +53,7 @@ exports.usuariosRouter.get("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async
     const userRes = await pool_1.pool.query("SELECT id, nombre, apellidos, dni, puntos_acumulados, kg_totales, reputacion_promedio, resenas_recibidas_count, foto_perfil_path FROM usuarios WHERE id=$1", [id]);
     const u = userRes.rows[0] || null;
     const matsRes = await pool_1.pool.query("SELECT umt.material_id, m.nombre, umt.kg_totales FROM usuario_materiales_totales umt JOIN materiales m ON m.id=umt.material_id WHERE umt.usuario_id=$1 ORDER BY m.nombre", [id]);
-    const resenasRes = await pool_1.pool.query("SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 ORDER BY ru.creado_en DESC", [id]);
+    const resenasRes = await pool_1.pool.query("SELECT ru.id, ru.puntaje, ru.mensaje, ru.creado_en, ru.transaccion_id, ru.empresa_id, COALESCE(e.nombre, 'Empresa ' || e.id) AS empresa_nombre FROM resenas_usuarios ru JOIN empresas e ON e.id=ru.empresa_id WHERE ru.usuario_id=$1 AND ru.estado=true ORDER BY ru.creado_en DESC", [id]);
     res.json({ usuario: u, materiales: matsRes.rows, resenas: resenasRes.rows });
 }));
 exports.usuariosRouter.patch("/:id/perfil", (0, asyncHandler_1.asyncHandler)(async (req, res) => {
