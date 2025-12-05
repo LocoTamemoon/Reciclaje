@@ -468,7 +468,7 @@
           <div>Comisión (10%): <strong id="pesaje-fee">S/ 0.00</strong></div>
           <div>Total a pagar: <strong id="pesaje-net">S/ 0.00</strong></div>
           <div class="row" style="gap:8px; align-items:center;">
-            
+            <label class="check-wrap"><input type="checkbox" id="acepto-tyc" /> Acepto los términos y condiciones de Uso de la Plataforma VidaVerde</label>
           </div>
         </div>
       </section>
@@ -3905,9 +3905,12 @@
         });
       });
       actualizarPesajeTotal();
+      const tyc = document.getElementById('acepto-tyc');
+      if (tyc) { tyc.checked = false; tyc.addEventListener('change', actualizarPesajeTotal); }
       const btn = document.getElementById('btn-pesaje-confirm');
       const hasKg = materialesSeleccionados.some(m=> Number(m.kg||0) > 0);
-      if (btn) btn.disabled = !hasKg;
+      const tycChecked = Boolean(tyc && tyc.checked);
+      if (btn) btn.disabled = !(hasKg && tycChecked);
     }
     function actualizarPesajeTotal(){
       let total = 0;
@@ -3927,7 +3930,9 @@
       if (netEl) netEl.textContent = 'S/ ' + net.toFixed(2);
       const btn = document.getElementById('btn-pesaje-confirm');
       const hasKg = materialesSeleccionados.some(m=> Number(m.kg||0) > 0);
-      if (btn) btn.disabled = !hasKg;
+      const tyc = document.getElementById('acepto-tyc');
+      const tycChecked = Boolean(tyc && tyc.checked);
+      if (btn) btn.disabled = !(hasKg && tycChecked);
     }
     function cancelarPesaje(){ setView('empresa_solicitudes'); }
     async function confirmarPesaje(){
