@@ -2803,11 +2803,12 @@
         if (uid>0){ try{ const pj = await (await fetch(`/api/usuarios/${uid}/perfil`, { headers: authHeaders() })).json(); const u = pj?.usuario||pj||{}; const nn = [String(u.nombre||'').trim(), String(u.apellidos||'').trim()].filter(Boolean).join(' '); usuarioNombreFull = nn || (`Usuario #${uid}`); if (u?.dni) usuarioDniText = 'DNI '+String(u.dni); }catch{} }
         if (eid>0){ try{ const pj = await (await fetch(`/api/empresas/${eid}/perfil`, { headers: authHeaders() })).json(); const e = pj?.empresa||pj||{}; empresaNombreFull = String(e?.nombre||'') || (`Empresa #${eid}`); if (e?.ruc) empresaRucText = 'RUC '+String(e.ruc); }catch{} }
         let handoffId = null; let originalId = null;
-        try { const sid2 = Number(base?.transaccion?.solicitud_id||0); if (sid2>0){ const sj = await (await fetch(`/api/solicitudes/${sid2}`, { headers: authHeaders() })).json(); const rid = Number(sj?.recolector_id||0); const pid = Number(sj?.pickup_recolector_id||0); const hid = Number(sj?.handoff_recolector_id||0); originalId = rid>0 ? rid : null; if (hid>0) handoffId = hid; else if (pid>0 && pid!==rid) handoffId = pid; } } catch {}
+        try { const sid2 = Number(base?.transaccion?.solicitud_id||0); if (sid2>0){ const sj = await (await fetch(`/api/solicitudes/${sid2}`, { headers: authHeaders() })).json(); const rid = Number(sj?.recolector_id||0); const pid = Number(sj?.pickup_recolector_id||0); const hid = Number(sj?.handoff_recolector_id||0); originalId = (pid>0 ? pid : (rid>0 ? rid : null)); handoffId = (hid>0 ? hid : ((pid>0 && pid!==rid) ? pid : null)); } } catch {}
         if (originalId){ try{ const rp0 = await (await fetch(`/api/recolector/${originalId}/perfil`, { headers: authHeaders() })).json(); const nn0 = [String(rp0?.nombre||'').trim(), String(rp0?.apellidos||'').trim()].filter(Boolean).join(' '); originalRecoNombreFull = nn0 || (`Recolector #${originalId}`); if (rp0?.dni) originalRecoDniText = 'DNI '+String(rp0.dni); } catch {} }
         if (handoffId){ try{ const rp = await (await fetch(`/api/recolector/${handoffId}/perfil`, { headers: authHeaders() })).json(); const nn = [String(rp?.nombre||'').trim(), String(rp?.apellidos||'').trim()].filter(Boolean).join(' '); handoffRecoNombreFull = nn || (`Recolector #${handoffId}`); if (rp?.dni) handoffRecoDniText = 'DNI '+String(rp.dni); } catch {} }
-        const rutaHead = handoffId ? 'Recolector original → Usuario → Recolector (handoff) → Empresa' : 'Recolector → Usuario → Empresa';
-        const lineaR0 = handoffId ? `<div class=\"mt-2\"><span class=\"badge\">Recolector original</span> <strong>${originalRecoNombreFull||('Recolector #'+String(originalId||''))}</strong> ${originalRecoDniText?`<span class=\"muted\">(${originalRecoDniText})</span>`:''}</div>` : '';
+        const showR0 = (handoffId!=null && originalId!=null && Number(originalId)!==Number(handoffId));
+        const rutaHead = handoffId ? (showR0 ? 'Recolector original → Usuario → Recolector (handoff) → Empresa' : 'Usuario → Recolector (handoff) → Empresa') : 'Recolector → Usuario → Empresa';
+        const lineaR0 = showR0 ? `<div class=\"mt-2\"><span class=\"badge\">Recolector original</span> <strong>${originalRecoNombreFull||('Recolector #'+String(originalId||''))}</strong> ${originalRecoDniText?`<span class=\"muted\">(${originalRecoDniText})</span>`:''}</div>` : '';
         const lineaU = `<div><span class=\"badge\">Usuario</span> <strong>${usuarioNombreFull||('Usuario #'+String(uid||''))}</strong> ${usuarioDniText?`<span class=\"muted\">(${usuarioDniText})</span>`:''}</div>`;
         const lineaH = handoffId ? `<div class=\"mt-2\"><span class=\"badge\">Recolector (handoff)</span> <strong>${handoffRecoNombreFull||('Recolector #'+handoffId)}</strong> ${handoffRecoDniText?`<span class=\"muted\">(${handoffRecoDniText})</span>`:''}</div>` : '';
         const lineaE = `<div class=\"mt-2\"><span class=\"badge\">Empresa</span> <strong>${empresaNombreFull||('Empresa #'+String(eid||''))}</strong> ${empresaRucText?`<span class=\"muted\">(${empresaRucText})</span>`:''}</div>`;
@@ -3209,8 +3210,9 @@
       const pts = Array.isArray(jj?.points) ? jj.points.map(p=> L.latLng(Number(p.lat), Number(p.lon))) : [];
       if (pts.length >= 2) {
         viaPrevCoords = pts;
+        try { if (Array.isArray(viaPrevCoords) && viaPrevCoords.length>0 && Array.isArray(viaLastPt)) { let bi=0, bd=Infinity; for (let k=0;k<viaPrevCoords.length;k++){ const p=viaPrevCoords[k]; const dd=(p.lat-viaLastPt[0])*(p.lat-viaLastPt[0])+(p.lng-viaLastPt[1])*(p.lng-viaLastPt[1]); if (dd<bd){ bd=dd; bi=k; } } viaProgIdx = bi; } } catch {}
         viaPoly = L.polyline(pts, { color: '#22c55e', weight: 4 }).addTo(viaMap);
-        try { if (!viaStartMarker && viaPrevCoords[0]) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+        try { if (!viaStartMarker && viaPrevCoords[0] && viaProgIdx===0) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
         try { viaMap.fitBounds(viaPoly.getBounds()); } catch {}
         buildMetrics(viaPrevCoords);
         try {
@@ -3280,11 +3282,12 @@
           const coords = e?.routes?.[0]?.coordinates || [];
             const pts2 = Array.isArray(coords) ? coords.map(c=> L.latLng(c.lat, c.lng)) : [];
             viaPrevCoords = pts2;
+            try { if (Array.isArray(viaPrevCoords) && viaPrevCoords.length>0 && Array.isArray(viaLastPt)) { let bi=0, bd=Infinity; for (let k=0;k<viaPrevCoords.length;k++){ const p=viaPrevCoords[k]; const dd=(p.lat-viaLastPt[0])*(p.lat-viaLastPt[0])+(p.lng-viaLastPt[1])*(p.lng-viaLastPt[1]); if (dd<bd){ bd=dd; bi=k; } } viaProgIdx = bi; } } catch {}
             try {
               if (viaPoly) { viaPoly.remove(); viaPoly = null; }
             if (pts2.length >= 2) {
               viaPoly = L.polyline(pts2, { color: '#22c55e', weight: 4 }).addTo(viaMap);
-              try { if (!viaStartMarker && viaPrevCoords[0]) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+              try { if (!viaStartMarker && viaPrevCoords[0] && viaProgIdx===0) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
               buildMetrics(viaPrevCoords);
             }
             } catch {}
@@ -3312,8 +3315,9 @@
               const pts3 = Array.isArray(coordsGeo) ? coordsGeo.map(([lon,lat])=> L.latLng(Number(lat), Number(lon))) : [];
               if (!viaPoly && pts3.length>=2){
                 viaPrevCoords = pts3;
+                try { if (Array.isArray(viaPrevCoords) && viaPrevCoords.length>0 && Array.isArray(viaLastPt)) { let bi=0, bd=Infinity; for (let k=0;k<viaPrevCoords.length;k++){ const p=viaPrevCoords[k]; const dd=(p.lat-viaLastPt[0])*(p.lat-viaLastPt[0])+(p.lng-viaLastPt[1])*(p.lng-viaLastPt[1]); if (dd<bd){ bd=dd; bi=k; } } viaProgIdx = bi; } } catch {}
                 viaPoly = L.polyline(pts3, { color:'#22c55e', weight:4 }).addTo(viaMap);
-                try { if (!viaStartMarker && viaPrevCoords[0]) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+                try { if (!viaStartMarker && viaPrevCoords[0] && viaProgIdx===0) { viaStartMarker = L.marker(viaPrevCoords[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
                 try { viaMap.fitBounds(viaPoly.getBounds()); } catch {}
                 try { viaMap.invalidateSize(); } catch {}
                 buildMetrics(viaPrevCoords);
@@ -3333,10 +3337,11 @@
             if (eLat!=null && eLon!=null) raw.push(L.latLng(Number(eLat), Number(eLon)));
             if (raw.length>=2){
               viaPoly = L.polyline(raw, { color:'#22c55e', weight:4 }).addTo(viaMap);
-              try { if (!viaStartMarker) { viaStartMarker = L.marker(raw[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
+              try { if (!viaStartMarker && viaProgIdx===0) { viaStartMarker = L.marker(raw[0], { icon: partidaIcon }).addTo(viaMap); } } catch {}
               try { viaMap.fitBounds(viaPoly.getBounds()); } catch {}
               try { viaMap.invalidateSize(); } catch {}
               viaPrevCoords = raw;
+              try { if (Array.isArray(viaPrevCoords) && viaPrevCoords.length>0 && Array.isArray(viaLastPt)) { let bi=0, bd=Infinity; for (let k=0;k<viaPrevCoords.length;k++){ const p=viaPrevCoords[k]; const dd=(p.lat-viaLastPt[0])*(p.lat-viaLastPt[0])+(p.lng-viaLastPt[1])*(p.lng-viaLastPt[1]); if (dd<bd){ bd=dd; bi=k; } } viaProgIdx = bi; } } catch {}
               buildMetrics(viaPrevCoords);
             }
           }
@@ -3469,6 +3474,7 @@
               fetch(`/api/recolector/${recoId}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat: pt[0], lon: pt[1] }) });
             }
           } catch {}
+          if (viaHoldTimer) { try{ clearInterval(viaHoldTimer); }catch{} viaHoldTimer = null; }
           if (!(viaHandoffPublished || viaHandoffInExchange)) placeSimMarkerDebounced(pt);
           try {
             if (!(viaHandoffPublished || viaHandoffInExchange)) {
