@@ -146,8 +146,7 @@
         </div>
         <div class="row" style="gap:8px; align-items:center; margin-top:8px;">
           <div class="muted">Vehículo activo:</div>
-          <select id="reco-vehiculo" style="min-width:220px;"></select>
-          <button class="btn secondary" onclick="loadVehiculosRecolector()">Actualizar vehículos</button>
+          <span id="reco-vehiculo-static" class="badge"></span>
         </div>
         <div id="reco-current" class="card" style="display:none; margin-top:8px;">
           <div class="row jc-between ai-center">
@@ -1270,30 +1269,19 @@
 
     async function loadVehiculosRecolector(){
       try {
-        const sel = document.getElementById('reco-vehiculo');
-        if (!sel) return;
-        sel.innerHTML = '';
+        const label = document.getElementById('reco-vehiculo-static');
+        if (!label) return;
+        label.textContent = '';
         const r = await fetch(`/api/recolector/${user.id}/vehiculos`, { headers: authHeaders() });
         const list = await r.json();
         const actives = Array.isArray(list) ? list.filter(v=> Boolean(v?.activo)) : [];
-        const saved = Number(localStorage.getItem('reco_vehiculo_id')||'');
-        actives.forEach(v=>{
-          const opt = document.createElement('option');
-          opt.value = String(v.id);
-          opt.textContent = `${v.placa||('Vehículo '+v.id)} · ${Number(v.capacidad_kg||0)} kg`;
-          sel.appendChild(opt);
-        });
-        if (actives.length===0){
-          const opt = document.createElement('option');
-          opt.value = '';
-          opt.textContent = 'Sin vehículos activos';
-          sel.appendChild(opt);
+        let vehId = Number(localStorage.getItem('reco_vehiculo_id')||'');
+        if (Number.isNaN(vehId) || !actives.some(v=> Number(v.id)===vehId)) {
+          vehId = actives.length>0 ? Number(actives[0].id) : NaN;
         }
-        if (!Number.isNaN(saved)) {
-          const ok = actives.some(v=> Number(v.id)===saved);
-          if (ok) sel.value = String(saved);
-        }
-        sel.onchange = ()=>{ const v = Number(sel.value||''); if (!Number.isNaN(v)) localStorage.setItem('reco_vehiculo_id', String(v)); };
+        if (!Number.isNaN(vehId)) localStorage.setItem('reco_vehiculo_id', String(vehId));
+        const cur = actives.find(v=> Number(v.id)===vehId) || null;
+        label.textContent = cur ? `${cur.placa||('Vehículo '+cur.id)} · ${Number(cur.capacidad_kg||0)} kg` : 'Sin vehículos activos';
       } catch {}
     }
 
@@ -1892,8 +1880,7 @@
     }
 
     async function recolectorAceptar(sid){
-      const selVeh = document.getElementById('reco-vehiculo');
-      const vehId = selVeh && selVeh.value ? Number(selVeh.value) : NaN;
+      const vehId = Number(localStorage.getItem('reco_vehiculo_id')||'');
       if (Number.isNaN(vehId)) { showErrorBox('Vehículo obligatorio', 'Debes seleccionar un vehículo activo para aceptar el delivery.'); return; }
       const body = { recolector_id: user.id, vehiculo_id: vehId };
       try {
