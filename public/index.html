@@ -3,177 +3,345 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vida Verde · Home</title>
+  <title>Vida Verde · Reciclaje</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{ --bg:#f6fbf7; --bg2:#eef7f2; --panel:#ffffff; --panel2:#f8fbf8; --muted:#7b978b; --primary:#3ac27f; --accent:#38c1b3; --text:#0f172a; --border:#d9e7de; --shadow:rgba(15,60,30,0.08); }
-    body{ margin:0; font-family:system-ui, Segoe UI, Arial; background:linear-gradient(120deg, var(--bg), var(--bg2)); color:var(--text); }
-    .container{ max-width:1080px; margin:0 auto; padding:0 20px; }
-    .nav{ position:sticky; top:0; z-index:10; background:var(--panel); border-bottom:1px solid var(--border); box-shadow:0 6px 16px var(--shadow); }
-    .nav-inner{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; }
-    .brand{ display:flex; align-items:center; gap:8px; }
-    .brand-mark{ width:26px; height:26px; border-radius:999px; background:linear-gradient(180deg, #eafbf3, #d6f5e6); border:1px solid var(--border); box-shadow:0 4px 10px var(--shadow); animation:brandIn .6s ease-out; }
-    .brand-name{ font-weight:700; animation:fadeIn .6s ease-out; }
-    .menu{ display:flex; gap:14px; align-items:center; justify-content:center; }
-    .menu a{ color:#475569; text-decoration:none; font-weight:600; padding:6px 8px; border-radius:8px; transition:background-color .25s ease, color .25s ease, transform .25s ease; }
-    .menu a:hover{ background:#edf7f2; }
-    .nav-actions{ display:flex; gap:8px; align-items:center; }
-    .btn{ background:linear-gradient(180deg, #33cf79, var(--primary)); color:#083e2a; border:none; border-radius:10px; padding:8px 12px; cursor:pointer; box-shadow:0 6px 14px var(--shadow); font-weight:600; transition:transform .25s ease, filter .25s ease, box-shadow .25s ease; }
-    .btn.secondary{ background:linear-gradient(180deg, #3ed1c3, var(--accent)); color:#083333; }
-    .hero{ padding:48px 0; }
-    .hero-inner{ display:grid; grid-template-columns: 1.1fr 0.9fr; gap:20px; align-items:center; }
-    .hero h1{ margin:0 0 10px; font-size:30px; font-weight:800; }
-    .hero p{ margin:0 0 14px; color:#576a62; }
-    .illustration{ background:linear-gradient(180deg, #ffffff, #fbfdfc); border:1px solid var(--border); border-radius:16px; height:220px; box-shadow:0 10px 24px var(--shadow); }
-    .section{ padding:36px 0; }
-    .section h2{ margin:0 0 16px; font-size:22px; font-weight:700; }
-    .grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
-    .card{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:0 6px 14px var(--shadow); transition:transform .25s ease, box-shadow .25s ease; }
-    .muted{ color:var(--muted); font-size:14px; }
-    .steps{ display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; }
-    .step{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 6px 14px var(--shadow); transition:transform .25s ease, box-shadow .25s ease; }
-    .benefits{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
-    .benefit{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 6px 14px var(--shadow); transition:transform .25s ease, box-shadow .25s ease; }
-    .commit{ background:linear-gradient(180deg, #ffffff, #fbfdfc); border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:0 10px 24px var(--shadow); }
-    .footer{ margin-top:40px; background:#ffffff; border-top:1px solid var(--border); }
-    .footer-inner{ display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; padding:16px 0; }
-    .footer a{ color:#475569; text-decoration:none; }
-    .card:hover, .step:hover, .benefit:hover{ transform:translateY(-3px); box-shadow:0 10px 22px var(--shadow); }
-    .btn:hover{ transform:translateY(-1px); filter:brightness(1.06); }
-    .reveal{ opacity:0; transform:translateY(12px); transition:opacity .4s ease, transform .4s ease; }
-    .reveal.visible{ opacity:1; transform:translateY(0); }
-    @keyframes brandIn{ from{ transform:scale(.92); opacity:0; } to{ transform:scale(1); opacity:1; } }
-    @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
-    .sponsors{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
-    .sponsor-card{ background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:0 6px 14px var(--shadow); display:flex; align-items:center; gap:10px; transition:transform .25s ease, box-shadow .25s ease; }
-    .sponsor-logo{ width:34px; height:34px; border-radius:999px; background:linear-gradient(180deg, #eafbf3, #d6f5e6); border:1px solid var(--border); box-shadow:0 4px 10px var(--shadow); flex-shrink:0; }
-    .sponsor-name{ font-weight:600; color:#0f172a; }
-    .sponsor-card:hover{ transform:translateY(-3px); box-shadow:0 10px 22px var(--shadow); }
-    @media (max-width: 860px){ .hero-inner{ grid-template-columns: 1fr; } }
+    html{ scroll-behavior: smooth; }
+    body{ font-family: 'Inter', system-ui, Segoe UI, Arial; animation: pageIn .6s ease-out both; }
+    section{ scroll-margin-top: 88px; }
+
+    .carousel{ position: relative; width: 100%; height: 100%; }
+    .carousel img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .8s ease; }
+
+    .dots{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%); display:flex; gap:8px; }
+    .dot{ width:8px; height:8px; border-radius:999px; background:#fff; border:1px solid #dbe9df; opacity:.35; box-shadow:0 4px 10px rgba(18,70,42,.12); }
+    .dot.active{ opacity:1; transform:scale(1.1); }
+
+    .car-btn{ position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; display:grid; place-items:center; border-radius:999px; background:rgba(255,255,255,.9); border:1px solid #dbe9df; box-shadow:0 8px 18px rgba(18,70,42,.12); }
+    .car-btn.left{ left:12px; }
+    .car-btn.right{ right:12px; }
+
+    .flip{ position:relative; transform-style: preserve-3d; -webkit-transform-style: preserve-3d; perspective:1000px; transition: transform .6s ease; }
+    .flip .front, .flip .back{ position:absolute; inset:0; backface-visibility: visible; -webkit-backface-visibility: visible; }
+    .flip .front{ transform: rotateY(0deg); opacity:1; display:block; }
+    .flip .back{ transform: rotateY(180deg); opacity:0; display:none; }
+    input[type="checkbox"]:checked + label.flip{ transform: rotateY(180deg); }
+    input[type="checkbox"]:checked + label.flip .front{ opacity:0; display:none; }
+    input[type="checkbox"]:checked + label.flip .back{ opacity:1; display:block; z-index:1; }
+
+    @media (prefers-color-scheme: dark){
+      body{ background:linear-gradient(120deg, #0b1713, #0f1f18); color:#e6f4ed; }
+      .shadow{ box-shadow:0 10px 24px rgba(0,0,0,.35) !important; }
+    }
+    body.dark{ background:linear-gradient(120deg, #0b1713, #0f1f18); color:#e6f4ed; }
+    body.dark header{ background:rgba(16,24,19,.82) !important; border-color:#163b2c !important; }
+    body.dark .bg-white{ background-color:#0e1813 !important; }
+    body.dark .text-slate-600{ color:#cde7dc !important; }
+    body.dark .text-slate-700{ color:#eaf7f1 !important; }
+    body.dark .border-emerald-100{ border-color:#164a38 !important; }
+    @keyframes pageIn{ from{ opacity:0; transform:translateY(6px); filter:saturate(.92) } to{ opacity:1; transform:none; filter:none } }
   </style>
-  <script>
-    function goLogin(){ window.location.href='/login.html'; }
-    function goRegister(){ window.location.href='/registro.html'; }
-    document.addEventListener('DOMContentLoaded', function(){
-      var els = document.querySelectorAll('.reveal');
-      var io = new IntersectionObserver(function(entries){
-        entries.forEach(function(entry){
-          if(entry.isIntersecting){
-            entry.target.classList.add('visible');
-            io.unobserve(entry.target);
-          }
-        });
-      }, { threshold: 0.12 });
-      els.forEach(function(el){ io.observe(el); });
-    });
-  </script>
-  </head>
-<body>
-  <header class="nav">
-    <div class="container nav-inner">
-      <div class="brand"><div class="brand-mark"></div><div class="brand-name">Vida Verde</div></div>
-      <nav class="menu">
-        <a href="#inicio">Inicio</a>
-        <a href="#que-es">¿Qué es?</a>
-        <a href="#empresas">Empresas recicladoras</a>
-        <a href="#beneficios">Beneficios</a>
-        <a href="#puntos">Puntos</a>
-        <a href="#contacto">Contacto</a>
+</head>
+<body class="bg-gradient-to-b from-emerald-50 to-green-50 text-slate-900">
+  <header class="sticky top-0 z-30 backdrop-blur bg-white/80 border-b border-emerald-100 shadow">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img class="w-9 h-9 rounded-full border border-emerald-100 shadow" src="https://images.pexels.com/photos/311862/pexels-photo-311862.jpeg?auto=compress&cs=tinysrgb&w=120&h=120&dpr=2" alt="logo">
+        <div class="font-extrabold tracking-tight">Vida Verde</div>
+      </div>
+      <nav class="hidden md:flex items-center gap-4">
+        <a class="px-3 py-2 rounded-lg hover:bg-emerald-50 text-slate-700" href="#inicio">Inicio</a>
+        <a class="px-3 py-2 rounded-lg hover:bg-emerald-50 text-slate-700" href="#como">¿Cómo funciona?</a>
+        <a class="px-3 py-2 rounded-lg hover:bg-emerald-50 text-slate-700" href="#beneficios">Beneficios</a>
+        <a class="px-3 py-2 rounded-lg hover:bg-emerald-50 text-slate-700" href="#impacto">Impacto</a>
+        <a class="px-3 py-2 rounded-lg hover:bg-emerald-50 text-slate-700" href="#testimonios">Testimonios</a>
       </nav>
-      <div class="nav-actions"><button class="btn" onclick="goLogin()">Iniciar sesión</button><button class="btn secondary" onclick="goRegister()">Registrarse</button></div>
+      <div class="flex items-center gap-2">
+        <a class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-emerald-50 font-bold shadow" href="/login.html">Iniciar sesión</a>
+        <a class="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-teal-50 font-bold shadow" href="/registro.html">Registrarse</a>
+        <button id="btn-dark" class="px-3 py-2 rounded-xl border border-emerald-200 text-emerald-800 bg-white hover:bg-emerald-50 font-bold shadow">Dark</button>
+      </div>
     </div>
   </header>
+
   <main>
-    <section id="inicio" class="hero reveal">
-      <div class="container hero-inner">
+    <section id="inicio" class="py-20">
+      <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-8 items-center">
         <div>
-          <h1>Reciclar nunca fue tan fácil. Cuida el planeta y gana recompensas.</h1>
-          <p>Registra solicitudes, vende materiales, gana puntos y recibe pagos justos con empresas verificadas. Transparencia total en precios, historial y reputación.</p>
-          <div class="row" style="display:flex; gap:10px; align-items:center;">
-            <button class="btn" onclick="goLogin()">Comenzar ahora</button>
-            <button class="btn secondary" onclick="goLogin()">Ver empresas</button>
+          <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-4">Reciclar con estilo, impacto real y diseño impecable.</h1>
+          <p class="text-slate-600 mb-6">Página moderna, ecológica y totalmente responsive para presentar tu plataforma de reciclaje. Visual potente, limpio y profesional.</p>
+          <div class="flex flex-wrap gap-3">
+            <a class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow" href="#como">Comenzar</a>
+            <a class="px-4 py-2 rounded-xl border border-emerald-200 text-emerald-800 bg-white hover:bg-emerald-50 font-bold shadow" href="#beneficios">Ver beneficios</a>
           </div>
         </div>
-        <div class="illustration"></div>
-      </div>
-    </section>
-    <section id="que-es" class="section reveal">
-      <div class="container">
-        <h2>¿Qué es Vida Verde?</h2>
-        <div class="grid">
-          <div class="card">
-            <div class="muted">Plataforma digital que conecta usuarios con empresas recicladoras.</div>
+        <div class="relative h-64 md:h-80 lg:h-96 rounded-3xl overflow-hidden border border-emerald-100 shadow-xl">
+          <div class="carousel">
+            <img src="https://images.pexels.com/photos/886521/pexels-photo-886521.jpeg?auto=compress&cs=tinysrgb&w=1600&q=60" alt="plantas eco" />
+            <img src="https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1600&q=60" alt="colaboración" />
+            <img src="https://images.pexels.com/photos/1108572/pexels-photo-1108572.jpeg?auto=compress&cs=tinysrgb&w=1600&q=60" alt="energía sostenible" />
           </div>
-          <div class="card">
-            <div class="muted">Vende materiales, solicita recojo, consulta precios y recibe pagos al instante.</div>
-          </div>
-          <div class="card">
-            <div class="muted">Acumula puntos por cada kilo reciclado y canjéalos por beneficios.</div>
-          </div>
-          <div class="card">
-            <div class="muted">Transparencia en historial, reseñas, reputación y pesaje final de la empresa.</div>
+          <button class="car-btn left" id="carPrev">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="#134e3c" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <button class="car-btn right" id="carNext">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="#134e3c" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <div class="dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
           </div>
         </div>
       </div>
     </section>
-    <section id="como-funciona" class="section reveal">
-      <div class="container">
-        <h2>¿Cómo funciona?</h2>
-        <div class="steps">
-          <div class="step"><div class="muted">Crea tu solicitud</div></div>
-          <div class="step"><div class="muted">Elige una empresa recicladora</div></div>
-          <div class="step"><div class="muted">Entrega o solicita recojo</div></div>
-          <div class="step"><div class="muted">Recibe tu pago y gana puntos</div></div>
+
+    <section id="como" class="py-16">
+      <div class="max-w-6xl mx-auto px-6">
+        <h2 class="text-3xl font-extrabold mb-6">¿Cómo funciona?</h2>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="flex items-center gap-3 p-4 rounded-2xl bg-white border border-emerald-100 shadow">
+            <div class="w-12 h-12 rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 grid place-items-center">
+              <svg viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 3h10l6 6v12H4z"/>
+                <path d="M14 3v6h6"/>
+                <path d="M8 13h4"/>
+                <path d="M10 11v4"/>
+              </svg>
+            </div>
+            <div class="text-slate-700">Crea tu solicitud</div>
+          </div>
+          <div class="flex items-center gap-3 p-4 rounded-2xl bg-white border border-emerald-100 shadow">
+            <div class="w-12 h-12 rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 grid place-items-center">
+              <svg viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                <path d="M8 8h8"/>
+                <path d="M8 12h8"/>
+                <path d="M8 16h8"/>
+              </svg>
+            </div>
+            <div class="text-slate-700">Elige empresa recicladora</div>
+          </div>
+          <div class="flex items-center gap-3 p-4 rounded-2xl bg-white border border-emerald-100 shadow">
+            <div class="w-12 h-12 rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 grid place-items-center">
+              <svg viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="7" width="11" height="8" rx="2"/>
+                <path d="M14 10h4l3 3v2h-7"/>
+                <circle cx="7" cy="17" r="2"/>
+                <circle cx="18" cy="17" r="2"/>
+              </svg>
+            </div>
+            <div class="text-slate-700">Recojo o entrega a domicilio</div>
+          </div>
+          <div class="flex items-center gap-3 p-4 rounded-2xl bg-white border border-emerald-100 shadow">
+            <div class="w-12 h-12 rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 grid place-items-center">
+              <svg viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2">
+                <ellipse cx="12" cy="9" rx="6" ry="3"/>
+                <path d="M6 9v6a6 3 0 0012 0V9"/>
+              </svg>
+            </div>
+            <div class="text-slate-700">Pago justo y puntos por kilo</div>
+          </div>
         </div>
       </div>
     </section>
-    <section id="beneficios" class="section reveal">
-      <div class="container">
-        <h2>Beneficios principales</h2>
-        <div class="benefits">
-          <div class="benefit"><div class="muted">Precios actualizados por empresa</div></div>
-          <div class="benefit"><div class="muted">Sistema de puntos por reciclaje</div></div>
-          <div class="benefit"><div class="muted">Entrega a domicilio opcional</div></div>
-          <div class="benefit"><div class="muted">Historial transparente</div></div>
-          <div class="benefit"><div class="muted">Calificaciones y reputación real</div></div>
-          <div class="benefit"><div class="muted">Apoyo a la economía circular</div></div>
+
+    <section id="beneficios" class="py-16">
+      <div class="max-w-6xl mx-auto px-6">
+        <h2 class="text-3xl font-extrabold mb-6">Beneficios</h2>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="relative [perspective:1000px]">
+            <input id="b1" type="checkbox" class="peer sr-only">
+            <label for="b1" class="flip block h-40 rounded-2xl overflow-hidden border border-emerald-100 shadow bg-white cursor-pointer">
+              <div class="front">
+                <img class="w-full h-full object-cover" src="https://images.pexels.com/photos/669610/pexels-photo-669610.jpeg?auto=compress&cs=tinysrgb&w=1200&q=60" alt="precios">
+                <div class="absolute left-3 bottom-3 px-3 py-1 rounded-full bg-white/90 border border-emerald-100 text-slate-800 font-semibold">Precios actualizados</div>
+              </div>
+              <div class="back absolute inset-0">
+                <div class="w-full h-full p-4 bg-white grid place-items-center text-slate-600">
+                  <div class="text-center">
+                    <div class="inline-block mb-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-slate-800 font-semibold">Precios actualizados</div>
+                    <p class="text-sm">Consulta precios por material y empresa, actualizados para decidir mejor.</p>
+                  </div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div class="relative [perspective:1000px]">
+            <input id="b2" type="checkbox" class="peer sr-only">
+            <label for="b2" class="flip block h-40 rounded-2xl overflow-hidden border border-emerald-100 shadow bg-white cursor-pointer">
+              <div class="front">
+                <img class="w-full h-full object-cover" src="https://images.pexels.com/photos/1563604/pexels-photo-1563604.jpeg?auto=compress&cs=tinysrgb&w=1200&q=60" alt="economía circular">
+                <div class="absolute left-3 bottom-3 px-3 py-1 rounded-full bg-white/90 border border-emerald-100 text-slate-800 font-semibold">Economía circular</div>
+              </div>
+              <div class="back absolute inset-0">
+                <div class="w-full h-full p-4 bg-white grid place-items-center text-slate-600">
+                  <div class="text-center">
+                    <div class="inline-block mb-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-slate-800 font-semibold">Economía circular</div>
+                    <p class="text-sm">Conecta residuos con nuevas cadenas productivas y reduce desechos y CO₂.</p>
+                  </div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div class="relative [perspective:1000px]">
+            <input id="b3" type="checkbox" class="peer sr-only">
+            <label for="b3" class="flip block h-40 rounded-2xl overflow-hidden border border-emerald-100 shadow bg-white cursor-pointer">
+              <div class="front">
+                <img class="w-full h-full object-cover" src="https://images.pexels.com/photos/3184396/pexels-photo-3184396.jpeg?auto=compress&cs=tinysrgb&w=1200&q=60" alt="comunidad">
+                <div class="absolute left-3 bottom-3 px-3 py-1 rounded-full bg-white/90 border border-emerald-100 text-slate-800 font-semibold">Comunidad y reputación</div>
+              </div>
+              <div class="back absolute inset-0">
+                <div class="w-full h-full p-4 bg-white grid place-items-center text-slate-600">
+                  <div class="text-center">
+                    <div class="inline-block mb-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-slate-800 font-semibold">Comunidad y reputación</div>
+                    <p class="text-sm">Opiniones verificadas y calificaciones transparentes para elegir con confianza.</p>
+                  </div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div class="relative [perspective:1000px]">
+            <input id="b4" type="checkbox" class="peer sr-only">
+            <label for="b4" class="flip block h-40 rounded-2xl overflow-hidden border border-emerald-100 shadow bg-white cursor-pointer">
+              <div class="front">
+                <img class="w-full h-full object-cover" src="https://images.pexels.com/photos/669615/pexels-photo-669615.jpeg?auto=compress&cs=tinysrgb&w=1200&q=60" alt="transparencia">
+                <div class="absolute left-3 bottom-3 px-3 py-1 rounded-full bg-white/90 border border-emerald-100 text-slate-800 font-semibold">Transparencia y datos</div>
+              </div>
+              <div class="back absolute inset-0">
+                <div class="w-full h-full p-4 bg-white grid place-items-center text-slate-600">
+                  <div class="text-center">
+                    <div class="inline-block mb-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-slate-800 font-semibold">Transparencia y datos</div>
+                    <p class="text-sm">Seguimiento claro: solicitud, pesaje, pago y comprobantes en un solo lugar.</p>
+                  </div>
+                </div>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
     </section>
-    <section id="compromiso" class="section reveal">
-      <div class="container commit">
-        Vida Verde promueve prácticas sostenibles y conecta a miles de familias con empresas responsables. Cada reciclaje cuenta.
+
+    <section id="impacto" class="py-16">
+      <div class="max-w-6xl mx-auto px-6">
+        <h2 class="text-3xl font-extrabold mb-6">Impacto</h2>
+        <div class="rounded-3xl overflow-hidden border border-emerald-100 shadow bg-white">
+          <img class="w-full h-80 object-cover" src="https://images.pexels.com/photos/1108572/pexels-photo-1108572.jpeg?auto=compress&cs=tinysrgb&w=1400&q=60" alt="impacto ecológico">
+        </div>
       </div>
     </section>
-    <section id="sponsors" class="section reveal">
-      <div class="container">
-        <h2>Nuestros Aliados</h2>
-        <div class="muted">Estas empresas apoyan la misión de promover el reciclaje y la economía circular.</div>
-        <div class="sponsors" style="margin-top:12px;">
-          <div class="sponsor-card"><div class="sponsor-logo"></div><div class="sponsor-name">Bembos</div></div>
-          <div class="sponsor-card"><div class="sponsor-logo"></div><div class="sponsor-name">KFC</div></div>
-          <div class="sponsor-card"><div class="sponsor-logo"></div><div class="sponsor-name">Cinemark</div></div>
+
+    <section id="testimonios" class="py-16">
+      <div class="max-w-6xl mx-auto px-6">
+        <h2 class="text-3xl font-extrabold mb-6">Testimonios</h2>
+        <div class="grid md:grid-cols-3 gap-5">
+          <div class="p-4 rounded-2xl bg-white border border-emerald-100 shadow">
+            <div class="flex items-center gap-3">
+              <img class="w-12 h-12 rounded-full border border-emerald-100 shadow" src="https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=120&h=120&dpr=2" alt="avatar">
+              <div>
+                <div class="font-bold text-slate-800">María Gómez</div>
+                <div class="text-slate-500 text-sm">Usuaria</div>
+              </div>
+            </div>
+            <div class="mt-3 text-slate-600">“La página se siente ligera y confiable. ¡Motiva a reciclar!”</div>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-emerald-100 shadow">
+            <div class="flex items-center gap-3">
+              <img class="w-12 h-12 rounded-full border border-emerald-100 shadow" src="https://images.pexels.com/photos/712521/pexels-photo-712521.jpeg?auto=compress&cs=tinysrgb&w=120&h=120&dpr=2" alt="avatar">
+              <div>
+                <div class="font-bold text-slate-800">Luis Pérez</div>
+                <div class="text-slate-500 text-sm">Empresa recicladora</div>
+              </div>
+            </div>
+            <div class="mt-3 text-slate-600">“Excelente diseño, comunica beneficios y transparencia de forma clara.”</div>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-emerald-100 shadow">
+            <div class="flex items-center gap-3">
+              <img class="w-12 h-12 rounded-full border border-emerald-100 shadow" src="https://images.pexels.com/photos/1130626/pexels-photo-1130626.jpeg?auto=compress&cs=tinysrgb&w=120&h=120&dpr=2" alt="avatar">
+              <div>
+                <div class="font-bold text-slate-800">Ana Rojas</div>
+                <div class="text-slate-500 text-sm">Recolectora</div>
+              </div>
+            </div>
+            <div class="mt-3 text-slate-600">“Interfaces claras, accesibles y con foco ambiental. Me encantó.”</div>
+          </div>
         </div>
       </div>
     </section>
   </main>
-  <footer class="footer">
-    <div class="container footer-inner">
+
+  <footer class="bg-white border-t border-emerald-100 mt-16">
+    <div class="max-w-6xl mx-auto px-6 py-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
       <div>
-        Enlaces rápidos
-        <div class="muted"><a href="#inicio">Inicio</a> · <a href="#como-funciona">Cómo funciona</a> · <a href="#beneficios">Beneficios</a></div>
+        <div class="text-slate-700 font-bold mb-2">Secciones</div>
+        <div class="text-slate-600">Inicio · Cómo funciona · Beneficios</div>
       </div>
       <div>
-        Proyecto
-        <div class="muted">Vida Verde · Plataforma ecológica de reciclaje</div>
+        <div class="text-slate-700 font-bold mb-2">Proyecto</div>
+        <div class="text-slate-600">Vida Verde · Aplicacion Web</div>
       </div>
       <div>
-        Redes
-        <div class="muted">Instagram · Facebook · X</div>
+        <div class="text-slate-700 font-bold mb-2">Redes</div>
+        <div class="flex items-center gap-2">
+          <a class="w-9 h-9 grid place-items-center rounded-lg border border-emerald-100 bg-white shadow" href="https://instagram.com" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="#db2777"><path d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm0 2a3 3 0 00-3 3v10a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H7zm5 3a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6zm6.5-3a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/></svg>
+          </a>
+          <a class="w-9 h-9 grid place-items-center rounded-lg border border-emerald-100 bg-white shadow" href="https://facebook.com" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="#2563eb"><path d="M13 3h3a1 1 0 011 1v3h-3v3h3v11h-4v-7h-3v7H6V10H3V7a1 1 0 011-1h2V4a1 1 0 011-1h3a4 4 0 014-0z"/></svg>
+          </a>
+          <a class="w-9 h-9 grid place-items-center rounded-lg border border-emerald-100 bg-white shadow" href="https://x.com" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="#0f172a"><path d="M4 4l7.5 9.5L7 20h3l4-4.8L17.5 20H20l-7.2-9.1L17 4h-3l-3.6 4.3L8 4H4z"/></svg>
+          </a>
+          <a class="w-9 h-9 grid place-items-center rounded-lg border border-emerald-100 bg-white shadow" href="https://www.linkedin.com" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="#0ea5e9"><path d="M4 3a2 2 0 012-2h12a2 2 0 012 2v18a2 2 0 01-2 2H6a2 2 0 01-2-2V3zm4 6H6v12h2V9zm-1-4a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm7 7c1.657 0 3 1.343 3 3v6h-2v-6a1 1 0 00-1-1c-.552 0-1 .448-1 1v6h-2v-12h2v2c.33-.614 1.03-1 2-1z"/></svg>
+          </a>
+        </div>
       </div>
       <div>
-        <div class="muted">© Vida Verde. Todos los derechos reservados.</div>
+        <div class="text-slate-600">© Vida Verde. Todos los derechos reservados.</div>
       </div>
     </div>
   </footer>
+  <script>
+    (function(){
+      var btn=document.getElementById('btn-dark');
+      var saved=localStorage.getItem('theme');
+      if(saved==='dark'){ document.body.classList.add('dark'); if(btn) btn.textContent='Light'; }
+      function toggle(){ var d=document.body.classList.toggle('dark'); localStorage.setItem('theme', d?'dark':'light'); if(btn) btn.textContent=d?'Light':'Dark'; }
+      if(btn) btn.addEventListener('click', toggle);
+      var imgs=document.querySelectorAll('.carousel img');
+      var dots=document.querySelectorAll('.dots .dot');
+      var i=0, t=null;
+      function render(){ for(var a=0;a<imgs.length;a++){ imgs[a].style.opacity = a===i ? '1' : '0'; } for(var d=0;d<dots.length;d++){ dots[d].classList.toggle('active', d===i); } }
+      function next(){ i=(i+1)%imgs.length; render(); }
+      function prev(){ i=(i-1+imgs.length)%imgs.length; render(); }
+      function start(){ if(t) clearInterval(t); t=setInterval(next, 5000); }
+      var n=document.getElementById('carNext'); var p=document.getElementById('carPrev');
+      if(n) n.addEventListener('click', function(){ next(); start(); });
+      if(p) p.addEventListener('click', function(){ prev(); start(); });
+      for(var k=0;k<dots.length;k++){ (function(idx){ dots[idx].addEventListener('click', function(){ i=idx; render(); start(); }); })(k); }
+      render(); start();
+
+      var header=document.querySelector('header');
+      var headerH=header?header.offsetHeight:0;
+      function scrollToId(id){
+        var el=document.querySelector(id);
+        if(!el) return;
+        var y=el.getBoundingClientRect().top + window.pageYOffset - (headerH + 10);
+        window.scrollTo({ top:y, behavior:'smooth' });
+      }
+      var links=document.querySelectorAll('a[href^="#"]');
+      for(var s=0; s<links.length; s++){
+        (function(a){
+          a.addEventListener('click', function(e){
+            var hash=a.getAttribute('href');
+            if(hash && hash.length>1){ e.preventDefault(); scrollToId(hash); }
+          });
+        })(links[s]);
+      }
+      window.addEventListener('resize', function(){ headerH=header?header.offsetHeight:0; });
+    })();
+  </script>
 </body>
 </html>
