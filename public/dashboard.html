@@ -1074,7 +1074,7 @@
                 }
               } catch {}
             },
-            { enableHighAccuracy:true, timeout:3000 }
+            { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
           );
         }
       } catch {}
@@ -1423,7 +1423,7 @@
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
             try { await fetch(`/api/viajes/${sid}/handoff/posicion`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) }); } catch {}
-          });
+          }, ()=>{}, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
         }
       }, 1500);
     }
@@ -1433,6 +1433,8 @@
         const r = await fetch(`/api/recolector/${sid}/handoff/accept`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ recolector_id: user.id }) });
         if (!r.ok) { alert('No se pudo aceptar handoff'); return; }
         alert('Handoff aceptado, dirígete al punto y mantén el mapa abierto');
+        try { startHandoffPublish(sid); } catch {}
+        try { viaSpeedMult = 1; await fetch(`/api/viajes/${sid}/handoff/speed`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ mult: viaSpeedMult }) }); } catch {}
         try{ await loadRecolectorFeed(); }catch{}
         try{ await loadHandoffFeed(); }catch{}
         viaHandoffServerDriven = true;
@@ -1493,7 +1495,7 @@
           try {
             await new Promise((resolve)=>{
               if (!navigator.geolocation) return resolve(null);
-              navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:2000 });
+              navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
             });
           } catch {}
           if (rLat==null || rLon==null){
@@ -1639,7 +1641,7 @@
       try {
         await new Promise((resolve)=>{
           if (!navigator.geolocation) return resolve(null);
-          navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:3000 });
+          navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
         });
       } catch {}
       if (rLat==null || rLon==null){ rLat = j?.recolector?.lat ?? null; rLon = j?.recolector?.lon ?? null; }
@@ -1886,7 +1888,7 @@
       try {
         await new Promise((resolve)=>{
           if (!navigator.geolocation) return resolve(null);
-          navigator.geolocation.getCurrentPosition(p=>{ body.lat = p.coords.latitude; body.lon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:3000 });
+          navigator.geolocation.getCurrentPosition(p=>{ body.lat = p.coords.latitude; body.lon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
         });
       } catch {}
       const r = await fetch(`/api/recolector/${sid}/aceptar`, { method:'POST', headers: authHeaders(), body: JSON.stringify(body) });
@@ -3277,24 +3279,24 @@
     try { const hp = localStorage.getItem('handoff_last_pos_'+sid); if (hp) { const o = JSON.parse(hp); if (o && typeof o.lat === 'number' && typeof o.lon === 'number') { viaHandoffHasPos = true; viaHandoffLastLat = Number(o.lat); viaHandoffLastLon = Number(o.lon); } } } catch {}
     } catch { viaHandoffPublished = false; viaHandoffInExchange = false; viaHandoffPickLat = null; viaHandoffPickLon = null; }
     try {
-      const actions = document.querySelector('#viaje-modal .modal-actions');
-      if (actions) {
-        const oldBtn = document.getElementById('btn-handoff-old'); if (oldBtn) oldBtn.remove();
-        const newBtn = document.getElementById('btn-handoff-new'); if (newBtn) newBtn.remove();
-        const st = String(sjCache?.handoff_state||'');
-        const oldOk = Boolean(sjCache?.handoff_old_ok);
-        const newOk = Boolean(sjCache?.handoff_new_ok);
-        if (st==='en_intercambio' && String(role)==='recolector'){
-          if (!oldOk && Number(sjCache?.recolector_id) === Number(user.id)){
-            const b = document.createElement('button'); b.className='btn'; b.id='btn-handoff-old'; b.textContent='Confirmar entrega'; b.onclick=()=>confirmarHandoffOld(sid); actions.insertBefore(b, actions.firstChild);
-          }
-          if (!newOk && Number(sjCache?.handoff_recolector_id) === Number(user.id)){
+        const actions = document.querySelector('#viaje-modal .modal-actions');
+        if (actions) {
+          const oldBtn = document.getElementById('btn-handoff-old'); if (oldBtn) oldBtn.remove();
+          const newBtn = document.getElementById('btn-handoff-new'); if (newBtn) newBtn.remove();
+          const st = String(sjCache?.handoff_state||'');
+          const oldOk = Boolean(sjCache?.handoff_old_ok);
+          const newOk = Boolean(sjCache?.handoff_new_ok);
+          if (st==='en_intercambio' && String(role)==='recolector'){
+            if (!oldOk && Number(sjCache?.recolector_id) === Number(user.id)){
+            const b = document.createElement('button'); b.className='btn'; b.id='btn-handoff-old'; b.textContent='Confirmar entrega'; b.disabled = true; b.onclick=()=>confirmarHandoffOld(sid); actions.insertBefore(b, actions.firstChild);
+            }
+            if (!newOk && Number(sjCache?.handoff_recolector_id) === Number(user.id)){
             const b2 = document.createElement('button'); b2.className='btn'; b2.id='btn-handoff-new'; b2.textContent='Confirmar recepción'; b2.disabled = true; b2.onclick=()=>confirmarHandoffNew(sid); actions.insertBefore(b2, actions.firstChild);
             try { startHandoffPublish(sid); } catch {}
+            }
           }
         }
-      }
-    } catch {}
+      } catch {}
     viaUserLat = uLat;
     viaUserLon = uLon;
     try {
@@ -3589,13 +3591,24 @@
         const pickLon = d.hand_pick_lon!=null ? Number(d.hand_pick_lon) : (viaHandoffPickLon!=null ? Number(viaHandoffPickLon) : NaN);
         if (!isNaN(pickLat) && !isNaN(pickLon)) { viaHandoffPickLat = pickLat; viaHandoffPickLon = pickLon; }
         if (!isNaN(hLat) && !isNaN(hLon)){
-          const handPt = [hLat, hLon];
+          let handPt = [hLat, hLon];
           try {
+            // Snap visual marker to nearest point on the computed handoff route for smoother UX
+            if (Array.isArray(viaHandoffCoords) && viaHandoffCoords.length>=2) {
+              let best = 0, bd = Infinity;
+              for (let k=0; k<viaHandoffCoords.length; k++){
+                const p = viaHandoffCoords[k];
+                const dd = (p.lat-handPt[0])*(p.lat-handPt[0]) + (p.lng-handPt[1])*(p.lng-handPt[1]);
+                if (dd<bd){ bd=dd; best=k; }
+              }
+              const bp = viaHandoffCoords[Math.max(0, Math.min(best, viaHandoffCoords.length-1))];
+              handPt = [bp.lat, bp.lng];
+            }
             if (!viaHandoffMarker) viaHandoffMarker = L.marker(handPt, { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap);
             else viaHandoffMarker.setLatLng(handPt);
           } catch {}
           // Track last known handoff position for resume on reopen
-          viaHandoffHasPos = true; viaHandoffLastLat = hLat; viaHandoffLastLon = hLon;
+          viaHandoffHasPos = true; viaHandoffLastLat = handPt[0]; viaHandoffLastLon = handPt[1];
           try { localStorage.setItem('handoff_last_pos_'+sid, JSON.stringify({ lat: hLat, lon: hLon })); } catch {}
           try {
             if (!isNaN(pickLat) && !isNaN(pickLon)){
@@ -3613,6 +3626,8 @@
               }
               const btnNew = document.getElementById('btn-handoff-new');
               if (btnNew) btnNew.disabled = !(dRecoPickKm <= 0.05);
+              const btnOld = document.getElementById('btn-handoff-old');
+              if (btnOld) btnOld.disabled = !(dRecoPickKm <= 0.05);
             }
           } catch {}
           if (viaHandoffInExchange) {
@@ -3780,7 +3795,7 @@
     try {
       await new Promise((resolve)=>{
         if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(p=>{ uLat = p.coords.latitude; uLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:3000 });
+        navigator.geolocation.getCurrentPosition(p=>{ uLat = p.coords.latitude; uLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
       });
     } catch {}
     if (uLat==null || uLon==null || eLat==null || eLon==null){
@@ -4407,7 +4422,7 @@
             resolve(null);
           },
           () => resolve(null),
-          { enableHighAccuracy: true, timeout: 3000 }
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       });
     } catch {}
@@ -4526,11 +4541,32 @@
   }
   function obtenerUbicacion(){
     if (navigator.geolocation){
-      navigator.geolocation.getCurrentPosition(
-        p=>{ geoAccuracy = Number(p.coords.accuracy)||null; const lat=p.coords.latitude, lon=p.coords.longitude; updateSelf(lat, lon); persistCurrentLocation(lat, lon); },
-        _=>usarIP(),
-        { enableHighAccuracy:true, timeout:8000 }
-      );
+      let best = null;
+      let bestAcc = Infinity;
+      let watchId = null;
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          p=>{
+            const acc = Number(p.coords.accuracy)||Infinity;
+            const lat = p.coords.latitude;
+            const lon = p.coords.longitude;
+            if (acc < bestAcc) { bestAcc = acc; best = { lat, lon }; }
+            if (acc <= 100) { geoAccuracy = acc; updateSelf(lat, lon); persistCurrentLocation(lat, lon); }
+          },
+          ()=>{},
+          { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+        );
+      } catch {}
+      setTimeout(async ()=>{
+        try { if (watchId!=null) navigator.geolocation.clearWatch(watchId); } catch {}
+        if (best && bestAcc <= 100) {
+          geoAccuracy = bestAcc;
+          updateSelf(best.lat, best.lon);
+          persistCurrentLocation(best.lat, best.lon);
+        } else {
+          await usarIP();
+        }
+      }, 10000);
     } else {
       usarIP();
     }

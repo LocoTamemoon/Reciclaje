@@ -526,16 +526,20 @@ exports.recolectorRouter.post("/:sid/handoff/confirm_old", (0, asyncHandler_1.as
     const okNew = Boolean(s.handoff_new_ok);
     const okOld = true;
     if (okOld && okNew) {
-        const r1 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
-        const r2 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id)]);
-        const a = r1.rows[0] || null;
-        const b = r2.rows[0] || null;
-        const aLat = a?.lat != null ? Number(a.lat) : NaN;
-        const aLon = a?.lon != null ? Number(a.lon) : NaN;
-        const bLat = b?.lat != null ? Number(b.lat) : NaN;
-        const bLon = b?.lon != null ? Number(b.lon) : NaN;
-        const d = (!isNaN(aLat) && !isNaN(aLon) && !isNaN(bLat) && !isNaN(bLon)) ? (0, solicitudesService_1.haversineKm)(aLat, aLon, bLat, bLon) : Infinity;
-        if (d <= 0.05) {
+        const curRes = await pool_1.pool.query("SELECT handoff_cur_lat, handoff_cur_lon, handoff_pick_lat, handoff_pick_lon FROM solicitudes WHERE id=$1", [sid]);
+        const cur = curRes.rows[0] || null;
+        let r2Lat = cur?.handoff_cur_lat != null ? Number(cur.handoff_cur_lat) : NaN;
+        let r2Lon = cur?.handoff_cur_lon != null ? Number(cur.handoff_cur_lon) : NaN;
+        const pickLat = cur?.handoff_pick_lat != null ? Number(cur.handoff_pick_lat) : NaN;
+        const pickLon = cur?.handoff_pick_lon != null ? Number(cur.handoff_pick_lon) : NaN;
+        if (Number.isNaN(r2Lat) || Number.isNaN(r2Lon)) {
+            const r2 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id)]);
+            const b = r2.rows[0] || null;
+            r2Lat = b?.lat != null ? Number(b.lat) : NaN;
+            r2Lon = b?.lon != null ? Number(b.lon) : NaN;
+        }
+        const dPick = (!isNaN(r2Lat) && !isNaN(r2Lon) && !isNaN(pickLat) && !isNaN(pickLon)) ? (0, solicitudesService_1.haversineKm)(r2Lat, r2Lon, pickLat, pickLon) : Infinity;
+        if (dPick <= 0.05) {
             await pool_1.pool.query("UPDATE solicitudes SET recolector_id=$2, handoff_state='completado' WHERE id=$1", [sid, Number(s.handoff_recolector_id)]);
             await pool_1.pool.query("UPDATE solicitudes SET estado='rumbo_a_empresa' WHERE id=$1", [sid]);
             try {
@@ -606,16 +610,20 @@ exports.recolectorRouter.post("/:sid/handoff/confirm_new", (0, asyncHandler_1.as
     const okOld = Boolean(s.handoff_old_ok);
     const okNew = true;
     if (okOld && okNew) {
-        const r1 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.recolector_id)]);
-        const r2 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id)]);
-        const a = r1.rows[0] || null;
-        const b = r2.rows[0] || null;
-        const aLat = a?.lat != null ? Number(a.lat) : NaN;
-        const aLon = a?.lon != null ? Number(a.lon) : NaN;
-        const bLat = b?.lat != null ? Number(b.lat) : NaN;
-        const bLon = b?.lon != null ? Number(b.lon) : NaN;
-        const d = (!isNaN(aLat) && !isNaN(aLon) && !isNaN(bLat) && !isNaN(bLon)) ? (0, solicitudesService_1.haversineKm)(aLat, aLon, bLat, bLon) : Infinity;
-        if (d <= 0.05) {
+        const curRes = await pool_1.pool.query("SELECT handoff_cur_lat, handoff_cur_lon, handoff_pick_lat, handoff_pick_lon FROM solicitudes WHERE id=$1", [sid]);
+        const cur = curRes.rows[0] || null;
+        let r2Lat = cur?.handoff_cur_lat != null ? Number(cur.handoff_cur_lat) : NaN;
+        let r2Lon = cur?.handoff_cur_lon != null ? Number(cur.handoff_cur_lon) : NaN;
+        const pickLat = cur?.handoff_pick_lat != null ? Number(cur.handoff_pick_lat) : NaN;
+        const pickLon = cur?.handoff_pick_lon != null ? Number(cur.handoff_pick_lon) : NaN;
+        if (Number.isNaN(r2Lat) || Number.isNaN(r2Lon)) {
+            const r2 = await pool_1.pool.query("SELECT lat, lon FROM recolectores WHERE id=$1", [Number(s.handoff_recolector_id)]);
+            const b = r2.rows[0] || null;
+            r2Lat = b?.lat != null ? Number(b.lat) : NaN;
+            r2Lon = b?.lon != null ? Number(b.lon) : NaN;
+        }
+        const dPick = (!isNaN(r2Lat) && !isNaN(r2Lon) && !isNaN(pickLat) && !isNaN(pickLon)) ? (0, solicitudesService_1.haversineKm)(r2Lat, r2Lon, pickLat, pickLon) : Infinity;
+        if (dPick <= 0.05) {
             await pool_1.pool.query("UPDATE solicitudes SET recolector_id=$2, handoff_state='completado' WHERE id=$1", [sid, Number(s.handoff_recolector_id)]);
             await pool_1.pool.query("UPDATE solicitudes SET estado='rumbo_a_empresa' WHERE id=$1", [sid]);
             try {

@@ -39,7 +39,7 @@
         if(navigator.geolocation){
           navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude, p.coords.longitude); }, async ()=>{
             try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude, j?.longitude); }catch{}
-          }, { enableHighAccuracy:true, timeout:3000 });
+          }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
           return;
         }
       }catch{}
