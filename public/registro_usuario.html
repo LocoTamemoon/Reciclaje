@@ -53,6 +53,7 @@
       const curLon=document.getElementById('cur-lon');
       const btn=document.getElementById('use-loc-btn-user');
       function set(llat,llon){ if(homeLat) homeLat.value=String(llat||''); if(homeLon) homeLon.value=String(llon||''); if(curLat) curLat.value=String(llat||''); if(curLon) curLon.value=String(llon||''); }
+      window.__usedLocationUser = true;
       try{
         if(navigator.geolocation){
           const MAX_WAIT_MS = 20000;
@@ -123,6 +124,8 @@
       if(!nm || !ap){ showAlert('Nombre y apellidos son requeridos','error'); return; }
       if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
       if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
+      const usedLoc = Boolean(window.__usedLocationUser);
+      if(usedLoc && (!homeLat || !homeLon || !curLat || !curLon)){ showAlert('Home y Current Lat/Lon son requeridas tras usar ubicación','error'); return; }
       if(pw.length<6){ showAlert('La contraseña debe tener al menos 6 caracteres','error'); return; }
       if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ showAlert('Formato de correo inválido','error'); return; }
       if(!dni || !/^\d{1,7}$/.test(dni)){ showAlert('DNI debe tener hasta 7 dígitos','error'); return; }

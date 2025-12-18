@@ -30,6 +30,7 @@
       const lon=document.getElementById('lon');
       const btn=document.getElementById('use-loc-btn-reco');
       function set(llat,llon){ if(lat) lat.value=String(llat||''); if(lon) lon.value=String(llon||''); }
+      window.__usedLocationReco = true;
       try{
         if(btn) { try{ btn.setAttribute('disabled','true'); }catch{} }
         showAlert('Cargando ubicación...', 'ok');
@@ -113,6 +114,8 @@
       if(!dni || !/^\d{7}$/.test(String(dni))){ showAlert('DNI debe tener 7 dígitos','error'); return; }
       if(String(pass||'').length<6){ showAlert('La contraseña debe tener al menos 6 caracteres','error'); return; }
       if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email||''))){ showAlert('Formato de correo inválido','error'); return; }
+      const usedLoc = Boolean(window.__usedLocationReco);
+      if(usedLoc && (!lat || !lon)){ showAlert('Lat y Lon son requeridas tras usar ubicación','error'); return; }
       if(lat){ const n=Number(lat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Lat inválida (-90 a 90)','error'); return; } }
       if(lon){ const n=Number(lon); if(Number.isNaN(n) || n<-180 || n>180){ showAlert('Lon inválida (-180 a 180)','error'); return; } }
       const f1=(document.getElementById('foto')||{}).files? (document.getElementById('foto').files[0]||null) : null;

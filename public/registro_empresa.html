@@ -47,6 +47,7 @@
       const lon=document.getElementById('lon');
       const btn=document.getElementById('use-loc-btn-emp');
       function set(llat,llon){ if(lat) lat.value=String(llat||''); if(lon) lon.value=String(llon||''); }
+      window.__usedLocationEmp = true;
       try{
         if(navigator.geolocation){
           const MAX_WAIT_MS = 20000;
@@ -125,6 +126,8 @@
       if(!/^\d{11}$/.test(ruc)){ showAlert('RUC debe tener exactamente 11 dígitos','error'); return; }
       if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
       if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
+      const usedLoc = Boolean(window.__usedLocationEmp);
+      if(usedLoc && (!lat || !lon)){ showAlert('Lat y Lon son requeridas tras usar ubicación','error'); return; }
       if(lat){ const n=Number(lat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Lat inválida (-90 a 90)','error'); return; } }
       if(lon){ const n=Number(lon); if(Number.isNaN(n) || n<-180 || n>180){ showAlert('Lon inválida (-180 a 180)','error'); return; } }
       let logo=null; const file=(document.getElementById('logo')||{}).files? (document.getElementById('logo').files[0]||null) : null; if(file){ logo = await readFileBase64(file); }
