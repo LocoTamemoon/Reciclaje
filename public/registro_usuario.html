@@ -30,9 +30,34 @@
       function set(llat,llon){ if(homeLat) homeLat.value=String(llat||''); if(homeLon) homeLon.value=String(llon||''); if(curLat) curLat.value=String(llat||''); if(curLon) curLon.value=String(llon||''); }
       try{
         if(navigator.geolocation){
-          navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude,p.coords.longitude); }, async ()=>{
+          const MAX_WAIT_MS = 12000;
+          const ACC_THRESHOLD = 50;
+          let best = null;
+          let done = false;
+          const start = Date.now();
+          try{
+            const watchId = navigator.geolocation.watchPosition((p)=>{
+              const acc = Number(p.coords.accuracy||9999);
+              if(!best || acc < (best.acc||9999)){ best = { lat:p.coords.latitude, lon:p.coords.longitude, acc }; set(best.lat,best.lon); }
+              if(acc <= ACC_THRESHOLD || (Date.now()-start) > MAX_WAIT_MS){
+                try{ navigator.geolocation.clearWatch(watchId); }catch{}
+                done = true;
+              }
+            }, async ()=>{
+              try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+              done = true;
+            }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+            setTimeout(async ()=>{
+              if(!done){
+                try{ navigator.geolocation.clearWatch(watchId); }catch{}
+                if(!best){
+                  try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+                }
+              }
+            }, MAX_WAIT_MS+1500);
+          }catch{
             try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
-          }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+          }
           return;
         }
       }catch{}
