@@ -140,6 +140,24 @@ async function ensureEmpresasRucConstraint(){
 }
 ensureEmpresasRucConstraint();
 
+async function ensureUniqueEmailConstraints(){
+  try{
+    try{
+      const c = await pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='usuarios' AND constraint_name='usuarios_email_unique' LIMIT 1");
+      if (!c.rows[0]) { await pool.query("ALTER TABLE usuarios ADD CONSTRAINT usuarios_email_unique UNIQUE (email)"); }
+    }catch{}
+    try{
+      const c = await pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='empresas' AND constraint_name='empresas_email_unique' LIMIT 1");
+      if (!c.rows[0]) { await pool.query("ALTER TABLE empresas ADD CONSTRAINT empresas_email_unique UNIQUE (email)"); }
+    }catch{}
+    try{
+      const c = await pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='recolectores' AND constraint_name='recolectores_email_unique' LIMIT 1");
+      if (!c.rows[0]) { await pool.query("ALTER TABLE recolectores ADD CONSTRAINT recolectores_email_unique UNIQUE (email)"); }
+    }catch{}
+  }catch{}
+}
+ensureUniqueEmailConstraints();
+
 const viajeStreams: Map<number, Set<any>> = new Map();
 const viajeSimTimers: Map<number, any> = new Map();
 const viajeSimProgress: Map<number, number> = new Map();

@@ -149,6 +149,33 @@ async function ensureEmpresasRucConstraint() {
     catch { }
 }
 ensureEmpresasRucConstraint();
+async function ensureUniqueEmailConstraints() {
+    try {
+        try {
+            const c = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='usuarios' AND constraint_name='usuarios_email_unique' LIMIT 1");
+            if (!c.rows[0]) {
+                await pool_1.pool.query("ALTER TABLE usuarios ADD CONSTRAINT usuarios_email_unique UNIQUE (email)");
+            }
+        }
+        catch { }
+        try {
+            const c = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='empresas' AND constraint_name='empresas_email_unique' LIMIT 1");
+            if (!c.rows[0]) {
+                await pool_1.pool.query("ALTER TABLE empresas ADD CONSTRAINT empresas_email_unique UNIQUE (email)");
+            }
+        }
+        catch { }
+        try {
+            const c = await pool_1.pool.query("SELECT 1 FROM information_schema.table_constraints WHERE table_name='recolectores' AND constraint_name='recolectores_email_unique' LIMIT 1");
+            if (!c.rows[0]) {
+                await pool_1.pool.query("ALTER TABLE recolectores ADD CONSTRAINT recolectores_email_unique UNIQUE (email)");
+            }
+        }
+        catch { }
+    }
+    catch { }
+}
+ensureUniqueEmailConstraints();
 const viajeStreams = new Map();
 const viajeSimTimers = new Map();
 const viajeSimProgress = new Map();

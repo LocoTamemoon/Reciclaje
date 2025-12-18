@@ -24,5 +24,18 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     res.status(403).json({ error: "empresa_inactiva" });
     return;
   }
+  if (String(err?.message) === "email_duplicado") {
+    res.status(409).json({ error: "email_duplicado" });
+    return;
+  }
+  if (code === "23505") {
+    const detail = String(err?.detail||"");
+    if (/email/i.test(detail)) {
+      res.status(409).json({ error: "email_duplicado" });
+      return;
+    }
+    res.status(409).json({ error: "unique_violation" });
+    return;
+  }
   res.status(500).json({ error: "internal_error", message: err?.message || "Error" });
 }

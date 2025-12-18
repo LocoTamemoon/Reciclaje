@@ -412,7 +412,8 @@
             <span id="filtro-res" class="muted"></span>
           </div>
         </div>
-        <div class="card mt-12">
+        <div class="card mt-12" id="map-card" style="position:relative;">
+          <div id="map-loading" class="muted" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:400; pointer-events:none;">Renderizando sistema de mapeo…</div>
           <div id="map" class="map-box"></div>
         </div>
       </section>
@@ -654,6 +655,7 @@
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
     const user = JSON.parse(localStorage.getItem('user')||'null');
+    let geoUpdating = false;
     if (!token || !user) { window.location.href = '/login.html'; }
 
     document.getElementById('user-info').textContent = `${role || 'usuario'} #${user.id}`;
@@ -4439,10 +4441,13 @@
 
     // Inicializar mapa
     mapa = L.map("map").setView(center, 13);
+    try { const ml = document.getElementById('map-loading'); if (ml) ml.style.display='flex'; } catch {}
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    const tl = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
     }).addTo(mapa);
+    try { tl.on('load', ()=>{ const ml=document.getElementById('map-loading'); if (ml) ml.style.display='none'; }); } catch {}
+    try { mapa.whenReady(()=>{ const ml=document.getElementById('map-loading'); if (ml) ml.style.display='none'; }); } catch {}
 
     selfMarker = L.circleMarker(center, {
       radius: 8,
@@ -4539,6 +4544,7 @@
     center = [lat, lon];
     if (selfMarker) selfMarker.setLatLng(center);
     if (mapa) mapa.panTo(center);
+    try { const ml=document.getElementById('map-loading'); if (ml) ml.style.display='none'; } catch {}
     updateAccBadge();
     updateDistritoBadge();
   }
@@ -4554,6 +4560,9 @@
   }
   function obtenerUbicacion(){
     if (navigator.geolocation){
+      geoUpdating = true;
+      updateAccBadge();
+      try { const btn=document.getElementById('buscar-btn'); if (btn) { btn.disabled=true; btn.textContent='Actualizando…'; } } catch {}
       let best = null;
       let bestAcc = Infinity;
       let watchId = null;
@@ -4567,6 +4576,9 @@
             geoAccuracy = acc;
             updateSelf(lat, lon);
             persistCurrentLocation(lat, lon);
+            geoUpdating = false;
+            updateAccBadge();
+            try { const btn=document.getElementById('buscar-btn'); if (btn) { btn.disabled=false; btn.textContent='Mi ubicación'; } } catch {}
           },
           ()=>{},
           { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
@@ -4575,6 +4587,9 @@
       setTimeout(async ()=>{
         try { if (watchId!=null) navigator.geolocation.clearWatch(watchId); } catch {}
         if (best) { geoAccuracy = bestAcc; updateSelf(best.lat, best.lon); persistCurrentLocation(best.lat, best.lon); }
+        geoUpdating = false;
+        updateAccBadge();
+        try { const btn=document.getElementById('buscar-btn'); if (btn) { btn.disabled=false; btn.textContent='Mi ubicación'; } } catch {}
       }, 10000);
     } else {
       usarIP();
@@ -4606,6 +4621,7 @@
   function updateAccBadge(){
     const b = document.getElementById('acc-badge');
     if (!b) return;
+    if (geoUpdating) { b.textContent = 'Actualizando ubicación…'; return; }
     if (selfMarker && typeof selfMarker.getLatLng === 'function'){
       const ll = selfMarker.getLatLng();
       const lat = Number(ll.lat);

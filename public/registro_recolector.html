@@ -16,6 +16,9 @@
     .full{grid-column:1 / -1}
     .hint{color:var(--color-muted);font-size:12px}
     .avatar{width:80px;height:80px;border-radius:999px;background:linear-gradient(180deg,#e8fbf2,#d6f5e6);border:1px solid #cfeeda;box-shadow:0 10px 20px rgba(34,197,94,0.20);display:flex;align-items:center;justify-content:center;font-size:30px}
+    #post-register-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);backdrop-filter:blur(3px);z-index:9999}
+    #post-register-modal .modal-card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.2);padding:18px}
+    #post-register-modal .badge{border-radius:14px}
   </style>
   <script>
     function setToken(t){ localStorage.setItem('token', t); }
@@ -80,7 +83,14 @@
         const body={ email, password:pass, nombre, apellidos, dni, distrito_id: distrito? Number(distrito): null, foto_base64: foto, foto_documento_base64: fotoDoc, foto_vehiculo_base64: fotoVeh, lat: lat? Number(lat): null, lon: lon? Number(lon): null, vehiculo_tipo_id: tipo? Number(tipo): null, placa: placa||null, capacidad_kg: capacidad? Number(capacidad): null };
         const r=await fetch('/api/auth/register/recolector', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
         const j=await r.json();
-        if(j.token){ setToken(j.token); setRole('recolector'); setUser(j.recolector); window.location.href='/dashboard.html'; return; }
+        if (j && j.recolector) {
+          showAlert('Has sido registrado con éxito.', 'ok');
+          const modal = document.getElementById('post-register-modal');
+          if (modal) modal.hidden = false;
+          setTimeout(()=>{ window.location.href='/'; }, 3500);
+          return;
+        }
+        if (j && j.error === 'email_duplicado') { showAlert('El correo ingresado ya está en uso','error'); return; }
         showAlert('No se pudo registrar. Revisa los datos.','error');
       }catch{ showAlert('Error de red al registrar.','error'); }
     }
@@ -161,6 +171,22 @@
       <div class="row jc-between mt-12">
         <button class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
         <button class="btn" onclick="submit()">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+  <div id="post-register-modal" class="modal" hidden>
+    <div class="modal-card" style="max-width:520px">
+      <div class="row jc-between ai-center">
+        <h3>Registro exitoso</h3>
+        <button class="btn secondary" onclick="goHome()">Ir al inicio</button>
+      </div>
+      <div class="mt-10">
+        <div class="badge" style="display:block; background:#F2FBF7; border-color:#cfeeda">
+          No puedes iniciar sesión, tu cuenta fue inhabilitada o aún no ha sido verificada por el administrador. Por favor, inténtalo más tarde.
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="goHome()">Ir al inicio</button>
       </div>
     </div>
   </div>

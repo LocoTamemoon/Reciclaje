@@ -8,6 +8,17 @@ function signToken(payload: object) {
   return jwt.sign(payload, secret, { expiresIn: "7d" });
 }
 
+async function assertEmailUnique(email: string) {
+  const q = await pool.query(
+    "SELECT 1 WHERE EXISTS (SELECT 1 FROM usuarios WHERE email=$1) " +
+    "OR EXISTS (SELECT 1 FROM empresas WHERE email=$1) " +
+    "OR EXISTS (SELECT 1 FROM recolectores WHERE email=$1) " +
+    "OR EXISTS (SELECT 1 FROM admins WHERE email=$1)",
+    [email]
+  );
+  if (q.rows[0]) { const e = new Error("email_duplicado"); (e as any).code = 409; throw e; }
+}
+
 export async function registerUsuario(
   email: string,
   password: string,
@@ -20,6 +31,7 @@ export async function registerUsuario(
   current_lat: number | null,
   current_lon: number | null
 ) {
+  await assertEmailUnique(email);
   const hash = await bcrypt.hash(password, 10);
   const res = await pool.query(
     "INSERT INTO usuarios(email, password_hash, nombre, apellidos, dni, foto_perfil_path, home_lat, home_lon, current_lat, current_lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
@@ -42,6 +54,7 @@ export async function registerEmpresa(
   lat: number | null,
   lon: number | null
 ) {
+  await assertEmailUnique(email);
   const hash = await bcrypt.hash(password, 10);
   const res = await pool.query(
     "INSERT INTO empresas(email, password_hash, ruc, nombre, logo, foto_local_1, foto_local_2, foto_local_3, lat, lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
@@ -98,6 +111,7 @@ export async function registerRecolector(
   placa: string | null,
   capacidad_kg: number | null
 ) {
+  await assertEmailUnique(email);
   const hash = await bcrypt.hash(password, 10);
   try { await pool.query("ALTER TABLE recolectores ADD COLUMN IF NOT EXISTS estado BOOLEAN NOT NULL DEFAULT false"); } catch {}
   const res = await pool.query(

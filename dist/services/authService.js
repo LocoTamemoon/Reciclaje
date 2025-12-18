@@ -18,7 +18,19 @@ function signToken(payload) {
     const secret = process.env.JWT_SECRET || "devsecret";
     return jsonwebtoken_1.default.sign(payload, secret, { expiresIn: "7d" });
 }
+async function assertEmailUnique(email) {
+    const q = await pool_1.pool.query("SELECT 1 WHERE EXISTS (SELECT 1 FROM usuarios WHERE email=$1) " +
+        "OR EXISTS (SELECT 1 FROM empresas WHERE email=$1) " +
+        "OR EXISTS (SELECT 1 FROM recolectores WHERE email=$1) " +
+        "OR EXISTS (SELECT 1 FROM admins WHERE email=$1)", [email]);
+    if (q.rows[0]) {
+        const e = new Error("email_duplicado");
+        e.code = 409;
+        throw e;
+    }
+}
 async function registerUsuario(email, password, nombre, apellidos, dni, foto_perfil_path, home_lat, home_lon, current_lat, current_lon) {
+    await assertEmailUnique(email);
     const hash = await bcryptjs_1.default.hash(password, 10);
     const res = await pool_1.pool.query("INSERT INTO usuarios(email, password_hash, nombre, apellidos, dni, foto_perfil_path, home_lat, home_lon, current_lat, current_lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *", [email, hash, nombre, apellidos, dni, foto_perfil_path, home_lat, home_lon, current_lat, current_lon]);
     const u = res.rows[0];
@@ -26,6 +38,7 @@ async function registerUsuario(email, password, nombre, apellidos, dni, foto_per
     return { token, usuario: u };
 }
 async function registerEmpresa(email, password, ruc, nombre, logo, foto_local_1, foto_local_2, foto_local_3, lat, lon) {
+    await assertEmailUnique(email);
     const hash = await bcryptjs_1.default.hash(password, 10);
     const res = await pool_1.pool.query("INSERT INTO empresas(email, password_hash, ruc, nombre, logo, foto_local_1, foto_local_2, foto_local_3, lat, lon) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *", [email, hash, ruc, nombre, logo, foto_local_1, foto_local_2, foto_local_3, lat, lon]);
     const e = res.rows[0];
@@ -62,6 +75,7 @@ async function setEmpresaCredentialsByRuc(ruc, email, password) {
     return res.rows[0];
 }
 async function registerRecolector(email, password, nombre, apellidos, dni, distrito_id, foto_perfil_path, foto_documento_path, foto_vehiculo_path, lat, lon, vehiculo_tipo_id, placa, capacidad_kg) {
+    await assertEmailUnique(email);
     const hash = await bcryptjs_1.default.hash(password, 10);
     try {
         await pool_1.pool.query("ALTER TABLE recolectores ADD COLUMN IF NOT EXISTS estado BOOLEAN NOT NULL DEFAULT false");
