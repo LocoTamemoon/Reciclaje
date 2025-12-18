@@ -821,14 +821,23 @@
       console.log('notif_list_in');
       let pend = [];
       let past = [];
+      const uid = Number((user && user.id!=null) ? user.id : NaN);
+      const validId = !Number.isNaN(uid) && uid > 0;
+      if (!validId) {
+        notifPend = [];
+        notifPast = [];
+        renderNotificaciones();
+        updateNotifCount();
+        return;
+      }
       try {
-        const r = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(user.id)}&status=pending`, { headers: authHeaders() });
+        const r = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(uid)}&status=pending`, { headers: authHeaders() });
         pend = await r.json();
       } catch {}
       if (!Array.isArray(pend)) pend = [];
       if (pend.length === 0){
         try {
-          const r2 = await fetch(`/api/solicitudes/notificaciones?id=${encodeURIComponent(user.id)}&status=pending`, { headers: authHeaders() });
+          const r2 = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(uid)}&status=pending`, { headers: authHeaders() });
           const list2 = await r2.json();
           if (Array.isArray(list2)) pend = list2;
         } catch {}
@@ -847,7 +856,7 @@
       notifPend = pend;
       notifPagePend = 1;
       try {
-        const r3 = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(user.id)}&status=past`, { headers: authHeaders() });
+        const r3 = await fetch(`/api/solicitudes/notificaciones?role=${encodeURIComponent(role)}&id=${encodeURIComponent(uid)}&status=past`, { headers: authHeaders() });
         past = await r3.json();
       } catch {}
       if (!Array.isArray(past)) past = [];
