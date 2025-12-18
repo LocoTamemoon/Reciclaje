@@ -22,16 +22,45 @@
     function setRole(r){ localStorage.setItem('role', r); }
     function setUser(u){ localStorage.setItem('user', JSON.stringify(u)); }
     function goHome(){ window.location.href='/'; }
+    function prewarmGeo(){
+      try{
+        if(navigator.geolocation){
+          try{
+            const id = navigator.geolocation.watchPosition((p)=>{
+              const acc = Number(p.coords.accuracy||9999);
+              const cur = window.__bestPos || null;
+              if(!cur || acc < Number(cur.acc||9999)){
+                window.__bestPos = { lat:p.coords.latitude, lon:p.coords.longitude, acc };
+                const homeLat=document.getElementById('home-lat');
+                const homeLon=document.getElementById('home-lon');
+                const curLat=document.getElementById('cur-lat');
+                const curLon=document.getElementById('cur-lon');
+                if(homeLat) homeLat.value=String(p.coords.latitude||'');
+                if(homeLon) homeLon.value=String(p.coords.longitude||'');
+                if(curLat) curLat.value=String(p.coords.latitude||'');
+                if(curLon) curLon.value=String(p.coords.longitude||'');
+              }
+            }, ()=>{}, { enableHighAccuracy:true, maximumAge:0 });
+            window.__geoWatchId = id;
+          }catch{}
+        }
+      }catch{}
+    }
     async function useLocation(){
       const homeLat=document.getElementById('home-lat');
       const homeLon=document.getElementById('home-lon');
       const curLat=document.getElementById('cur-lat');
       const curLon=document.getElementById('cur-lon');
+      const btn=document.getElementById('use-loc-btn-user');
       function set(llat,llon){ if(homeLat) homeLat.value=String(llat||''); if(homeLon) homeLon.value=String(llon||''); if(curLat) curLat.value=String(llat||''); if(curLon) curLon.value=String(llon||''); }
       try{
         if(navigator.geolocation){
-          const MAX_WAIT_MS = 12000;
-          const ACC_THRESHOLD = 50;
+          const MAX_WAIT_MS = 20000;
+          const ACC_THRESHOLD = 25;
+          const curBest = window.__bestPos || null;
+          if(curBest && curBest.lat!=null && curBest.lon!=null) set(curBest.lat, curBest.lon);
+          if(btn) { try{ btn.setAttribute('disabled','true'); }catch{} }
+          showAlert('Cargando ubicación...', 'ok');
           let best = null;
           let done = false;
           const start = Date.now();
@@ -42,26 +71,35 @@
               if(acc <= ACC_THRESHOLD || (Date.now()-start) > MAX_WAIT_MS){
                 try{ navigator.geolocation.clearWatch(watchId); }catch{}
                 done = true;
+                showAlert('Ubicación lista','ok');
+                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
               }
             }, async ()=>{
-              try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+              try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
               done = true;
+              if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
             }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
             setTimeout(async ()=>{
               if(!done){
                 try{ navigator.geolocation.clearWatch(watchId); }catch{}
                 if(!best){
-                  try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+                  try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
+                } else {
+                  showAlert('Ubicación lista','ok');
                 }
+                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
               }
             }, MAX_WAIT_MS+1500);
           }catch{
-            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
+            if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
           }
           return;
         }
       }catch{}
     }
+    document.addEventListener('DOMContentLoaded', prewarmGeo);
+    window.addEventListener('beforeunload', ()=>{ try{ const id = window.__geoWatchId; if(id!=null) navigator.geolocation.clearWatch(id); }catch{} });
     function readFileBase64(file){
       return new Promise((resolve)=>{ try{ const fr=new FileReader(); fr.onload=()=>resolve(fr.result); fr.readAsDataURL(file); }catch{ resolve(null); } });
     }
@@ -77,9 +115,21 @@
       const homeLon=(document.getElementById('home-lon')||{}).value||'';
       const curLat=(document.getElementById('cur-lat')||{}).value||'';
       const curLon=(document.getElementById('cur-lon')||{}).value||'';
+      const em = String(email||'').trim();
+      const pw = String(pass||'');
+      const nm = String(nombre||'').trim();
+      const ap = String(apellidos||'').trim();
+      const dn = String(dni||'').trim();
+      if(!nm || !ap){ showAlert('Nombre y apellidos son requeridos','error'); return; }
       if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
       if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
+      if(pw.length<6){ showAlert('La contraseña debe tener al menos 6 caracteres','error'); return; }
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ showAlert('Formato de correo inválido','error'); return; }
       if(!dni || !/^\d{1,7}$/.test(dni)){ showAlert('DNI debe tener hasta 7 dígitos','error'); return; }
+      if(homeLat){ const n=Number(homeLat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Home Lat inválida (-90 a 90)','error'); return; } }
+      if(homeLon){ const n=Number(homeLon); if(Number.isNaN(n) || n<-180 || n>180){ showAlert('Home Lon inválida (-180 a 180)','error'); return; } }
+      if(curLat){ const n=Number(curLat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Current Lat inválida (-90 a 90)','error'); return; } }
+      if(curLon){ const n=Number(curLon); if(Number.isNaN(n) || n<-180 || n>180){ showAlert('Current Lon inválida (-180 a 180)','error'); return; } }
       let foto=null; const file=(document.getElementById('foto')||{}).files? (document.getElementById('foto').files[0]||null) : null; if(file){ foto = await readFileBase64(file); }
       try{
         const body={ email, password:pass, nombre, apellidos, dni, foto_base64: foto, home_lat: homeLat? Number(homeLat): null, home_lon: homeLon? Number(homeLon): null, current_lat: curLat? Number(curLat): null, current_lon: curLon? Number(curLon): null };
@@ -102,28 +152,28 @@
       <div class="grid2">
         <div>
           <label>Nombre</label>
-          <input id="nombre" type="text" placeholder="Nombre" />
+          <input id="nombre" type="text" placeholder="Nombre" required />
         </div>
         <div>
           <label>Apellidos</label>
-          <input id="apellidos" type="text" placeholder="Apellidos" />
+          <input id="apellidos" type="text" placeholder="Apellidos" required />
         </div>
         <div>
           <label>DNI</label>
-          <input id="dni" type="text" placeholder="Máx. 7 dígitos" autocomplete="off" />
+          <input id="dni" type="text" placeholder="Máx. 7 dígitos" autocomplete="off" required />
           <div class="hint">Único e inmutable</div>
         </div>
         <div>
           <label>Correo</label>
-          <input id="email" type="email" placeholder="correo@ejemplo.com" autocomplete="off" />
+          <input id="email" type="email" placeholder="correo@ejemplo.com" autocomplete="off" required />
         </div>
         <div>
           <label>Password</label>
-          <input id="pass" type="password" placeholder="••••" autocomplete="new-password" />
+          <input id="pass" type="password" placeholder="••••" autocomplete="new-password" required />
         </div>
         <div>
           <label>Confirmar</label>
-          <input id="pass2" type="password" placeholder="••••" autocomplete="new-password" />
+          <input id="pass2" type="password" placeholder="••••" autocomplete="new-password" required />
         </div>
         <div class="full">
           <label>Foto de perfil</label>
@@ -148,7 +198,7 @@
         </div>
       </div>
       <div class="row jc-between mt-12">
-        <button class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
+        <button id="use-loc-btn-user" class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
         <button class="btn" onclick="submit()">Crear cuenta</button>
       </div>
     </div>

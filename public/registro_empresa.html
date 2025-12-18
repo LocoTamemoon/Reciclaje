@@ -22,14 +22,39 @@
     function setRole(r){ localStorage.setItem('role', r); }
     function setUser(u){ localStorage.setItem('user', JSON.stringify(u)); }
     function goHome(){ window.location.href='/'; }
+    function prewarmGeo(){
+      try{
+        if(navigator.geolocation){
+          try{
+            const id = navigator.geolocation.watchPosition((p)=>{
+              const acc = Number(p.coords.accuracy||9999);
+              const cur = window.__bestPosEmp || null;
+              if(!cur || acc < Number(cur.acc||9999)){
+                window.__bestPosEmp = { lat:p.coords.latitude, lon:p.coords.longitude, acc };
+                const lat=document.getElementById('lat');
+                const lon=document.getElementById('lon');
+                if(lat) lat.value=String(p.coords.latitude||'');
+                if(lon) lon.value=String(p.coords.longitude||'');
+              }
+            }, ()=>{}, { enableHighAccuracy:true, maximumAge:0 });
+            window.__geoWatchIdEmp = id;
+          }catch{}
+        }
+      }catch{}
+    }
     async function useLocation(){
       const lat=document.getElementById('lat');
       const lon=document.getElementById('lon');
+      const btn=document.getElementById('use-loc-btn-emp');
       function set(llat,llon){ if(lat) lat.value=String(llat||''); if(lon) lon.value=String(llon||''); }
       try{
         if(navigator.geolocation){
-          const MAX_WAIT_MS = 12000;
-          const ACC_THRESHOLD = 50;
+          const MAX_WAIT_MS = 20000;
+          const ACC_THRESHOLD = 25;
+          const curBest = window.__bestPosEmp || null;
+          if(curBest && curBest.lat!=null && curBest.lon!=null) set(curBest.lat, curBest.lon);
+          if(btn) { try{ btn.setAttribute('disabled','true'); }catch{} }
+          showAlert('Cargando ubicación...', 'ok');
           let best = null;
           let done = false;
           const start = Date.now();
@@ -40,26 +65,35 @@
               if(acc <= ACC_THRESHOLD || (Date.now()-start) > MAX_WAIT_MS){
                 try{ navigator.geolocation.clearWatch(watchId); }catch{}
                 done = true;
+                showAlert('Ubicación lista','ok');
+                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
               }
             }, async ()=>{
-              try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+              try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
               done = true;
+              if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
             }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
             setTimeout(async ()=>{
               if(!done){
                 try{ navigator.geolocation.clearWatch(watchId); }catch{}
                 if(!best){
-                  try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+                  try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
+                } else {
+                  showAlert('Ubicación lista','ok');
                 }
+                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
               }
             }, MAX_WAIT_MS+1500);
           }catch{
-            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
+            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
+            if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
           }
           return;
         }
       }catch{}
     }
+    document.addEventListener('DOMContentLoaded', prewarmGeo);
+    window.addEventListener('beforeunload', ()=>{ try{ const id = window.__geoWatchIdEmp; if(id!=null) navigator.geolocation.clearWatch(id); }catch{} });
     function readFileBase64(file){
       return new Promise((resolve)=>{ try{ const fr=new FileReader(); fr.onload=()=>resolve(fr.result); fr.readAsDataURL(file); }catch{ resolve(null); } });
     }
@@ -91,6 +125,8 @@
       if(!/^\d{11}$/.test(ruc)){ showAlert('RUC debe tener exactamente 11 dígitos','error'); return; }
       if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
       if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
+      if(lat){ const n=Number(lat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Lat inválida (-90 a 90)','error'); return; } }
+      if(lon){ const n=Number(lon); if(Number.isNaN(n) || n<-180 || n>180){ showAlert('Lon inválida (-180 a 180)','error'); return; } }
       let logo=null; const file=(document.getElementById('logo')||{}).files? (document.getElementById('logo').files[0]||null) : null; if(file){ logo = await readFileBase64(file); }
       let f1=null; const file1=(document.getElementById('foto1')||{}).files? (document.getElementById('foto1').files[0]||null) : null; if(file1){ f1 = await readFileBase64(file1); }
       let f2=null; const file2=(document.getElementById('foto2')||{}).files? (document.getElementById('foto2').files[0]||null) : null; if(file2){ f2 = await readFileBase64(file2); }
@@ -191,7 +227,7 @@
         </div>
       </div>
       <div class="row jc-between mt-12">
-        <button class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
+        <button id="use-loc-btn-emp" class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
         <button class="btn" onclick="submit()">Crear cuenta</button>
       </div>
     </div>

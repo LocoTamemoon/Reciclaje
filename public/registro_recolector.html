@@ -28,15 +28,53 @@
     async function useLocation(){
       const lat=document.getElementById('lat');
       const lon=document.getElementById('lon');
+      const btn=document.getElementById('use-loc-btn-reco');
       function set(llat,llon){ if(lat) lat.value=String(llat||''); if(lon) lon.value=String(llon||''); }
       try{
+        if(btn) { try{ btn.setAttribute('disabled','true'); }catch{} }
+        showAlert('Cargando ubicación...', 'ok');
         if(navigator.geolocation){
-          navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude,p.coords.longitude); }, async ()=>{
-            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); }catch{}
-          }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+          const MAX_WAIT_MS = 20000;
+          const ACC_THRESHOLD = 25;
+          let best = null;
+          let done = false;
+          const start = Date.now();
+          try{
+            const watchId = navigator.geolocation.watchPosition((p)=>{
+              const acc = Number(p.coords.accuracy||9999);
+              if(!best || acc < (best.acc||9999)){ best = { lat:p.coords.latitude, lon:p.coords.longitude, acc }; set(best.lat,best.lon); }
+              if(acc <= ACC_THRESHOLD || (Date.now()-start) > MAX_WAIT_MS){
+                try{ navigator.geolocation.clearWatch(watchId); }catch{}
+                done = true;
+                showAlert('Ubicación lista', 'ok');
+                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+              }
+            }, async ()=>{
+              try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
+              done = true;
+              if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+            }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+            setTimeout(async ()=>{
+              if(!done){
+                try{ navigator.geolocation.clearWatch(watchId); }catch{}
+                if(!best){
+                  try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
+                } else {
+                  showAlert('Ubicación lista','ok');
+                }
+                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+              }
+            }, MAX_WAIT_MS+1500);
+          }catch{
+            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); showAlert('Ubicación lista (aprox.)','ok'); }catch{ showAlert('No se pudo obtener ubicación','error'); }
+            if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+          }
           return;
         }
-      }catch{}
+      }catch{
+        showAlert('No se pudo obtener ubicación','error');
+        if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+      }
     }
     function readFileBase64(file){
       return new Promise((resolve)=>{ try{ const fr=new FileReader(); fr.onload=()=>resolve(fr.result); fr.readAsDataURL(file); }catch{ resolve(null); } });
@@ -71,7 +109,12 @@
       const capacidad=(document.getElementById('capacidad')||{}).value||'';
       if(!email || !pass){ showAlert('Email y contraseña son requeridos','error'); return; }
       if(pass!==pass2){ showAlert('Las contraseñas no coinciden','error'); return; }
-      if(dni && !/^\d{7}$/.test(String(dni))){ showAlert('DNI debe tener 7 dígitos','error'); return; }
+      if(!nombre || !apellidos){ showAlert('Nombre y apellidos son requeridos','error'); return; }
+      if(!dni || !/^\d{7}$/.test(String(dni))){ showAlert('DNI debe tener 7 dígitos','error'); return; }
+      if(String(pass||'').length<6){ showAlert('La contraseña debe tener al menos 6 caracteres','error'); return; }
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email||''))){ showAlert('Formato de correo inválido','error'); return; }
+      if(lat){ const n=Number(lat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Lat inválida (-90 a 90)','error'); return; } }
+      if(lon){ const n=Number(lon); if(Number.isNaN(n) || n<-180 || n>180){ showAlert('Lon inválida (-180 a 180)','error'); return; } }
       const f1=(document.getElementById('foto')||{}).files? (document.getElementById('foto').files[0]||null) : null;
       const f2=(document.getElementById('foto-doc')||{}).files? (document.getElementById('foto-doc').files[0]||null) : null;
       const f3=(document.getElementById('foto-veh')||{}).files? (document.getElementById('foto-veh').files[0]||null) : null;
@@ -108,15 +151,15 @@
       <div class="grid2">
         <div>
           <label>Nombres</label>
-          <input id="nombre" type="text" placeholder="nombres" />
+          <input id="nombre" type="text" placeholder="nombres" required />
         </div>
         <div>
           <label>Apellidos</label>
-          <input id="apellidos" type="text" placeholder="apellidos" />
+          <input id="apellidos" type="text" placeholder="apellidos" required />
         </div>
         <div>
           <label>DNI</label>
-          <input id="dni" type="text" placeholder="7 dígitos" maxlength="7" inputmode="numeric" autocomplete="off" />
+          <input id="dni" type="text" placeholder="7 dígitos" maxlength="7" inputmode="numeric" autocomplete="off" required />
         </div>
         <div>
           <label>Distrito</label>
@@ -124,15 +167,15 @@
         </div>
         <div class="full">
           <label>Correo</label>
-          <input id="email" type="email" placeholder="correo@ejemplo.com" autocomplete="off" />
+          <input id="email" type="email" placeholder="correo@ejemplo.com" autocomplete="off" required />
         </div>
         <div>
           <label>Password</label>
-          <input id="pass" type="password" placeholder="••••" autocomplete="new-password" />
+          <input id="pass" type="password" placeholder="••••" autocomplete="new-password" required />
         </div>
         <div>
           <label>Confirmar</label>
-          <input id="pass2" type="password" placeholder="••••" autocomplete="new-password" />
+          <input id="pass2" type="password" placeholder="••••" autocomplete="new-password" required />
         </div>
         <div class="full">
           <label>Foto de perfil</label>
@@ -169,7 +212,7 @@
         </div>
       </div>
       <div class="row jc-between mt-12">
-        <button class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
+        <button id="use-loc-btn-reco" class="btn secondary" onclick="useLocation()">Usar mi ubicación</button>
         <button class="btn" onclick="submit()">Crear cuenta</button>
       </div>
     </div>
