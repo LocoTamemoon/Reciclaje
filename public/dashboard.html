@@ -4531,6 +4531,7 @@
     updateDistritoBadge();
   }
   async function usarIP(){
+    if (geoAccuracy!=null && geoAccuracy <= 100) return;
     try{
       const r = await fetch("https://ipapi.co/json/");
       const d = await r.json();
@@ -4563,8 +4564,6 @@
           geoAccuracy = bestAcc;
           updateSelf(best.lat, best.lon);
           persistCurrentLocation(best.lat, best.lon);
-        } else {
-          await usarIP();
         }
       }, 10000);
     } else {
