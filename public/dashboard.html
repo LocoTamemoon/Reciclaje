@@ -1245,6 +1245,16 @@
       const totalText = document.getElementById('estimado-total').textContent||'S/ 0';
       const totalNum = Number(totalText.replace('S/','').trim());
       if (delivery && totalNum < 35) { alert('Para solicitar delivery el total mínimo es S/ 35'); return; }
+      if (delivery && delivery_use_current) {
+        try {
+          if (selfMarker && typeof selfMarker.getLatLng === 'function') {
+            const ll = selfMarker.getLatLng();
+            await persistCurrentLocation(Number(ll.lat), Number(ll.lng));
+          } else {
+            obtenerUbicacion();
+          }
+        } catch {}
+      }
       let foto_base64 = null;
       try {
         const el = document.getElementById('material-foto');
@@ -4448,6 +4458,8 @@
     if (document.getElementById('buscar-btn')) document.getElementById('buscar-btn').onclick = obtenerUbicacion;
     const cbtn = document.getElementById('casa-btn');
     if (cbtn) cbtn.onclick = verUbicacionCasa;
+    const actChk = document.getElementById('delivery-actual-check');
+    if (actChk) actChk.onchange = ()=>{ if ((actChk instanceof HTMLInputElement) && actChk.checked) obtenerUbicacion(); };
     obtenerUbicacion();
     if (document.getElementById('addr-btn')) document.getElementById('addr-btn').onclick = geocodeAddress;
     if (mapa) mapa.on('click', (e)=> updateSelf(e.latlng.lat, e.latlng.lng));
@@ -4552,7 +4564,9 @@
             const lat = p.coords.latitude;
             const lon = p.coords.longitude;
             if (acc < bestAcc) { bestAcc = acc; best = { lat, lon }; }
-            if (acc <= 100) { geoAccuracy = acc; updateSelf(lat, lon); persistCurrentLocation(lat, lon); }
+            geoAccuracy = acc;
+            updateSelf(lat, lon);
+            persistCurrentLocation(lat, lon);
           },
           ()=>{},
           { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
@@ -4560,11 +4574,7 @@
       } catch {}
       setTimeout(async ()=>{
         try { if (watchId!=null) navigator.geolocation.clearWatch(watchId); } catch {}
-        if (best && bestAcc <= 100) {
-          geoAccuracy = bestAcc;
-          updateSelf(best.lat, best.lon);
-          persistCurrentLocation(best.lat, best.lon);
-        }
+        if (best) { geoAccuracy = bestAcc; updateSelf(best.lat, best.lon); persistCurrentLocation(best.lat, best.lon); }
       }, 10000);
     } else {
       usarIP();
@@ -4576,11 +4586,19 @@
       if (role === 'usuario'){
         const r = await fetch(`/api/usuarios/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) });
         j = await r.json();
-        if (j && j.usuario){ const nu = { ...user, current_lat: j.usuario.current_lat, current_lon: j.usuario.current_lon }; localStorage.setItem('user', JSON.stringify(nu)); }
+        if (j && j.usuario){
+          const nu = { ...user, current_lat: j.usuario.current_lat, current_lon: j.usuario.current_lon };
+          localStorage.setItem('user', JSON.stringify(nu));
+          try { user.current_lat = j.usuario.current_lat; user.current_lon = j.usuario.current_lon; } catch {}
+        }
       } else if (role === 'recolector'){
         const r = await fetch(`/api/recolector/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) });
         j = await r.json();
-        if (j && j.recolector){ const nu = { ...user, lat: j.recolector.lat, lon: j.recolector.lon }; localStorage.setItem('user', JSON.stringify(nu)); }
+        if (j && j.recolector){
+          const nu = { ...user, lat: j.recolector.lat, lon: j.recolector.lon };
+          localStorage.setItem('user', JSON.stringify(nu));
+          try { user.lat = j.recolector.lat; user.lon = j.recolector.lon; } catch {}
+        }
       }
       actualizarEstimado();
     }catch{}
