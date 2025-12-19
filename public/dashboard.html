@@ -1065,30 +1065,46 @@
   let recoEventSource = null;
   let recoSimSid = null;
 
-    function iniciarUbicacionRecolector(){
-      try {
+    async function getBestLocation() {
+      return new Promise((resolve) => {
+        // 1. Try GPS (High Accuracy)
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
-            (p)=>{
-              const lat = p.coords.latitude;
-              const lon = p.coords.longitude;
-              fetch(`/api/recolector/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) }).catch(()=>{});
+            (p) => { resolve({ lat: p.coords.latitude, lon: p.coords.longitude, type: 'gps' }); },
+            () => {
+              // 2. Try WiFi/Network (Low Accuracy)
+              navigator.geolocation.getCurrentPosition(
+                (p) => { resolve({ lat: p.coords.latitude, lon: p.coords.longitude, type: 'wifi' }); },
+                async () => {
+                  // 3. Try IP
+                  try {
+                    const r = await fetch('https://ipapi.co/json/');
+                    const d = await r.json();
+                    if (d.latitude && d.longitude) resolve({ lat: d.latitude, lon: d.longitude, type: 'ip' });
+                    else resolve(null);
+                  } catch { resolve(null); }
+                },
+                { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+              );
             },
-            async ()=>{
-              try {
-                const r = await fetch('https://ipapi.co/json');
-                const j = await r.json();
-                const lat = Number(j?.latitude);
-                const lon = Number(j?.longitude);
-                if (!isNaN(lat) && !isNaN(lon)) {
-                  fetch(`/api/recolector/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat, lon }) }).catch(()=>{});
-                }
-              } catch {}
-            },
-            { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
           );
+        } else {
+          // Fallback IP directly
+          fetch('https://ipapi.co/json/').then(r=>r.json()).then(d=>{
+            if (d.latitude && d.longitude) resolve({ lat: d.latitude, lon: d.longitude, type: 'ip' });
+            else resolve(null);
+          }).catch(()=>resolve(null));
         }
-      } catch {}
+      });
+    }
+
+    function iniciarUbicacionRecolector(){
+      getBestLocation().then(loc => {
+        if(loc) {
+          fetch(`/api/recolector/${user.id}/ubicacion_actual`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ lat: loc.lat, lon: loc.lon }) }).catch(()=>{});
+        }
+      });
     }
 
     async function loadEmpresas(){
@@ -1514,10 +1530,8 @@
         let rLat = null, rLon = null;
         const getRecoPos = async ()=>{
           try {
-            await new Promise((resolve)=>{
-              if (!navigator.geolocation) return resolve(null);
-              navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
-            });
+            const loc = await getBestLocation();
+            if (loc) { rLat = loc.lat; rLon = loc.lon; }
           } catch {}
           if (rLat==null || rLon==null){
             try { const rp = await fetch(`/api/recolector/${user.id}/perfil`, { headers: authHeaders() }); if (rp.ok) { const pj = await rp.json(); rLat = pj?.lat!=null?Number(pj.lat):null; rLon = pj?.lon!=null?Number(pj.lon):null; } } catch {}
@@ -1660,10 +1674,8 @@
       const j = await r.json();
       let rLat = null, rLon = null;
       try {
-        await new Promise((resolve)=>{
-          if (!navigator.geolocation) return resolve(null);
-          navigator.geolocation.getCurrentPosition(p=>{ rLat = p.coords.latitude; rLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
-        });
+        const loc = await getBestLocation();
+        if (loc) { rLat = loc.lat; rLon = loc.lon; }
       } catch {}
       if (rLat==null || rLon==null){ rLat = j?.recolector?.lat ?? null; rLon = j?.recolector?.lon ?? null; }
       const uLat = j?.usuario?.lat ?? null;
@@ -3814,10 +3826,8 @@
       eLon = j?.empresa?.lon ?? null;
     } catch {}
     try {
-      await new Promise((resolve)=>{
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(p=>{ uLat = p.coords.latitude; uLon = p.coords.longitude; resolve(null); }, ()=>resolve(null), { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
-      });
+      const loc = await getBestLocation();
+      if (loc) { uLat = loc.lat; uLon = loc.lon; }
     } catch {}
     if (uLat==null || uLon==null || eLat==null || eLon==null){
       alert('No se puede trazar la ruta: ubicación o empresa sin coordenadas');
@@ -4434,18 +4444,10 @@
     let center = [-12.05, -77.03];
 
     try {
-      await new Promise((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
-
-        navigator.geolocation.getCurrentPosition(
-          pos => {
-            center = [pos.coords.latitude, pos.coords.longitude];
-            resolve(null);
-          },
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-      });
+      const loc = await getBestLocation();
+      if (loc) {
+        center = [loc.lat, loc.lon];
+      }
     } catch {}
 
     // Inicializar mapa
@@ -4568,41 +4570,28 @@
     }catch{}
   }
   function obtenerUbicacion(){
-    if (navigator.geolocation){
-      geoUpdating = true;
+    geoUpdating = true;
+    updateAccBadge();
+    const btn = document.getElementById('buscar-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Buscando...'; }
+
+    getBestLocation().then(loc => {
+      if (loc) {
+        if (loc.type === 'gps') geoAccuracy = 10;
+        else if (loc.type === 'wifi') geoAccuracy = 50;
+        else geoAccuracy = 5000;
+
+        updateSelf(loc.lat, loc.lon);
+        persistCurrentLocation(loc.lat, loc.lon);
+        if (mapa) mapa.setView([loc.lat, loc.lon], 16);
+      } else {
+        alert('No se pudo obtener la ubicación.');
+      }
+    }).finally(() => {
+      geoUpdating = false;
       updateAccBadge();
-      try { const btn=document.getElementById('buscar-btn'); if (btn) { btn.disabled=true; btn.textContent='Actualizando…'; } } catch {}
-      let best = null;
-      let bestAcc = Infinity;
-      let watchId = null;
-      try {
-        watchId = navigator.geolocation.watchPosition(
-          p=>{
-            const acc = Number(p.coords.accuracy)||Infinity;
-            const lat = p.coords.latitude;
-            const lon = p.coords.longitude;
-            if (acc < bestAcc) { bestAcc = acc; best = { lat, lon }; }
-            geoAccuracy = acc;
-            updateSelf(lat, lon);
-            persistCurrentLocation(lat, lon);
-            geoUpdating = false;
-            updateAccBadge();
-            try { const btn=document.getElementById('buscar-btn'); if (btn) { btn.disabled=false; btn.textContent='Mi ubicación'; } } catch {}
-          },
-          ()=>{},
-          { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
-        );
-      } catch {}
-      setTimeout(async ()=>{
-        try { if (watchId!=null) navigator.geolocation.clearWatch(watchId); } catch {}
-        if (best) { geoAccuracy = bestAcc; updateSelf(best.lat, best.lon); persistCurrentLocation(best.lat, best.lon); }
-        geoUpdating = false;
-        updateAccBadge();
-        try { const btn=document.getElementById('buscar-btn'); if (btn) { btn.disabled=false; btn.textContent='Mi ubicación'; } } catch {}
-      }, 10000);
-    } else {
-      usarIP();
-    }
+      if (btn) { btn.disabled = false; btn.textContent = 'Mi ubicación'; }
+    });
   }
   async function persistCurrentLocation(lat, lon){
     try{

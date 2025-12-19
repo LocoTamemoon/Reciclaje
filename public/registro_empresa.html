@@ -48,70 +48,57 @@
       const btn=document.getElementById('use-loc-btn-emp');
       function set(llat,llon){ if(lat) lat.value=String(llat||''); if(lon) lon.value=String(llon||''); }
       window.__usedLocationEmp = true;
-      window.__lastAccEmp = null;
-      function startCountdown(ms){
-        try{ clearInterval(window.__locCountdownIntEmp); }catch{}
-        const end = Date.now() + Math.max(0, ms||0);
-        window.__locCountdownIntEmp = setInterval(()=>{
-          const rem = Math.max(0, Math.ceil((end - Date.now())/1000));
-          const el=document.getElementById('alert');
-          if(el){
-            const a = window.__lastAccEmp!=null ? Math.round(Number(window.__lastAccEmp)) : null;
-            const accTxt = a!=null ? ' (±'+a+' m)' : '';
-            el.textContent='Ubicación aproximada'+accTxt+'. Mejor lectura en '+rem+'s';
-            el.className='badge'; el.style.background='#F2FBF7'; el.style.borderColor='#cfeeda';
-          }
-          if(rem<=0){ try{ clearInterval(window.__locCountdownIntEmp); }catch{} }
-        }, 1000);
-      }
-      function stopCountdown(){ try{ clearInterval(window.__locCountdownIntEmp); }catch{} }
-      try{
-        if(navigator.geolocation){
-          const MAX_WAIT_MS = 20000;
-          const ACC_THRESHOLD = 25;
-          const curBest = window.__bestPosEmp || null;
-          if(curBest && curBest.lat!=null && curBest.lon!=null) set(curBest.lat, curBest.lon);
-          if(btn) { try{ btn.setAttribute('disabled','true'); }catch{} }
-          showAlert('Cargando ubicación...', 'ok');
-          let best = null;
-          let done = false;
-          const start = Date.now();
-           try{
-            const watchId = navigator.geolocation.watchPosition((p)=>{
-              const acc = Number(p.coords.accuracy||9999);
-              window.__lastAccEmp = acc;
-              if(!best || acc < (best.acc||9999)){ best = { lat:p.coords.latitude, lon:p.coords.longitude, acc }; set(best.lat,best.lon); }
-              if(acc <= ACC_THRESHOLD || (Date.now()-start) > MAX_WAIT_MS){
-                try{ navigator.geolocation.clearWatch(watchId); }catch{}
-                done = true;
-                stopCountdown();
-                showAlert('Ubicación lista','ok');
-                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+      
+      if(btn) { try{ btn.setAttribute('disabled','true'); }catch{} }
+
+      const tryIp = async () => {
+          showAlert('Falló GPS y WiFi. Usando IP...', 'ok');
+          try{ 
+              const r=await fetch('https://ipapi.co/json'); 
+              const j=await r.json(); 
+              if(j.latitude && j.longitude){
+                  set(j.latitude, j.longitude); 
+                  showAlert('Ubicación por IP lista', 'ok');
+              } else {
+                  throw new Error('IP sin coords');
               }
-            }, async ()=>{
-              try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); startCountdown(MAX_WAIT_MS - (Date.now()-start)); }catch{ showAlert('No se pudo obtener ubicación','error'); }
-              done = true;
+          }catch{ 
+              showAlert('No se pudo obtener ubicación','error'); 
+          }
+          if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+      };
+
+      const tryWifi = () => {
+          showAlert('Falló GPS. Intentando WiFi/Red...', 'ok');
+          navigator.geolocation.getCurrentPosition(
+              (p) => {
+                  set(p.coords.latitude, p.coords.longitude);
+                  showAlert('Ubicación WiFi/Red lista', 'ok');
+                  if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+              },
+              (err) => {
+                  console.log('WiFi error', err);
+                  tryIp();
+              },
+              { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+          );
+      };
+
+      if(!navigator.geolocation){ tryIp(); return; }
+
+      showAlert('Intentando GPS...', 'ok');
+      navigator.geolocation.getCurrentPosition(
+          (p) => {
+              set(p.coords.latitude, p.coords.longitude);
+              showAlert('Ubicación GPS lista', 'ok');
               if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
-            }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
-            setTimeout(async ()=>{
-              if(!done){
-                try{ navigator.geolocation.clearWatch(watchId); }catch{}
-                if(!best){
-                  try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); startCountdown(1500); }catch{ showAlert('No se pudo obtener ubicación','error'); }
-                } else {
-                  stopCountdown();
-                  showAlert('Ubicación lista','ok');
-                }
-                if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
-              }
-            }, MAX_WAIT_MS+1500);
-          }catch{
-            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude,j?.longitude); startCountdown(MAX_WAIT_MS); }catch{ showAlert('No se pudo obtener ubicación','error'); }
-            if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
-          }
-          return;
-        }
-      }catch{}
+          },
+          (err) => {
+              console.log('GPS error', err);
+              tryWifi();
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
     }
     document.addEventListener('DOMContentLoaded', prewarmGeo);
     window.addEventListener('beforeunload', ()=>{ try{ const id = window.__geoWatchIdEmp; if(id!=null) navigator.geolocation.clearWatch(id); }catch{} });

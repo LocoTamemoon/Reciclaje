@@ -34,15 +34,53 @@
     async function useMyLocation(){
       const latEl = document.getElementById('user-lat');
       const lonEl = document.getElementById('user-lon');
+      const alertEl = document.getElementById('user-alert');
       function set(llat,llon){ if(latEl) latEl.value=String(llat||''); if(lonEl) lonEl.value=String(llon||''); }
-      try{
-        if(navigator.geolocation){
-          navigator.geolocation.getCurrentPosition((p)=>{ set(p.coords.latitude, p.coords.longitude); }, async ()=>{
-            try{ const r=await fetch('https://ipapi.co/json'); const j=await r.json(); set(j?.latitude, j?.longitude); }catch{}
-          }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
-          return;
-        }
-      }catch{}
+      function showAlert(msg,type){ if(!alertEl) return; alertEl.textContent=msg; alertEl.className = type==='error' ? 'badge' : 'badge'; alertEl.style.background = type==='error' ? '#ffecec' : '#eafbf3'; alertEl.style.borderColor = type==='error' ? '#fca5a5' : '#cfeeda'; }
+
+      const tryIp = async () => {
+          showAlert('Falló GPS y WiFi. Usando IP...', 'ok');
+          try{ 
+              const r=await fetch('https://ipapi.co/json'); 
+              const j=await r.json(); 
+              if(j.latitude && j.longitude){
+                  set(j.latitude, j.longitude); 
+                  showAlert('Ubicación por IP lista', 'ok');
+              } else {
+                  throw new Error('IP sin coords');
+              }
+          }catch{ 
+              showAlert('No se pudo obtener ubicación','error'); 
+          }
+      };
+
+      const tryWifi = () => {
+          showAlert('Falló GPS. Intentando WiFi/Red...', 'ok');
+          navigator.geolocation.getCurrentPosition(
+              (p) => {
+                  set(p.coords.latitude, p.coords.longitude);
+                  showAlert('Ubicación WiFi/Red lista', 'ok');
+              },
+              (err) => {
+                  tryIp();
+              },
+              { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+          );
+      };
+
+      if(!navigator.geolocation){ tryIp(); return; }
+
+      showAlert('Intentando GPS...', 'ok');
+      navigator.geolocation.getCurrentPosition(
+          (p) => {
+              set(p.coords.latitude, p.coords.longitude);
+              showAlert('Ubicación GPS lista', 'ok');
+          },
+          (err) => {
+              tryWifi();
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
     }
     function setToken(t){ localStorage.setItem('token', t); }
     function setRole(r){ localStorage.setItem('role', r); }
