@@ -148,7 +148,7 @@
       if(usedLoc && (!homeLat || !homeLon || !curLat || !curLon)){ showAlert('Home y Current Lat/Lon son requeridas tras usar ubicación','error'); return; }
       if(pw.length<6){ showAlert('La contraseña debe tener al menos 6 caracteres','error'); return; }
       if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ showAlert('Formato de correo inválido','error'); return; }
-      if(!dni || !/^\d{1,7}$/.test(dni)){ showAlert('DNI debe tener hasta 7 dígitos','error'); return; }
+      if(!dni || !/^\d{7}$/.test(dni)){ showAlert('DNI debe tener 7 dígitos','error'); return; }
       if(homeLat){ const n=Number(homeLat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Home Lat inválida (-90 a 90)','error'); return; } }
       if(homeLon){ const n=Number(homeLon); if(Number.isNaN(n) || n<-180 || n>180){ showAlert('Home Lon inválida (-180 a 180)','error'); return; } }
       if(curLat){ const n=Number(curLat); if(Number.isNaN(n) || n<-90 || n>90){ showAlert('Current Lat inválida (-90 a 90)','error'); return; } }
@@ -183,7 +183,7 @@
         </div>
         <div>
           <label>DNI</label>
-          <input id="dni" type="text" placeholder="Máx. 7 dígitos" autocomplete="off" required />
+          <input id="dni" type="text" placeholder="7 dígitos" maxlength="7" inputmode="numeric" pattern="^\d{7}$" autocomplete="off" required />
           <div class="hint">Único e inmutable</div>
         </div>
         <div>

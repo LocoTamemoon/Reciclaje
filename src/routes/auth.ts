@@ -9,6 +9,7 @@ export const authRouter = Router();
 
 authRouter.post("/register/usuario", asyncHandler(async (req: Request, res: Response) => {
   const { email, password, nombre, apellidos, dni, foto_base64, home_lat, home_lon, current_lat, current_lon } = req.body;
+  if (dni != null && !/^\d{7}$/.test(String(dni))) { res.status(400).json({ error: "dni_invalido" }); return; }
   let fotoPath: string | null = null;
   try {
     if (foto_base64) {
