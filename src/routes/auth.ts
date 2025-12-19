@@ -138,6 +138,13 @@ authRouter.post("/register/recolector", asyncHandler(async (req: Request, res: R
       vehPath = `/img/${filename}`;
     }
   } catch {}
+  const capRaw = (req.body as any)?.capacidad_kg;
+  const tipoRaw = (req.body as any)?.vehiculo_tipo_id;
+  const placaRaw = (req.body as any)?.placa;
+  if (tipoRaw == null || placaRaw == null || String(placaRaw).trim() === '' || capRaw == null || Number.isNaN(Number(capRaw))) {
+    res.status(400).json({ error: "vehiculo_requerido" });
+    return;
+  }
   const r = await registerRecolector(
     String(email),
     String(password),
