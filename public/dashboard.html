@@ -3650,7 +3650,7 @@
           try { localStorage.setItem('handoff_last_pos_'+sid, JSON.stringify({ lat: hLat, lon: hLon })); } catch {}
           try {
             if (!isNaN(pickLat) && !isNaN(pickLon)){
-              const dRecoPickKm = distanciaMetros(hLat, hLon, pickLat, pickLon) / 1000;
+              const dRecoPickKm = distanciaMetros(handPt[0], handPt[1], pickLat, pickLon) / 1000;
               let dPickEmpKm = null;
               if (viaEmpLat!=null && viaEmpLon!=null) dPickEmpKm = distanciaMetros(pickLat, pickLon, Number(viaEmpLat), Number(viaEmpLon)) / 1000;
               if (meta) {
