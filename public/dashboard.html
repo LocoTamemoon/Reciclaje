@@ -3672,6 +3672,26 @@
             viaHandoffServerDriven = true;
             if (viaHandoffSimTimer) { try { clearInterval(viaHandoffSimTimer); } catch {} viaHandoffSimTimer = null; }
           }
+        } else {
+          // Fallback: if handoff lat/lon is missing, use current marker or last known handoff position to compute proximity
+          try {
+            if (!isNaN(pickLat) && !isNaN(pickLon)){
+              let curLat = null, curLon = null;
+              if (viaHandoffMarker && typeof viaHandoffMarker.getLatLng === 'function'){
+                const ll = viaHandoffMarker.getLatLng();
+                curLat = Number(ll.lat); curLon = Number(ll.lng);
+              } else if (viaHandoffHasPos && viaHandoffLastLat!=null && viaHandoffLastLon!=null){
+                curLat = Number(viaHandoffLastLat); curLon = Number(viaHandoffLastLon);
+              }
+              if (curLat!=null && curLon!=null){
+                const dRecoPickKm = distanciaMetros(curLat, curLon, pickLat, pickLon) / 1000;
+                const btnNew = document.getElementById('btn-handoff-new');
+                if (btnNew) btnNew.disabled = !(dRecoPickKm <= 0.05);
+                const btnOld = document.getElementById('btn-handoff-old');
+                if (btnOld) btnOld.disabled = !(dRecoPickKm <= 0.05);
+              }
+            }
+          } catch {}
         }
         const idx = Number(d.i);
         if (!isNaN(lat) && !isNaN(lon)){
