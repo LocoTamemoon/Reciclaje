@@ -3774,8 +3774,18 @@
             }
           } catch {}
         }
-        if (viaHandoffInExchange && viaHandoffMarker==null && !isNaN(pickLat) && !isNaN(pickLon)){
-          try { viaHandoffMarker = L.marker([pickLat, pickLon], { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap); } catch {}
+        if (viaHandoffInExchange && viaHandoffMarker==null){
+          try {
+            let initLat = null, initLon = null;
+            if (viaHandoffHasPos && viaHandoffLastLat!=null && viaHandoffLastLon!=null) {
+              initLat = Number(viaHandoffLastLat); initLon = Number(viaHandoffLastLon);
+            } else if (!isNaN(pickLat) && !isNaN(pickLon)) {
+              initLat = Number(pickLat); initLon = Number(pickLon);
+            }
+            if (initLat!=null && initLon!=null && !Number.isNaN(initLat) && !Number.isNaN(initLon)) {
+              viaHandoffMarker = L.marker([initLat, initLon], { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap);
+            }
+          } catch {}
         }
       } catch {}
     }
