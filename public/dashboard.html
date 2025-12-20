@@ -1607,6 +1607,7 @@
                 const dd = (p.lat-Number(viaHandoffLastLat))*(p.lat-Number(viaHandoffLastLat)) + (p.lng-Number(viaHandoffLastLon))*(p.lng-Number(viaHandoffLastLon));
                 if (dd<bd){ bd=dd; best=k; }
               }
+              viaHandoffProgIdx = Math.max(0, Math.min(best, pts.length-1));
               offsetDist = cum[Math.max(0, Math.min(best, cum.length-1))] || 0;
             }
             const t0 = performance.now() - (offsetDist / speed) * 1000;
@@ -2501,6 +2502,7 @@
   let viaHandoffLastLat = null;
   let viaHandoffServerDriven = false;
   let viaHandoffLastLon = null;
+  let viaHandoffProgIdx = 0;
   let viaUserLat = null;
   let viaUserLon = null;
   let viaEmpLat = null;
@@ -3634,7 +3636,10 @@
                 const dd = (p.lat-handPt[0])*(p.lat-handPt[0]) + (p.lng-handPt[1])*(p.lng-handPt[1]);
                 if (dd<bd){ bd=dd; best=k; }
               }
-              const bp = viaHandoffCoords[Math.max(0, Math.min(best, viaHandoffCoords.length-1))];
+              // Enforce non-decreasing progression to avoid teleporting back to start
+              viaHandoffProgIdx = Math.max(viaHandoffProgIdx||0, best);
+              const clamped = Math.max(0, Math.min(viaHandoffProgIdx, viaHandoffCoords.length-1));
+              const bp = viaHandoffCoords[clamped];
               handPt = [bp.lat, bp.lng];
             }
             if (!viaHandoffMarker) viaHandoffMarker = L.marker(handPt, { icon: recolectorHandIcon, zIndexOffset: 900 }).addTo(viaMap);
