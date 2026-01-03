@@ -1066,37 +1066,42 @@
   let recoSimSid = null;
 
     async function getBestLocation() {
-      return new Promise((resolve) => {
-        // 1. Try GPS (High Accuracy)
-        if (navigator.geolocation) {
+      if (!navigator.geolocation) return null;
+      const ua = String(navigator.userAgent||'');
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+      const getWifiPrecise = async () => {
+        return new Promise((resolve)=>{
+          let best=null; let id=null;
+          try{ id = navigator.geolocation.watchPosition(
+            (p)=>{ const acc=Number(p.coords.accuracy||9999); if(!best || acc<Number(best.acc||9999)) best={ lat:p.coords.latitude, lon:p.coords.longitude, acc }; },
+            ()=>{},
+            { enableHighAccuracy:false, maximumAge:0 }
+          ); }catch{}
+          setTimeout(()=>{ try{ if(id!=null) navigator.geolocation.clearWatch(id); }catch{} resolve(best? { lat:best.lat, lon:best.lon, type:'wifi' } : null); }, 2500);
+        });
+      };
+      const tryGps = async () => {
+        return new Promise((resolve)=>{
           navigator.geolocation.getCurrentPosition(
-            (p) => { resolve({ lat: p.coords.latitude, lon: p.coords.longitude, type: 'gps' }); },
-            () => {
-              // 2. Try WiFi/Network (Low Accuracy)
-              navigator.geolocation.getCurrentPosition(
-                (p) => { resolve({ lat: p.coords.latitude, lon: p.coords.longitude, type: 'wifi' }); },
-                async () => {
-                  // 3. Try IP
-                  try {
-                    const r = await fetch('https://ipapi.co/json/');
-                    const d = await r.json();
-                    if (d.latitude && d.longitude) resolve({ lat: d.latitude, lon: d.longitude, type: 'ip' });
-                    else resolve(null);
-                  } catch { resolve(null); }
-                },
-                { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
-              );
-            },
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+            (p)=>resolve({ lat:p.coords.latitude, lon:p.coords.longitude, type:'gps' }),
+            ()=>resolve(null),
+            { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
           );
-        } else {
-          // Fallback IP directly
-          fetch('https://ipapi.co/json/').then(r=>r.json()).then(d=>{
-            if (d.latitude && d.longitude) resolve({ lat: d.latitude, lon: d.longitude, type: 'ip' });
-            else resolve(null);
-          }).catch(()=>resolve(null));
-        }
-      });
+        });
+      };
+      if (isMobile) {
+        const g = await tryGps();
+        if (g) return g;
+        const w = await getWifiPrecise();
+        if (w) return w;
+        return null;
+      } else {
+        const w = await getWifiPrecise();
+        if (w) return w;
+        const g = await tryGps();
+        if (g) return g;
+        return null;
+      }
     }
 
     function iniciarUbicacionRecolector(){
@@ -4593,16 +4598,6 @@
     try { const ml=document.getElementById('map-loading'); if (ml) ml.style.display='none'; } catch {}
     updateAccBadge();
     updateDistritoBadge();
-  }
-  async function usarIP(){
-    if (geoAccuracy!=null && geoAccuracy <= 100) return;
-    try{
-      const r = await fetch("https://ipapi.co/json/");
-      const d = await r.json();
-      if (d && typeof d.latitude === 'number' && typeof d.longitude === 'number') { updateSelf(d.latitude, d.longitude); persistCurrentLocation(d.latitude, d.longitude); }
-      geoAccuracy = null;
-      updateAccBadge();
-    }catch{}
   }
   function obtenerUbicacion(){
     geoUpdating = true;

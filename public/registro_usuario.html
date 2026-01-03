@@ -40,7 +40,7 @@
                 if(curLat) curLat.value=String(p.coords.latitude||'');
                 if(curLon) curLon.value=String(p.coords.longitude||'');
               }
-            }, ()=>{}, { enableHighAccuracy:true, maximumAge:0 });
+            }, ()=>{}, { enableHighAccuracy:false, maximumAge:0 });
             window.__geoWatchId = id;
           }catch{}
         }
@@ -57,54 +57,48 @@
       
       if(btn) { try{ btn.setAttribute('disabled','true'); }catch{} }
 
-      const tryIp = async () => {
-          showAlert('Falló GPS y WiFi. Usando IP...', 'ok');
-          try{ 
-              const r=await fetch('https://ipapi.co/json'); 
-              const j=await r.json(); 
-              if(j.latitude && j.longitude){
-                  set(j.latitude, j.longitude); 
-                  showAlert('Ubicación por IP lista', 'ok');
-              } else {
-                  throw new Error('IP sin coords');
-              }
-          }catch{ 
-              showAlert('No se pudo obtener ubicación','error'); 
-          }
-          if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
+      const getWifiPrecise = async () => {
+        return new Promise((resolve)=>{
+          let best=null; let id=null;
+          try{ id = navigator.geolocation.watchPosition(
+            (p)=>{ const acc=Number(p.coords.accuracy||9999); if(!best || acc<Number(best.acc||9999)) best={ lat:p.coords.latitude, lon:p.coords.longitude, acc }; },
+            ()=>{},
+            { enableHighAccuracy:false, maximumAge:0 }
+          ); }catch{}
+          setTimeout(()=>{ try{ if(id!=null) navigator.geolocation.clearWatch(id); }catch{} resolve(best? { lat:best.lat, lon:best.lon } : null); }, 2500);
+        });
       };
-
-      const tryWifi = () => {
-          showAlert('Falló GPS. Intentando WiFi/Red...', 'ok');
+      const tryGps = () => {
+        return new Promise((resolve)=>{
           navigator.geolocation.getCurrentPosition(
-              (p) => {
-                  set(p.coords.latitude, p.coords.longitude);
-                  showAlert('Ubicación WiFi/Red lista', 'ok');
-                  if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
-              },
-              (err) => {
-                  console.log('WiFi error', err);
-                  tryIp();
-              },
-              { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+            (p)=>resolve({ lat:p.coords.latitude, lon:p.coords.longitude }),
+            ()=>resolve(null),
+            { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
           );
+        });
       };
 
-      if(!navigator.geolocation){ tryIp(); return; }
+      if(!navigator.geolocation){ showAlert('Tu navegador no soporta geolocalización','error'); if(btn) { try{ btn.removeAttribute('disabled'); }catch{} } return; }
 
-      showAlert('Intentando GPS...', 'ok');
-      navigator.geolocation.getCurrentPosition(
-          (p) => {
-              set(p.coords.latitude, p.coords.longitude);
-              showAlert('Ubicación GPS lista', 'ok');
-              if(btn) { try{ btn.removeAttribute('disabled'); }catch{} }
-          },
-          (err) => {
-              console.log('GPS error', err);
-              tryWifi();
-          },
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
+      const ua = String(navigator.userAgent||'');
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+      if (isMobile) {
+        showAlert('Intentando GPS...', 'ok');
+        const g = await tryGps();
+        if (g) { set(g.lat, g.lon); showAlert('Ubicación GPS lista', 'ok'); if(btn){ try{ btn.removeAttribute('disabled'); }catch{} } return; }
+        showAlert('Intentando WiFi/Red...', 'ok');
+        const w = await getWifiPrecise();
+        if (w) { set(w.lat, w.lon); showAlert('Ubicación WiFi/Red lista', 'ok'); if(btn){ try{ btn.removeAttribute('disabled'); }catch{} } return; }
+        showAlert('No se pudo obtener ubicación','error'); if(btn){ try{ btn.removeAttribute('disabled'); }catch{} }
+      } else {
+        showAlert('Intentando WiFi/Red...', 'ok');
+        const w = await getWifiPrecise();
+        if (w) { set(w.lat, w.lon); showAlert('Ubicación WiFi/Red lista', 'ok'); if(btn){ try{ btn.removeAttribute('disabled'); }catch{} } return; }
+        showAlert('Intentando GPS...', 'ok');
+        const g = await tryGps();
+        if (g) { set(g.lat, g.lon); showAlert('Ubicación GPS lista', 'ok'); if(btn){ try{ btn.removeAttribute('disabled'); }catch{} } return; }
+        showAlert('No se pudo obtener ubicación','error'); if(btn){ try{ btn.removeAttribute('disabled'); }catch{} }
+      }
     }
     document.addEventListener('DOMContentLoaded', prewarmGeo);
     window.addEventListener('beforeunload', ()=>{ try{ const id = window.__geoWatchId; if(id!=null) navigator.geolocation.clearWatch(id); }catch{} });
